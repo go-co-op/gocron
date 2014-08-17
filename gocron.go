@@ -7,19 +7,19 @@
 // Inspired by the Ruby module clockwork <https://github.com/tomykaira/clockwork>
 // and
 // Python package schedule <https://github.com/dbader/schedule>
+//
 // See also
 // http://adam.heroku.com/past/2010/4/13/rethinking_cron/
 // http://adam.heroku.com/past/2010/6/30/replace_cron_with_clockwork/
 //
-// Copyright 2014 Jason Lyu. jasonlvhit <dot.> gmail.com
+// Copyright 2014 Jason Lyu. jasonlvhit@gmail.com .
 // All rights reserved.
-// Use of this source code is governed by a BSD-style
+// Use of this source code is governed by a BSD-style .
 // license that can be found in the LICENSE file.
 package gocron
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"runtime"
 	"sort"
@@ -120,7 +120,7 @@ func (j *Job) Do(job_fun interface{}, params ...interface{}) {
 func (j *Job) At(t string) *Job {
 	hour := int((t[0]-'0')*10 + (t[1] - '0'))
 	min := int((t[3]-'0')*10 + (t[4] - '0'))
-	if hour < 0 || hour > 12 || min < 0 || min > 59 {
+	if hour < 0 || hour > 23 || min < 0 || min > 59 {
 		panic("time format error.")
 	}
 	// time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
@@ -188,9 +188,9 @@ func (j *Job) scheduleNextRun() {
 // the follow functions set the job's unit with seconds,minutes,hours...
 
 // Set the unit with second
-func (j *Job) Second() (job *Job, err error) {
+func (j *Job) Second() (job *Job) {
 	if j.interval != 1 {
-		err = errors.New("function Second require the job's interval must be 1.")
+		panic("")
 		return
 	}
 	job = j.Seconds()
@@ -204,9 +204,9 @@ func (j *Job) Seconds() (job *Job) {
 }
 
 // Set the unit  with minute, which interval is 1
-func (j *Job) Minute() (job *Job, err error) {
+func (j *Job) Minute() (job *Job) {
 	if j.interval != 1 {
-		err = errors.New("function Minute require the job's interval must be 1.")
+		panic("")
 		return
 	}
 	job = j.Minutes()
@@ -220,9 +220,9 @@ func (j *Job) Minutes() (job *Job) {
 }
 
 //set the unit with hour, which interval is 1
-func (j *Job) Hour() (job *Job, err error) {
+func (j *Job) Hour() (job *Job) {
 	if j.interval != 1 {
-		err = errors.New("function Hour require the job's interval must be 1.")
+		panic("")
 		return
 	}
 	job = j.Hours()
@@ -236,10 +236,9 @@ func (j *Job) Hours() (job *Job) {
 }
 
 // Set the job's unit with day, which interval is 1
-func (j *Job) Day() (job *Job, err error) {
+func (j *Job) Day() (job *Job) {
 	if j.interval != 1 {
-		err = errors.New("function Day require the job's interval must be 1.")
-		return
+		panic("")
 	}
 	job = j.Days()
 	return
@@ -251,15 +250,17 @@ func (j *Job) Days() *Job {
 	return j
 }
 
+/*
 // Set the unit with week, which the interval is 1
-func (j *Job) Week() (job *Job, err error) {
+func (j *Job) Week() (job *Job) {
 	if j.interval != 1 {
-		err = errors.New("function Second require the job's interval must be 1.")
-		return
+		panic("")
 	}
 	job = j.Weeks()
 	return
 }
+
+*/
 
 // s.Every(1).Monday().Do(task)
 // Set the start day with Monday
@@ -387,7 +388,7 @@ func (s *Scheduler) getRunnableJobs() (running_jobs [MAXJOBNUM]*Job, n int) {
 // Datetime when the next job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if s.size <= 0 {
-		return nil
+		return nil, time.Now()
 	}
 	sort.Sort(s)
 	return s.jobs[0], s.jobs[0].next_run
@@ -506,4 +507,9 @@ func Clear() {
 // Remove
 func Remove(j interface{}) {
 	default_scheduler.Remove(j)
+}
+
+// get the next running time
+func NextRun() (job *Job, time time.Time) {
+	return default_scheduler.NextRun()
 }
