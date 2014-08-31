@@ -10,7 +10,7 @@ See also this two great articles:
 
 Back to this package, you could just use this simple API as below, to run a cron scheduler.
 
-``` golang
+``` go
 package main
  
 import (
