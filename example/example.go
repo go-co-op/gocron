@@ -1,4 +1,4 @@
-package douban
+package main
 
 import (
 	"fmt"
