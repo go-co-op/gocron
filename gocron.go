@@ -405,6 +405,7 @@ func (s *Scheduler) Every(interval uint64) *Job {
 // Run all the jobs that are scheduled to run.
 func (s *Scheduler) RunPending() {
 	runnable_jobs, n := s.getRunnableJobs()
+
 	if n != 0 {
 		for i := 0; i < n; i++ {
 			runnable_jobs[i].run()
@@ -452,10 +453,23 @@ func (s *Scheduler) Clear() {
 }
 
 // Start all the pending jobs
-func (s *Scheduler) Start() {
-	for {
-		s.RunPending()
-	}
+// Add seconds ticker
+func (s *Scheduler) Start() chan bool {
+	stopped := make(chan bool, 1)
+	ticker := time.NewTicker(1 * time.Second)
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				s.RunPending()
+			case <-stopped:
+				return
+			}
+		}
+	}()
+
+	return stopped
 }
 
 // The following methods are shortcuts for not having to
