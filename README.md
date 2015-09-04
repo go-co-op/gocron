@@ -1,6 +1,6 @@
 ## goCron: A Golang Job Scheduling Package.
 
-[![GoDoc](http://godoc.org/github.com/jasonlvhit/gocron?status.png)](http://godoc.org/github.com/jasonlvhit/gocron)
+[![GoDoc](http://godoc.org/github.com/claudiu/gocron?status.png)](http://godoc.org/github.com/claudiu/gocron)
 
 goCron is a Golang job scheduling package which lets you run Go functions periodically at pre-determined interval using a simple, human-friendly syntax.
 
@@ -58,29 +58,17 @@ func main() {
 	gocron.Clear()
  
 	// function Start start all the pending jobs
-	gocron.Start()
- 
-	// Run all and Run pending , Run all with delay
-	for {
-		gocron.RunAll()
-	}
- 
-	for {
-		gocron.RunPending()
-	}
- 
-	for {
-		gocron.RunAllwithDelay(2) // in second
-	}
+	<- gocron.Start()
  
 	// also , you can create a your new scheduler,
 	// to run two scheduler concurrently
 	s := gocron.NewScheduler()
 	s.Every(3).Seconds().Do(task)
+	<- s.Start()
  
 }
 ```
-and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon.
+and full test cases and [document](http://godoc.org/github.com/claudiu/gocron) will be coming soon.
 
 Once again, thanks to the great works of Ruby clockwork and Python schedule package. BSD license is used, see the file License for detail.
 
