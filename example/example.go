@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/jasonlvhit/gocron"
 )
 
@@ -39,28 +40,15 @@ func main() {
 	_, time := gocron.NextRun()
 	fmt.Println(time)
 
-	gocron.Remove(task)
-	gocron.Clear()
+	// gocron.Remove(task)
+	// gocron.Clear()
 
 	// function Start start all the pending jobs
-	gocron.Start()
-
-	// Run all and Run pending , Run all with delay
-	for {
-		gocron.RunAll()
-	}
-
-	for {
-		gocron.RunPending()
-	}
-
-	for {
-		gocron.RunAllwithDelay(2) // in second
-	}
+	<-gocron.Start()
 
 	// also , you can create a your new scheduler,
 	// to run two scheduler concurrently
 	s := gocron.NewScheduler()
 	s.Every(3).Seconds().Do(task)
-
+	<-s.Start()
 }

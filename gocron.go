@@ -506,8 +506,8 @@ func RunAllwithDelay(d int) {
 }
 
 // Run all jobs that are scheduled to run
-func Start() {
-	defaultScheduler.Start()
+func Start() chan bool {
+	return defaultScheduler.Start()
 }
 
 // Clear
