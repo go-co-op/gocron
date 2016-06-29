@@ -37,12 +37,6 @@ func ChangeLoc(newLocation *time.Location) {
 // Max number of jobs, hack it if you need.
 const MAXJOBNUM = 10000
 
-// Map for the function task store
-var funcs = map[string]interface{}{}
-
-// Map for function and  params of function
-var fparams = map[string]([]interface{}){}
-
 type Job struct {
 
 	// pause interval * unit bettween runs
@@ -64,11 +58,25 @@ type Job struct {
 
 	// Specific day of the week to start on
 	startDay time.Weekday
+
+	// Map for the function task store
+	funcs map[string]interface{}
+
+	// Map for function and  params of function
+	fparams map[string]([]interface{})
 }
 
 // Create a new job with the time interval.
 func NewJob(intervel uint64) *Job {
-	return &Job{intervel, "", "", "", time.Unix(0, 0), time.Unix(0, 0), 0, time.Sunday}
+	return &Job{
+		intervel,
+		"", "", "",
+		time.Unix(0, 0),
+		time.Unix(0, 0), 0,
+		time.Sunday,
+		make(map[string]interface{}),
+		make(map[string]([]interface{})),
+	}
 }
 
 // True if the job should be run now
@@ -78,8 +86,8 @@ func (j *Job) shouldRun() bool {
 
 //Run the job and immdiately reschedulei it
 func (j *Job) run() (result []reflect.Value, err error) {
-	f := reflect.ValueOf(funcs[j.jobFunc])
-	params := fparams[j.jobFunc]
+	f := reflect.ValueOf(j.funcs[j.jobFunc])
+	params := j.fparams[j.jobFunc]
 	if len(params) != f.Type().NumIn() {
 		err = errors.New("The number of param is not adapted.")
 		return
@@ -108,8 +116,8 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) {
 	}
 
 	fname := getFunctionName(jobFun)
-	funcs[fname] = jobFun
-	fparams[fname] = params
+	j.funcs[fname] = jobFun
+	j.fparams[fname] = params
 	j.jobFunc = fname
 	//schedule the next run
 	j.scheduleNextRun()
