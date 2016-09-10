@@ -449,6 +449,16 @@ func (s *Scheduler) Remove(j interface{}) {
 	s.size = s.size - 1
 }
 
+// Check if specific job j was already added
+func (s *Scheduler) Scheduled(j interface{}) bool {
+	for _, job := range s.jobs {
+		if job.jobFunc == getFunctionName(j) {
+			return true
+		}
+	}
+	return false
+}
+
 // Delete all scheduled jobs
 func (s *Scheduler) Clear() {
 	for i := 0; i < s.size; i++ {
@@ -526,6 +536,16 @@ func Clear() {
 // Remove
 func Remove(j interface{}) {
 	defaultScheduler.Remove(j)
+}
+
+// Check if specific job j was already added
+func Scheduled(j interface{}) bool {
+	for _, job := range defaultScheduler.jobs {
+		if job.jobFunc == getFunctionName(j) {
+			return true
+		}
+	}
+	return false
 }
 
 // NextRun gets the next running time
