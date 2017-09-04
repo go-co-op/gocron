@@ -193,6 +193,11 @@ func (j *Job) scheduleNextRun() {
 	}
 }
 
+// NextScheduledTime returns the time of when this job is to run next
+func (j *Job) NextScheduledTime() time.Time {
+	return j.nextRun
+}
+
 // the follow functions set the job's unit with seconds,minutes,hours...
 
 // Set the unit with second
@@ -254,18 +259,6 @@ func (j *Job) Days() *Job {
 	j.unit = "days"
 	return j
 }
-
-/*
-// Set the unit with week, which the interval is 1
-func (j *Job) Week() (job *Job) {
-	if j.interval != 1 {
-		panic("")
-	}
-	job = j.Weeks()
-	return
-}
-
-*/
 
 // s.Every(1).Monday().Do(task)
 // Set the start day with Monday
