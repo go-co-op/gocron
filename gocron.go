@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -123,14 +125,38 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) {
 	j.scheduleNextRun()
 }
 
+func formatTime(t string) (hour, min int, err error) {
+	var er = errors.New("time format error")
+	ts := strings.Split(t, ":")
+	if len(ts) != 2 {
+		err = er
+		return
+	}
+
+	hour, err = strconv.Atoi(ts[0])
+	if err != nil {
+		return
+	}
+	min, err = strconv.Atoi(ts[1])
+	if err != nil {
+		return
+	}
+
+	if hour < 0 || hour > 23 || min < 0 || min > 59 {
+		err = er
+		return
+	}
+	return hour, min, nil
+}
+
 //	s.Every(1).Day().At("10:30").Do(task)
 //	s.Every(1).Monday().At("10:30").Do(task)
 func (j *Job) At(t string) *Job {
-	hour := int((t[0]-'0')*10 + (t[1] - '0'))
-	min := int((t[3]-'0')*10 + (t[4] - '0'))
-	if hour < 0 || hour > 23 || min < 0 || min > 59 {
-		panic("time format error.")
+	hour, min, err := formatTime(t)
+	if err != nil {
+		panic(err)
 	}
+
 	// time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	mock := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), int(hour), int(min), 0, 0, loc)
 
