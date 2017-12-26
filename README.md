@@ -72,4 +72,4 @@ and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron
 
 Once again, thanks to the great works of Ruby clockwork and Python schedule package. BSD license is used, see the file License for detail.
 
-Hava fun!
+Have fun!
