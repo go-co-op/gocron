@@ -86,12 +86,12 @@ func (j *Job) shouldRun() bool {
 	return time.Now().After(j.nextRun)
 }
 
-//Run the job and immdiately reschedulei it
+//Run the job and immediately reschedule it
 func (j *Job) run() (result []reflect.Value, err error) {
 	f := reflect.ValueOf(j.funcs[j.jobFunc])
 	params := j.fparams[j.jobFunc]
 	if len(params) != f.Type().NumIn() {
-		err = errors.New("The number of param is not adapted.")
+		err = errors.New("the number of param is not adapted")
 		return
 	}
 	in := make([]reflect.Value, len(params))
@@ -104,7 +104,7 @@ func (j *Job) run() (result []reflect.Value, err error) {
 	return
 }
 
-// for given function fn , get the name of funciton.
+// for given function fn, get the name of function.
 func getFunctionName(fn interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf((fn)).Pointer()).Name()
 }
@@ -167,7 +167,7 @@ func (j *Job) At(t string) *Job {
 			j.lastRun = time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()-1, hour, min, 0, 0, loc)
 		}
 	} else if j.unit == "weeks" {
-		if time.Now().After(mock) {
+		if j.startDay != time.Now().Weekday() || (time.Now().After(mock) && j.startDay == time.Now().Weekday()) {
 			i := mock.Weekday() - j.startDay
 			if i < 0 {
 				i = 7 + i
