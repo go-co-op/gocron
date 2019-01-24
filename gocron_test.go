@@ -159,3 +159,23 @@ func callTodaysWeekday(job *Job) *Job {
 	}
 	return job
 }
+
+func TestScheduler_Remove(t *testing.T) {
+	scheduler := NewScheduler()
+	scheduler.Every(1).Minute().Do(task)
+	scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
+	if scheduler.Len() != 2 {
+		t.Fail()
+		t.Logf("Incorrect number of jobs - expected 2, actual %d", scheduler.Len())
+	}
+	scheduler.Remove(task)
+	if scheduler.Len() != 1 {
+		t.Fail()
+		t.Logf("Incorrect number of jobs after removing 1 job - expected 1, actual %d", scheduler.Len())
+	}
+	scheduler.Remove(task)
+	if scheduler.Len() != 1 {
+		t.Fail()
+		t.Logf("Incorrect number of jobs after removing non-existent job - expected 1, actual %d", scheduler.Len())
+	}
+}

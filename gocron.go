@@ -455,10 +455,17 @@ func (s *Scheduler) RunAllwithDelay(d int) {
 // Remove specific job j
 func (s *Scheduler) Remove(j interface{}) {
 	i := 0
+	found := false
+
 	for ; i < s.size; i++ {
 		if s.jobs[i].jobFunc == getFunctionName(j) {
+			found = true
 			break
 		}
+	}
+
+	if !found {
+		return
 	}
 
 	for j := (i + 1); j < s.size; j++ {
