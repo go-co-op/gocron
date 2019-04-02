@@ -1,4 +1,4 @@
-This package is currently looking for new maintainers. Please message @jasonlvhit if you are interested.
+This package is currently looking for new maintainers (cause @jasonlvhit is in [ICU](https://github.com/996icu/996.ICU)). Please message @jasonlvhit if you are interested.
 
 ## goCron: A Golang Job Scheduling Package.
 
