@@ -23,6 +23,14 @@ func TestSecond(*testing.T) {
 	time.Sleep(10 * time.Second)
 }
 
+func TestScheduled(t *testing.T) {
+	n := NewScheduler()
+	n.Every(1).Second().Do(task)
+	if !n.Scheduled(task) {
+		t.Fatal("Task was scheduled but function couldn't found it")
+  }
+}
+
 // This is a basic test for the issue described here: https://github.com/jasonlvhit/gocron/issues/23
 func TestScheduler_Weekdays(t *testing.T) {
 	scheduler := NewScheduler()
