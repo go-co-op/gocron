@@ -71,12 +71,12 @@ func (j *Job) shouldRun() bool {
 	return time.Now().After(j.nextRun)
 }
 
-//Run the job and immdiately reschedulei it
+//Run the job and immediately reschedule it
 func (j *Job) run() (result []reflect.Value, err error) {
 	f := reflect.ValueOf(j.funcs[j.jobFunc])
 	params := j.fparams[j.jobFunc]
 	if len(params) != f.Type().NumIn() {
-		err = errors.New("the number of param is not adapted")
+		err = errors.New("The number of param is not adapted.")
 		return
 	}
 	in := make([]reflect.Value, len(params))
@@ -89,7 +89,7 @@ func (j *Job) run() (result []reflect.Value, err error) {
 	return
 }
 
-// for given function fn , get the name of funciton.
+// for given function fn, get the name of function.
 func getFunctionName(fn interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf((fn)).Pointer()).Name()
 }
@@ -392,10 +392,17 @@ func (s *Scheduler) RunAllwithDelay(d int) {
 // Remove specific job j
 func (s *Scheduler) Remove(j interface{}) {
 	i := 0
+	found := false
+
 	for ; i < s.size; i++ {
 		if s.jobs[i].jobFunc == getFunctionName(j) {
+			found = true
 			break
 		}
+	}
+
+	if !found {
+		return
 	}
 
 	for j := (i + 1); j < s.size; j++ {
@@ -403,6 +410,16 @@ func (s *Scheduler) Remove(j interface{}) {
 		i++
 	}
 	s.size = s.size - 1
+}
+
+// Check if specific job j was already added
+func (s *Scheduler) Scheduled(j interface{}) bool {
+	for _, job := range s.jobs {
+		if job.jobFunc == getFunctionName(j) {
+			return true
+		}
+	}
+	return false
 }
 
 // Clear delete all scheduled jobs
@@ -482,6 +499,16 @@ func Clear() {
 // Remove specific job
 func Remove(j interface{}) {
 	defaultScheduler.Remove(j)
+}
+
+// Check if specific job j was already added
+func Scheduled(j interface{}) bool {
+	for _, job := range defaultScheduler.jobs {
+		if job.jobFunc == getFunctionName(j) {
+			return true
+		}
+	}
+	return false
 }
 
 // NextRun gets the next running time
