@@ -19,6 +19,7 @@
 package gocron
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"reflect"
@@ -51,6 +52,22 @@ type Job struct {
 	startDay time.Weekday               // Specific day of the week to start on
 	funcs    map[string]interface{}     // Map for the function task store
 	fparams  map[string]([]interface{}) // Map for function and  params of function
+	lock     bool                       // lock the job from running at same time form multiple instances
+}
+
+// Locker provides a method to lock jobs from running
+// at the same time on multiple instances of gocron.
+// You can provide any locker implementation you wish.
+type Locker interface {
+	Lock(key string) (bool, error)
+	Unlock(key string) error
+}
+
+var locker Locker
+
+// SetLocker sets a locker implementation
+func SetLocker(l Locker) {
+	locker = l
 }
 
 // NewJob creates a new job with the time interval.
@@ -63,6 +80,7 @@ func NewJob(interval uint64) *Job {
 		time.Sunday,
 		make(map[string]interface{}),
 		make(map[string]([]interface{})),
+		false,
 	}
 }
 
@@ -73,6 +91,24 @@ func (j *Job) shouldRun() bool {
 
 //Run the job and immediately reschedule it
 func (j *Job) run() (result []reflect.Value, err error) {
+	if j.lock {
+		if locker == nil {
+			err = fmt.Errorf("Trying to lock %s with nil locker.", j.jobFunc)
+			return
+		}
+		key := getFunctionKey(j.jobFunc)
+
+		if ok, err := locker.Lock(key); err != nil || !ok {
+			return nil, err
+		}
+
+		defer func() {
+			if e := locker.Unlock(key); e != nil {
+				err = e
+			}
+		}()
+	}
+
 	f := reflect.ValueOf(j.funcs[j.jobFunc])
 	params := j.fparams[j.jobFunc]
 	if len(params) != f.Type().NumIn() {
@@ -92,6 +128,12 @@ func (j *Job) run() (result []reflect.Value, err error) {
 // for given function fn, get the name of function.
 func getFunctionName(fn interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf((fn)).Pointer()).Name()
+}
+
+func getFunctionKey(funcName string) string {
+	h := sha256.New()
+	h.Write([]byte(funcName))
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // Do specifies the jobFunc that should be called every time the job runs
@@ -302,6 +344,12 @@ func (j *Job) Saturday() *Job {
 // Sunday sets the job start day Sunday
 func (j *Job) Sunday() *Job {
 	return j.Weekday(time.Sunday)
+}
+
+// Lock prevents job to run from multiple instances of gocron
+func (j *Job) Lock() *Job {
+	j.lock = true
+	return j
 }
 
 // Scheduler struct, the only data member is the list of jobs.
