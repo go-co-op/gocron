@@ -68,7 +68,7 @@ func NewJob(interval uint64) *Job {
 
 // True if the job should be run now
 func (j *Job) shouldRun() bool {
-	return time.Now().Second() >= j.nextRun.Second()
+	return time.Now().Unix() >= j.nextRun.Unix()
 }
 
 //Run the job and immediately reschedule it
