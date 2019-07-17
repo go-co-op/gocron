@@ -320,7 +320,7 @@ func (s *Scheduler) Swap(i, j int) {
 }
 
 func (s *Scheduler) Less(i, j int) bool {
-	return s.jobs[j].nextRun.After(s.jobs[i].nextRun)
+	return s.jobs[j].nextRun.Second() >= s.jobs[i].nextRun.Second()
 }
 
 // NewScheduler creates a new scheduler
@@ -335,9 +335,7 @@ func (s *Scheduler) getRunnableJobs() (running_jobs [MAXJOBNUM]*Job, n int) {
 	sort.Sort(s)
 	for i := 0; i < s.size; i++ {
 		if s.jobs[i].shouldRun() {
-
 			runnableJobs[n] = s.jobs[i]
-			//fmt.Println(runnableJobs)
 			n++
 		} else {
 			break
