@@ -62,13 +62,13 @@ func NewJob(interval uint64) *Job {
 		time.Unix(0, 0),
 		time.Sunday,
 		make(map[string]interface{}),
-		make(map[string]([]interface{})),
+		make(map[string][]interface{}),
 	}
 }
 
 // True if the job should be run now
 func (j *Job) shouldRun() bool {
-	return time.Now().After(j.nextRun)
+	return time.Now().Second() >= j.nextRun.Second()
 }
 
 //Run the job and immediately reschedule it
@@ -76,7 +76,7 @@ func (j *Job) run() (result []reflect.Value, err error) {
 	f := reflect.ValueOf(j.funcs[j.jobFunc])
 	params := j.fparams[j.jobFunc]
 	if len(params) != f.Type().NumIn() {
-		err = errors.New("The number of param is not adapted.")
+		err = errors.New("the number of param is not adapted")
 		return
 	}
 	in := make([]reflect.Value, len(params))
@@ -91,7 +91,7 @@ func (j *Job) run() (result []reflect.Value, err error) {
 
 // for given function fn, get the name of function.
 func getFunctionName(fn interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf((fn)).Pointer()).Name()
+	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 
 // Do specifies the jobFunc that should be called every time the job runs
