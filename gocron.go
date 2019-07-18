@@ -79,14 +79,14 @@ func NewJob(interval uint64) *Job {
 		time.Unix(0, 0),
 		time.Sunday,
 		make(map[string]interface{}),
-		make(map[string]([]interface{})),
+ 		make(map[string][]interface{}),
 		false,
 	}
 }
 
 // True if the job should be run now
 func (j *Job) shouldRun() bool {
-	return time.Now().After(j.nextRun)
+	return time.Now().Unix() >= j.nextRun.Unix()
 }
 
 //Run the job and immediately reschedule it
@@ -112,7 +112,7 @@ func (j *Job) run() (result []reflect.Value, err error) {
 	f := reflect.ValueOf(j.funcs[j.jobFunc])
 	params := j.fparams[j.jobFunc]
 	if len(params) != f.Type().NumIn() {
-		err = errors.New("The number of param is not adapted.")
+		err = errors.New("the number of param is not adapted")
 		return
 	}
 	in := make([]reflect.Value, len(params))
@@ -127,7 +127,7 @@ func (j *Job) run() (result []reflect.Value, err error) {
 
 // for given function fn, get the name of function.
 func getFunctionName(fn interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf((fn)).Pointer()).Name()
+	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 
 func getFunctionKey(funcName string) string {
@@ -368,7 +368,7 @@ func (s *Scheduler) Swap(i, j int) {
 }
 
 func (s *Scheduler) Less(i, j int) bool {
-	return s.jobs[j].nextRun.After(s.jobs[i].nextRun)
+	return s.jobs[j].nextRun.Second() >= s.jobs[i].nextRun.Second()
 }
 
 // NewScheduler creates a new scheduler
@@ -383,9 +383,7 @@ func (s *Scheduler) getRunnableJobs() (running_jobs [MAXJOBNUM]*Job, n int) {
 	sort.Sort(s)
 	for i := 0; i < s.size; i++ {
 		if s.jobs[i].shouldRun() {
-
 			runnableJobs[n] = s.jobs[i]
-			//fmt.Println(runnableJobs)
 			n++
 		} else {
 			break
