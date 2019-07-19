@@ -172,8 +172,15 @@ func (j *Job) scheduleNextRun() {
 	}
 
 	switch j.unit {
+	case "seconds":
+		j.nextRun = j.lastRun.Add(time.Duration(j.interval) * time.Second)
+	case "minutes":
+		j.nextRun = j.lastRun.Add(time.Duration(j.interval) * time.Minute)
+	case "hours":
+		j.nextRun = j.lastRun.Add(time.Duration(j.interval) * time.Hour)
 	case "days":
 		j.nextRun = j.roundToMidnight(j.lastRun)
+		j.nextRun = j.nextRun.Add(time.Duration(j.interval) * 24 * time.Hour)
 		j.nextRun = j.nextRun.Add(j.atTime)
 	case "weeks":
 		j.nextRun = j.roundToMidnight(j.lastRun)
@@ -183,8 +190,6 @@ func (j *Job) scheduleNextRun() {
 			j.nextRun = j.nextRun.Add(time.Duration(dayDiff) * 24 * time.Hour)
 		}
 		j.nextRun = j.nextRun.Add(j.atTime)
-	default:
-		j.nextRun = j.lastRun
 	}
 
 	// advance to next possible schedule
