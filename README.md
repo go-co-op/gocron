@@ -34,6 +34,9 @@ func taskWithParams(a int, b string) {
 func main() {
 	// Do jobs with params
 	gocron.Every(1).Second().Do(taskWithParams, 1, "hello")
+	
+	// Do jobs safely, preventing an unexpected panic from bubbling up
+	gocron.Every(1).Second().DoSafely(taskWithParams, 1, "hello")
 
 	// Do jobs without params
 	gocron.Every(1).Second().Do(task)
