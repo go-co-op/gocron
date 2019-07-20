@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"log"
 	"testing"
 	"time"
 )
@@ -12,6 +13,14 @@ func task() {
 
 func taskWithParams(a int, b string) {
 	fmt.Println(a, b)
+}
+
+func mutatingTask(success *bool) {
+	*success = true
+}
+
+func failingTask() {
+	log.Panic("I am panicking!")
 }
 
 func assertEqualTime(t *testing.T, actual, expected time.Time) {
@@ -27,6 +36,30 @@ func TestSecond(*testing.T) {
 	time.Sleep(5 * time.Second)
 	close(stop)
 	defaultScheduler.Clear()
+}
+
+func TestSafeExecution(t *testing.T) {
+	sched := NewScheduler()
+	success := false
+	sched.Every(1).Second().Do(mutatingTask, &success)
+	sched.RunAll()
+	sched.Clear()
+	if !success {
+		t.Errorf("Task did not get called")
+	}
+}
+
+func TestSafeExecutionWithPanic(t *testing.T) {
+	defer func() {
+		if err := recover(); err != nil {
+			t.Errorf("Unexpected internal panic occurred: %s", err)
+		}
+	}()
+
+	sched := NewScheduler()
+	sched.Every(1).Second().DoSafely(failingTask)
+	sched.RunAll()
+	sched.Clear()
 }
 
 func TestScheduled(t *testing.T) {

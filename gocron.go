@@ -21,6 +21,7 @@ package gocron
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"runtime"
 	"sort"
@@ -105,6 +106,17 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) {
 	j.fparams[fname] = params
 	j.jobFunc = fname
 	j.scheduleNextRun()
+}
+
+// DoSafely does the same thing as Do, but logs unexpected panics, instead of unwinding them up the chain
+func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Internal panic occurred: %s", err)
+		}
+	}()
+
+	j.Do(jobFun, params)
 }
 
 func formatTime(t string) (hour, min int, err error) {
