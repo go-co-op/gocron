@@ -71,7 +71,7 @@ func main() {
 }
 ```
 
-and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon.
+and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon (help is wanted! If you want to contribute, pull requests are welcome).
 
 Once again, thanks to the great works of Ruby clockwork and Python schedule package. BSD license is used, see the file License for detail.
 
