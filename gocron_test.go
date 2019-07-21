@@ -221,6 +221,37 @@ func TestScheduler_Remove(t *testing.T) {
 	}
 }
 
+func TestTaskAt(t *testing.T) {
+	// Create new scheduler to have clean test env
+	s := NewScheduler()
+
+	// Schedule to run in next minute
+	now := time.Now()
+	// Schedule every day At
+	startAt := fmt.Sprintf("%02d:%02d", now.Hour(), now.Add(time.Minute).Minute())
+	dayJob := s.Every(1).Day().At(startAt)
+
+	dayJobDone := make(chan bool, 1)
+	dayJob.Do(func() {
+		dayJobDone <- true
+	})
+
+	// Expected start time
+	startTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, loc)
+	nextRun := dayJob.NextScheduledTime()
+	assertEqualTime(t, nextRun, startTime)
+
+	sStop := s.Start()
+	<-dayJobDone // Wait job done
+	close(sStop)
+	time.Sleep(time.Second) // wait for scheduler to reschedule job
+
+	// Expected next start time 1 day after
+	startNext := startTime.AddDate(0, 0, 1)
+	nextRun = dayJob.NextScheduledTime()
+	assertEqualTime(t, nextRun, startNext)
+}
+
 func TestTaskAtFuture(t *testing.T) {
 	// Create new scheduler to have clean test env
 	s := NewScheduler()
