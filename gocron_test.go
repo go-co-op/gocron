@@ -24,18 +24,42 @@ func failingTask() {
 }
 
 func assertEqualTime(t *testing.T, actual, expected time.Time) {
-	if actual != expected {
-		t.Errorf("actual different than expected want: %v -> got: %v", expected, actual)
+	if actual.Unix() != expected.Unix() {
+		t.Errorf("actual different than expected\n want: %v -> got: %v", expected, actual)
 	}
 }
 
-func TestSecond(*testing.T) {
-	defaultScheduler.Every(1).Second().Do(task)
-	defaultScheduler.Every(1).Second().Do(taskWithParams, 1, "hello")
-	stop := defaultScheduler.Start()
+func Test1Second(t *testing.T) {
+	s := NewScheduler()
+
+	shouldBeFive := 1
+	s.Every(1).Second().Do(func() {
+		if shouldBeFive != 5 {
+			t.Log("Working on ", shouldBeFive)
+			shouldBeFive++
+		}
+	})
+	stop := s.Start()
+	time.Sleep(6 * time.Second)
+	close(stop)
+	if shouldBeFive != 5 {
+		t.Fatalf("task expected to run at least 5 times but ran %v times", shouldBeFive)
+	}
+}
+
+func TestNSeconds(t *testing.T) {
+	s := NewScheduler()
+	shouldBeTwo := 0
+	s.Every(2).Seconds().Do(func() {
+		t.Log("Working on ", shouldBeTwo)
+		shouldBeTwo++
+	})
+	stop := s.Start()
 	time.Sleep(5 * time.Second)
 	close(stop)
-	defaultScheduler.Clear()
+	if shouldBeTwo != 2 {
+		t.Fatalf("task expected to run 2 times but ran %v times", shouldBeTwo)
+	}
 }
 
 func TestSafeExecution(t *testing.T) {
@@ -81,8 +105,7 @@ func TestScheduler_Weekdays(t *testing.T) {
 	t.Logf("job1 scheduled for %s", job1.NextScheduledTime())
 	t.Logf("job2 scheduled for %s", job2.NextScheduledTime())
 	if job1.NextScheduledTime() == job2.NextScheduledTime() {
-		t.Fail()
-		t.Logf("Two jobs scheduled at the same time on two different weekdays should never run at the same time.[job1: %s; job2: %s]", job1.NextScheduledTime(), job2.NextScheduledTime())
+		t.Errorf("Two jobs scheduled at the same time on two different weekdays should never run at the same time.[job1: %s; job2: %s]", job1.NextScheduledTime(), job2.NextScheduledTime())
 	}
 }
 
@@ -98,13 +121,11 @@ func TestScheduler_WeekdaysTodayAfter(t *testing.T) {
 	job.Do(task)
 	t.Logf("job is scheduled for %s", job.NextScheduledTime())
 	if job.NextScheduledTime().Weekday() != timeToSchedule.Weekday() {
-		t.Fail()
-		t.Logf("Job scheduled for current weekday for earlier time, should still be scheduled for current weekday (but next week)")
+		t.Errorf("Job scheduled for current weekday for earlier time, should still be scheduled for current weekday (but next week)")
 	}
 	nextWeek := time.Date(now.Year(), now.Month(), now.Day()+7, now.Hour(), now.Minute()-1, 0, 0, time.Local)
 	if !job.NextScheduledTime().Equal(nextWeek) {
-		t.Fail()
-		t.Logf("Job should be scheduled for the correct time next week.")
+		t.Errorf("Job should be scheduled for the correct time next week.\nGot %+v, expected %+v", job.NextScheduledTime(), nextWeek)
 	}
 }
 
@@ -120,8 +141,7 @@ func TestScheduler_WeekdaysTodayBefore(t *testing.T) {
 	job.Do(task)
 	t.Logf("job is scheduled for %s", job.NextScheduledTime())
 	if !job.NextScheduledTime().Equal(timeToSchedule) {
-		t.Fail()
-		t.Logf("Job should be run today, at the set time.")
+		t.Error("Job should be run today, at the set time.")
 	}
 }
 
@@ -240,36 +260,51 @@ func TestTaskAt(t *testing.T) {
 
 	// Schedule to run in next minute
 	now := time.Now()
-	// Expected start time
-	startTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute()+1, 0, 0, loc)
-	// Expected next start time day after
-	startNext := startTime.AddDate(0, 0, 1)
-
 	// Schedule every day At
-	startAt := fmt.Sprintf("%02d:%02d", now.Hour(), now.Minute()+1)
+	startAt := fmt.Sprintf("%02d:%02d", now.Hour(), now.Add(time.Minute).Minute())
 	dayJob := s.Every(1).Day().At(startAt)
 
 	dayJobDone := make(chan bool, 1)
-	// Job running 5 sec
 	dayJob.Do(func() {
-		t.Log(time.Now(), "job start")
-		time.Sleep(2 * time.Second)
 		dayJobDone <- true
-		t.Log(time.Now(), "job done")
 	})
 
-	// Check first run
+	// Expected start time
+	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, loc)
 	nextRun := dayJob.NextScheduledTime()
-	assertEqualTime(t, nextRun, startTime)
+	assertEqualTime(t, nextRun, expectedStartTime)
 
-	sStop := s.Start()      // Start scheduler
-	<-dayJobDone            // Wait job done
-	close(sStop)            // Stop scheduler
+	sStop := s.Start()
+	<-dayJobDone // Wait job done
+	close(sStop)
 	time.Sleep(time.Second) // wait for scheduler to reschedule job
 
-	// Check next run
+	// Expected next start time 1 day after
+	expectedNextRun := expectedStartTime.AddDate(0, 0, 1)
 	nextRun = dayJob.NextScheduledTime()
-	assertEqualTime(t, nextRun, startNext)
+	assertEqualTime(t, nextRun, expectedNextRun)
+}
+
+func TestTaskAtFuture(t *testing.T) {
+	// Create new scheduler to have clean test env
+	s := NewScheduler()
+
+	now := time.Now()
+
+	// Schedule to run in next minute
+	startAt := fmt.Sprintf("%02d:%02d", now.Hour(), now.Add(time.Minute).Minute())
+	dayJob := s.Every(1).Day().At(startAt)
+	dayJob.Do(task)
+
+	// Check first run
+	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, loc)
+	nextRun := dayJob.NextScheduledTime()
+	assertEqualTime(t, nextRun, expectedStartTime)
+
+	s.RunAll()
+	// Check next runs scheduled time. Should be equal, as the job didn't run
+	nextRun = dayJob.NextScheduledTime()
+	assertEqualTime(t, nextRun, expectedStartTime)
 }
 
 func TestDaily(t *testing.T) {
@@ -281,13 +316,13 @@ func TestDaily(t *testing.T) {
 	// schedule next run 1 day
 	dayJob := s.Every(1).Day()
 	dayJob.scheduleNextRun()
-	exp := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
+	exp := time.Date(now.Year(), now.Month(), now.Add(time.Duration(24*time.Hour)).Day(), 0, 0, 0, 0, loc)
 	assertEqualTime(t, dayJob.nextRun, exp)
 
 	// schedule next run 2 days
 	dayJob = s.Every(2).Days()
 	dayJob.scheduleNextRun()
-	exp = time.Date(now.Year(), now.Month(), now.Day()+2, 0, 0, 0, 0, loc)
+	exp = time.Date(now.Year(), now.Month(), now.Add(time.Duration((24*2)*time.Hour)).Day(), 0, 0, 0, 0, loc)
 	assertEqualTime(t, dayJob.nextRun, exp)
 
 	// Job running longer than next schedule 1day 2 hours

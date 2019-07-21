@@ -184,15 +184,10 @@ func (j *Job) scheduleNextRun() {
 	}
 
 	switch j.unit {
-	case "seconds":
-		j.nextRun = j.lastRun.Add(time.Duration(j.interval) * time.Second)
-	case "minutes":
-		j.nextRun = j.lastRun.Add(time.Duration(j.interval) * time.Minute)
-	case "hours":
-		j.nextRun = j.lastRun.Add(time.Duration(j.interval) * time.Hour)
+	case "seconds", "minutes", "hours":
+		j.nextRun = j.lastRun.Add(j.periodDuration())
 	case "days":
 		j.nextRun = j.roundToMidnight(j.lastRun)
-		j.nextRun = j.nextRun.Add(time.Duration(j.interval) * 24 * time.Hour)
 		j.nextRun = j.nextRun.Add(j.atTime)
 	case "weeks":
 		j.nextRun = j.roundToMidnight(j.lastRun)
@@ -219,7 +214,7 @@ func (j *Job) NextScheduledTime() time.Time {
 
 func (j *Job) mustInterval(i uint64) {
 	if j.interval != i {
-		panic(fmt.Sprintf("interval maust be %d", i))
+		panic(fmt.Sprintf("interval must be %d", i))
 	}
 }
 
@@ -346,7 +341,7 @@ func NewScheduler() *Scheduler {
 }
 
 // Get the current runnable jobs, which shouldRun is True
-func (s *Scheduler) getRunnableJobs() (running_jobs [MAXJOBNUM]*Job, n int) {
+func (s *Scheduler) getRunnableJobs() (runningJobs [MAXJOBNUM]*Job, n int) {
 	runnableJobs := [MAXJOBNUM]*Job{}
 	n = 0
 	sort.Sort(s)
