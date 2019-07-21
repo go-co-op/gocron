@@ -237,9 +237,9 @@ func TestTaskAt(t *testing.T) {
 	})
 
 	// Expected start time
-	startTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, loc)
+	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, loc)
 	nextRun := dayJob.NextScheduledTime()
-	assertEqualTime(t, nextRun, startTime)
+	assertEqualTime(t, nextRun, expectedStartTime)
 
 	sStop := s.Start()
 	<-dayJobDone // Wait job done
@@ -247,9 +247,9 @@ func TestTaskAt(t *testing.T) {
 	time.Sleep(time.Second) // wait for scheduler to reschedule job
 
 	// Expected next start time 1 day after
-	startNext := startTime.AddDate(0, 0, 1)
+	expectedNextRun := expectedStartTime.AddDate(0, 0, 1)
 	nextRun = dayJob.NextScheduledTime()
-	assertEqualTime(t, nextRun, startNext)
+	assertEqualTime(t, nextRun, expectedNextRun)
 }
 
 func TestTaskAtFuture(t *testing.T) {
