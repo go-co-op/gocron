@@ -49,7 +49,7 @@ func TestNSeconds(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	close(stop)
 	if shouldBeTwo != 2 {
-		t.Fatalf("task expected to run at least 2 times but ran %v times", shouldBeTwo)
+		t.Fatalf("task expected to run 2 times but ran %v times", shouldBeTwo)
 	}
 }
 
