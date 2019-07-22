@@ -32,18 +32,18 @@ func assertEqualTime(t *testing.T, actual, expected time.Time) {
 func Test1Second(t *testing.T) {
 	intervalInSeconds := 1
 	job := defaultScheduler.Every(uint64(intervalInSeconds)).Second()
-	testSecondsWithInterval(job, int64(intervalInSeconds), t)
+	testJobWithInterval(job, int64(intervalInSeconds), t)
 	defaultScheduler.Clear()
 }
 
 func TestNSeconds(t *testing.T) {
 	intervalInSeconds := 2
 	job := defaultScheduler.Every(uint64(intervalInSeconds)).Seconds()
-	testSecondsWithInterval(job, int64(intervalInSeconds), t)
+	testJobWithInterval(job, int64(intervalInSeconds), t)
 	defaultScheduler.Clear()
 }
 
-func testSecondsWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
+func testJobWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
 	jobDone := make(chan bool)
 	executionTimes := make([]int64, 0)
 	numberOfIterations := 5
@@ -53,10 +53,8 @@ func testSecondsWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
 		if len(executionTimes) >= numberOfIterations {
 			jobDone <- true
 		}
-		time.Sleep(3000)
 	})
 
-	firstRunTime := job.nextRun.Unix()
 	stop := defaultScheduler.Start()
 	<-jobDone // Wait job done
 	close(stop)
@@ -64,10 +62,10 @@ func testSecondsWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
 	if len(executionTimes) != numberOfIterations {
 		t.Errorf("ran %d times but expected to run %d times", len(executionTimes), numberOfIterations)
 	}
-	for i, executionTime := range executionTimes {
-		if executionTime != firstRunTime+int64(i)*intervalInSeconds {
-			t.Errorf("execution time was %d but was expected to be %d",
-				executionTime, firstRunTime+int64(i)*intervalInSeconds)
+	for i := 1; i < numberOfIterations; i++ {
+		durationBetweenExecutions := executionTimes[i] - executionTimes[i-1]
+		if durationBetweenExecutions != intervalInSeconds {
+			t.Errorf("execution time was %d but was expected to be %d", durationBetweenExecutions, intervalInSeconds)
 		}
 	}
 }
