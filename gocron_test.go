@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"testing"
@@ -29,21 +30,25 @@ func assertEqualTime(t *testing.T, actual, expected time.Time) {
 	}
 }
 
-func Test1Second(t *testing.T) {
-	intervalInSeconds := 1
-	job := defaultScheduler.Every(uint64(intervalInSeconds)).Second()
-	testJobWithInterval(job, int64(intervalInSeconds), t)
+func TestSeconds(t *testing.T) {
+	// .Second()
+	job := defaultScheduler.Every(1).Second()
+	err := testJobWithInterval(job, 1)
+	if err != nil {
+		t.Error(err)
+	}
+	defaultScheduler.Clear()
+
+	// .Seconds()
+	job = defaultScheduler.Every(2).Seconds()
+	err = testJobWithInterval(job, 2)
+	if err != nil {
+		t.Error(err)
+	}
 	defaultScheduler.Clear()
 }
 
-func TestNSeconds(t *testing.T) {
-	intervalInSeconds := 2
-	job := defaultScheduler.Every(uint64(intervalInSeconds)).Seconds()
-	testJobWithInterval(job, int64(intervalInSeconds), t)
-	defaultScheduler.Clear()
-}
-
-func testJobWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
+func testJobWithInterval(job *Job, expectedTimeBetweenRuns int64) error {
 	jobDone := make(chan bool)
 	executionTimes := make([]int64, 0)
 	numberOfIterations := 5
@@ -60,12 +65,12 @@ func testJobWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
 	close(stop)
 
 	if len(executionTimes) != numberOfIterations {
-		t.Errorf("ran %d times but expected to run %d times", len(executionTimes), numberOfIterations)
+		return errors.New(fmt.Sprintf("ran %d times but expected to run %d times", len(executionTimes), numberOfIterations))
 	}
 	for i := 1; i < numberOfIterations; i++ {
 		durationBetweenExecutions := executionTimes[i] - executionTimes[i-1]
-		if durationBetweenExecutions != intervalInSeconds {
-			t.Errorf("execution time was %d but was expected to be %d", durationBetweenExecutions, intervalInSeconds)
+		if durationBetweenExecutions != expectedTimeBetweenRuns {
+			return errors.New(fmt.Sprintf("execution time was %d but was expected to be %d", durationBetweenExecutions, expectedTimeBetweenRuns))
 		}
 	}
 }
