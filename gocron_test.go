@@ -30,35 +30,45 @@ func assertEqualTime(t *testing.T, actual, expected time.Time) {
 }
 
 func Test1Second(t *testing.T) {
-	s := NewScheduler()
-
-	shouldBeFive := 1
-	s.Every(1).Second().Do(func() {
-		if shouldBeFive != 5 {
-			t.Log("Working on ", shouldBeFive)
-			shouldBeFive++
-		}
-	})
-	stop := s.Start()
-	time.Sleep(6 * time.Second)
-	close(stop)
-	if shouldBeFive != 5 {
-		t.Fatalf("task expected to run at least 5 times but ran %v times", shouldBeFive)
-	}
+	intervalInSeconds := 1
+	job := defaultScheduler.Every(uint64(intervalInSeconds)).Second()
+	testSecondsWithInterval(job, int64(intervalInSeconds), t)
+	defaultScheduler.Clear()
 }
 
 func TestNSeconds(t *testing.T) {
-	s := NewScheduler()
-	shouldBeTwo := 0
-	s.Every(2).Seconds().Do(func() {
-		t.Log("Working on ", shouldBeTwo)
-		shouldBeTwo++
+	intervalInSeconds := 2
+	job := defaultScheduler.Every(uint64(intervalInSeconds)).Seconds()
+	testSecondsWithInterval(job, int64(intervalInSeconds), t)
+	defaultScheduler.Clear()
+}
+
+func testSecondsWithInterval(job *Job, intervalInSeconds int64, t *testing.T) {
+	jobDone := make(chan bool)
+	executionTimes := make([]int64, 0)
+	numberOfIterations := 5
+
+	job.Do(func() {
+		executionTimes = append(executionTimes, time.Now().Unix())
+		if len(executionTimes) >= numberOfIterations {
+			jobDone <- true
+		}
+		time.Sleep(3000)
 	})
-	stop := s.Start()
-	time.Sleep(5 * time.Second)
+
+	firstRunTime := job.nextRun.Unix()
+	stop := defaultScheduler.Start()
+	<-jobDone // Wait job done
 	close(stop)
-	if shouldBeTwo != 2 {
-		t.Fatalf("task expected to run 2 times but ran %v times", shouldBeTwo)
+
+	if len(executionTimes) != numberOfIterations {
+		t.Errorf("ran %d times but expected to run %d times", len(executionTimes), numberOfIterations)
+	}
+	for i, executionTime := range executionTimes {
+		if executionTime != firstRunTime+int64(i)*intervalInSeconds {
+			t.Errorf("execution time was %d but was expected to be %d",
+				executionTime, firstRunTime+int64(i)*intervalInSeconds)
+		}
 	}
 }
 
@@ -294,17 +304,25 @@ func TestTaskAtFuture(t *testing.T) {
 	// Schedule to run in next minute
 	startAt := fmt.Sprintf("%02d:%02d", now.Hour(), now.Add(time.Minute).Minute())
 	dayJob := s.Every(1).Day().At(startAt)
-	dayJob.Do(task)
+	shouldBeFalse := false
+
+	dayJob.Do(func() {
+		shouldBeFalse = true
+	})
 
 	// Check first run
 	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, loc)
 	nextRun := dayJob.NextScheduledTime()
 	assertEqualTime(t, nextRun, expectedStartTime)
 
-	s.RunAll()
-	// Check next runs scheduled time. Should be equal, as the job didn't run
+	s.RunPending()
+
+	// Check next run's scheduled time
 	nextRun = dayJob.NextScheduledTime()
 	assertEqualTime(t, nextRun, expectedStartTime)
+	if shouldBeFalse == true {
+		t.Error("Day job was not expected to run as it was in the future")
+	}
 }
 
 func TestDaily(t *testing.T) {
