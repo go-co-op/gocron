@@ -247,18 +247,15 @@ func TestScheduler_Remove(t *testing.T) {
 	scheduler.Every(1).Minute().Do(task)
 	scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
 	if scheduler.Len() != 2 {
-		t.Fail()
-		t.Logf("Incorrect number of jobs - expected 2, actual %d", scheduler.Len())
+		t.Errorf("Incorrect number of jobs - expected 2, actual %d", scheduler.Len())
 	}
 	scheduler.Remove(task)
 	if scheduler.Len() != 1 {
-		t.Fail()
-		t.Logf("Incorrect number of jobs after removing 1 job - expected 1, actual %d", scheduler.Len())
+		t.Errorf("Incorrect number of jobs after removing 1 job - expected 1, actual %d", scheduler.Len())
 	}
 	scheduler.Remove(task)
 	if scheduler.Len() != 1 {
-		t.Fail()
-		t.Logf("Incorrect number of jobs after removing non-existent job - expected 1, actual %d", scheduler.Len())
+		t.Errorf("Incorrect number of jobs after removing non-existent job - expected 1, actual %d", scheduler.Len())
 	}
 }
 
@@ -422,14 +419,14 @@ func TestWeekdayBeforeToday(t *testing.T) {
 	}
 
 	weekJob.scheduleNextRun()
-	exp := time.Date(now.Year(), now.Month(), now.Day()+6, 0, 0, 0, 0, loc)
+	exp := time.Date(now.Year(), now.Month(), now.Add(6*24*time.Hour).Day(), 0, 0, 0, 0, loc)
 	assertEqualTime(t, weekJob.nextRun, exp)
 
 	// Simulate job run 7 days before
 	weekJob.lastRun = weekJob.nextRun.AddDate(0, 0, -7)
 	// Next run
 	weekJob.scheduleNextRun()
-	exp = time.Date(now.Year(), now.Month(), now.Day()+6, 0, 0, 0, 0, loc)
+	exp = time.Date(now.Year(), now.Month(), now.Add(6*24*time.Hour).Day(), 0, 0, 0, 0, loc)
 	assertEqualTime(t, weekJob.nextRun, exp)
 }
 
@@ -464,13 +461,13 @@ func TestWeekdayAt(t *testing.T) {
 
 	// First run
 	weekJob.scheduleNextRun()
-	exp := time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, loc)
+	exp := time.Date(now.Year(), now.Month(), now.Add(24*time.Hour).Day(), hour, minute, 0, 0, loc)
 	assertEqualTime(t, weekJob.nextRun, exp)
 
 	// Simulate job run 7 days before
 	weekJob.lastRun = weekJob.nextRun.AddDate(0, 0, -7)
 	// Next run
 	weekJob.scheduleNextRun()
-	exp = time.Date(now.Year(), now.Month(), now.Day()+1, hour, minute, 0, 0, loc)
+	exp = time.Date(now.Year(), now.Month(), now.Add(24*time.Hour).Day(), hour, minute, 0, 0, loc)
 	assertEqualTime(t, weekJob.nextRun, exp)
 }
