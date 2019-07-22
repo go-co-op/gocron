@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"testing"
 	"time"
 )
@@ -475,4 +476,103 @@ func TestWeekdayAt(t *testing.T) {
 	weekJob.scheduleNextRun()
 	exp = time.Date(now.Year(), now.Month(), now.Add(24*time.Hour).Day(), hour, minute, 0, 0, loc)
 	assertEqualTime(t, weekJob.nextRun, exp)
+}
+
+type lockerMock struct {
+	cache map[string]struct{}
+	l     sync.Mutex
+}
+
+func (l *lockerMock) Lock(key string) (bool, error) {
+	l.l.Lock()
+	defer l.l.Unlock()
+	if _, ok := l.cache[key]; ok {
+		return false, nil
+	}
+	l.cache[key] = struct{}{}
+	return true, nil
+}
+
+func (l *lockerMock) Unlock(key string) error {
+	l.l.Lock()
+	defer l.l.Unlock()
+	delete(l.cache, key)
+	return nil
+}
+
+func TestSetLocker(t *testing.T) {
+	if locker != nil {
+		t.Fail()
+		t.Log("Expected locker to not be set by default")
+	}
+
+	SetLocker(&lockerMock{})
+
+	if locker == nil {
+		t.Fail()
+		t.Log("Expected locker to be set")
+	}
+}
+
+type lockerResult struct {
+	key   string
+	cycle int
+	s, e  time.Time
+}
+
+func TestLocker(t *testing.T) {
+	l := sync.Mutex{}
+
+	result := make([]lockerResult, 0)
+	task := func(key string, i int) {
+		s := time.Now()
+		time.Sleep(time.Millisecond * 1000)
+		e := time.Now()
+		l.Lock()
+		result = append(result, lockerResult{
+			key:   key,
+			cycle: i,
+			s:     s,
+			e:     e,
+		})
+		l.Unlock()
+	}
+
+	SetLocker(&lockerMock{
+		make(map[string]struct{}),
+		sync.Mutex{},
+	})
+
+	for i := 0; i < 50; i++ {
+		s1 := NewScheduler()
+		s1.Every(1).Seconds().Lock().Do(task, "A", i)
+
+		s2 := NewScheduler()
+		s2.Every(1).Seconds().Lock().Do(task, "B", i)
+
+		s3 := NewScheduler()
+		s3.Every(1).Seconds().Lock().Do(task, "C", i)
+
+		stop1 := s1.Start()
+		stop2 := s2.Start()
+		stop3 := s3.Start()
+
+		time.Sleep(time.Millisecond * 1500)
+
+		close(stop1)
+		close(stop2)
+		close(stop3)
+
+		for i := 0; i < len(result)-1; i++ {
+			for j := i + 1; j < len(result); j++ {
+				iBefJ := result[i].s.Before(result[j].s) && result[i].e.Before(result[j].s)
+				jBefI := result[j].s.Before(result[i].s) && result[j].e.Before(result[i].s)
+				if !iBefJ && !jBefI {
+					t.Fatalf("\n2 operations ran concurrently:\n%s\n%d\n%s\n%s\n**********\n%s\n%d\n%s\n%s\n",
+						result[i].key, result[i].cycle, result[i].s, result[i].e,
+						result[j].key, result[j].cycle, result[j].s, result[j].e)
+				}
+			}
+		}
+	}
 }

@@ -76,6 +76,14 @@ func main() {
 
 and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon (help is wanted! If you want to contribute, pull requests are welcome).
 
+If you need to prevent a job from running at the same time from multiple cron instances (like running a cron app from multiple servers),
+you can provide a [Locker implementation](example/lock.go) and lock the required jobs.
+
+```go
+gocron.SetLocker(lockerImplementation)
+gocron.Every(1).Hour().Lock().Do(task)
+```
+
 Once again, thanks to the great works of Ruby clockwork and Python schedule package. BSD license is used, see the file License for detail.
 
 Have fun!
