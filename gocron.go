@@ -80,7 +80,7 @@ func NewJob(interval uint64) *Job {
 		time.Unix(0, 0),
 		time.Sunday,
 		make(map[string]interface{}),
- 		make(map[string][]interface{}),
+		make(map[string][]interface{}),
 		false,
 	}
 }
@@ -94,7 +94,7 @@ func (j *Job) shouldRun() bool {
 func (j *Job) run() (result []reflect.Value, err error) {
 	if j.lock {
 		if locker == nil {
-			err = fmt.Errorf("Trying to lock %s with nil locker.", j.jobFunc)
+			err = fmt.Errorf("trying to lock %s with nil locker", j.jobFunc)
 			return
 		}
 		key := getFunctionKey(j.jobFunc)

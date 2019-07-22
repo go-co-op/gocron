@@ -2,7 +2,7 @@ package gocron
 
 import (
 	"fmt"
-  "log"
+	"log"
 	"sync"
 	"testing"
 	"time"
