@@ -22,6 +22,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"runtime"
 	"sort"
@@ -149,6 +150,17 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) {
 	j.scheduleNextRun()
 }
 
+// DoSafely does the same thing as Do, but logs unexpected panics, instead of unwinding them up the chain
+func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Internal panic occurred: %s", err)
+		}
+	}()
+
+	j.Do(jobFun, params)
+}
+
 func formatTime(t string) (hour, min int, err error) {
 	var er = errors.New("time format error")
 	ts := strings.Split(t, ":")
@@ -188,11 +200,11 @@ func (j *Job) periodDuration() time.Duration {
 	interval := time.Duration(j.interval)
 	switch j.unit {
 	case "seconds":
-		return time.Duration(interval * time.Second)
+		return interval * time.Second
 	case "minutes":
-		return time.Duration(interval * time.Minute)
+		return interval * time.Minute
 	case "hours":
-		return time.Duration(interval * time.Hour)
+		return interval * time.Hour
 	case "days":
 		return time.Duration(interval * time.Hour * 24)
 	case "weeks":
@@ -214,6 +226,8 @@ func (j *Job) scheduleNextRun() {
 	}
 
 	switch j.unit {
+	case "seconds", "minutes", "hours":
+		j.nextRun = j.lastRun.Add(j.periodDuration())
 	case "days":
 		j.nextRun = j.roundToMidnight(j.lastRun)
 		j.nextRun = j.nextRun.Add(j.atTime)
@@ -225,8 +239,6 @@ func (j *Job) scheduleNextRun() {
 			j.nextRun = j.nextRun.Add(time.Duration(dayDiff) * 24 * time.Hour)
 		}
 		j.nextRun = j.nextRun.Add(j.atTime)
-	default:
-		j.nextRun = j.lastRun
 	}
 
 	// advance to next possible schedule
@@ -244,7 +256,7 @@ func (j *Job) NextScheduledTime() time.Time {
 
 func (j *Job) mustInterval(i uint64) {
 	if j.interval != i {
-		panic(fmt.Sprintf("interval maust be %d", i))
+		panic(fmt.Sprintf("interval must be %d", i))
 	}
 }
 
@@ -377,7 +389,7 @@ func NewScheduler() *Scheduler {
 }
 
 // Get the current runnable jobs, which shouldRun is True
-func (s *Scheduler) getRunnableJobs() (running_jobs [MAXJOBNUM]*Job, n int) {
+func (s *Scheduler) getRunnableJobs() (runningJobs [MAXJOBNUM]*Job, n int) {
 	runnableJobs := [MAXJOBNUM]*Job{}
 	n = 0
 	sort.Sort(s)

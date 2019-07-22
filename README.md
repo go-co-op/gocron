@@ -34,6 +34,9 @@ func taskWithParams(a int, b string) {
 func main() {
 	// Do jobs with params
 	gocron.Every(1).Second().Do(taskWithParams, 1, "hello")
+	
+	// Do jobs safely, preventing an unexpected panic from bubbling up
+	gocron.Every(1).Second().DoSafely(taskWithParams, 1, "hello")
 
 	// Do jobs without params
 	gocron.Every(1).Second().Do(task)
@@ -63,16 +66,15 @@ func main() {
 	// function Start start all the pending jobs
 	<- gocron.Start()
 
-	// also , you can create a your new scheduler,
-	// to run two scheduler concurrently
+	// also, you can create a new scheduler
+	// to run two schedulers concurrently
 	s := gocron.NewScheduler()
 	s.Every(3).Seconds().Do(task)
 	<- s.Start()
-
 }
 ```
 
-and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon.
+and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon (help is wanted! If you want to contribute, pull requests are welcome).
 
 If you need to prevent a job from running at the same time from multiple cron instances (like running a cron app from multiple servers),
 you can provide a [Locker implementation](example/lock.go) and lock the required jobs.
