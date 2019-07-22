@@ -419,7 +419,7 @@ func (s *Scheduler) Remove(j interface{}) {
 		s.jobs[i] = s.jobs[j]
 		i++
 	}
-	s.size = s.size - 1
+	s.size--
 }
 
 // Check if specific job j was already added
