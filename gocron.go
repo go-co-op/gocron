@@ -158,11 +158,11 @@ func (j *Job) periodDuration() time.Duration {
 	interval := time.Duration(j.interval)
 	switch j.unit {
 	case "seconds":
-		return time.Duration(interval * time.Second)
+		return interval * time.Second
 	case "minutes":
-		return time.Duration(interval * time.Minute)
+		return interval * time.Minute
 	case "hours":
-		return time.Duration(interval * time.Hour)
+		return interval * time.Hour
 	case "days":
 		return time.Duration(interval * time.Hour * 24)
 	case "weeks":
