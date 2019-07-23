@@ -74,6 +74,7 @@ func testJobWithInterval(job *Job, expectedTimeBetweenRuns int64) error {
 			return errors.New(fmt.Sprintf("execution time was %d but was expected to be %d", durationBetweenExecutions, expectedTimeBetweenRuns))
 		}
 	}
+	return nil
 }
 
 func TestSafeExecution(t *testing.T) {
@@ -543,7 +544,7 @@ func TestLocker(t *testing.T) {
 		sync.Mutex{},
 	})
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 20; i++ {
 		s1 := NewScheduler()
 		s1.Every(1).Seconds().Lock().Do(task, "A", i)
 
