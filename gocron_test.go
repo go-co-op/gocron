@@ -290,12 +290,8 @@ func TestTaskAtFuture(t *testing.T) {
 	now := time.Now()
 
 	// Schedule to run in next minute
-	hour := now.Hour()
-	minute := now.Add(time.Minute).Minute()
-	if minute == 0 {
-		hour = now.Add(time.Duration(1 * time.Hour)).Hour()
-	}
-	startAt := fmt.Sprintf("%02d:%02d", hour, minute)
+	nextMinute := now.Add(time.Duration(1 * time.Minute))
+	startAt := fmt.Sprintf("%02d:%02d", nextMinute.Hour(), nextMinute.Minute())
 	dayJob := s.Every(1).Day().At(startAt)
 	shouldBeFalse := false
 
