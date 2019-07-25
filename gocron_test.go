@@ -290,8 +290,8 @@ func TestTaskAtFuture(t *testing.T) {
 	now := time.Now()
 
 	// Schedule to run in next minute
-	nextMinute := now.Add(time.Duration(1 * time.Minute))
-	startAt := fmt.Sprintf("%02d:%02d", nextMinute.Hour(), nextMinute.Minute())
+	nextMinuteTime := now.Add(time.Duration(1 * time.Minute))
+	startAt := fmt.Sprintf("%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute())
 	dayJob := s.Every(1).Day().At(startAt)
 	shouldBeFalse := false
 
@@ -338,19 +338,15 @@ func TestDaily(t *testing.T) {
 	assert.Equal(t, dayJob.nextRun, expectedTime)
 
 	// At() 2 hours before now
-	hour := now.Add(time.Duration(-2 * time.Hour)).Hour()
-	minute := now.Minute()
-	startAt := fmt.Sprintf("%02d:%02d", hour, minute)
+	twoHoursBefore := now.Add(time.Duration(-2 * time.Hour))
+	startAt := fmt.Sprintf("%02d:%02d", twoHoursBefore.Hour(), twoHoursBefore.Minute())
 	dayJob = s.Every(1).Day().At(startAt)
 	dayJob.scheduleNextRun()
 
-	if now.Hour() <= 2 {
-		// same day at given hour
-		expectedTime = time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
-	} else {
-		// next day at given hour
-		expectedTime = time.Date(now.Year(), now.Month(), now.Add(time.Duration(24*time.Hour)).Day(), hour, minute, 0, 0, loc)
-	}
+	expectedTime = time.Date(twoHoursBefore.Year(), twoHoursBefore.Month(),
+		twoHoursBefore.Add(time.Duration(24*time.Hour)).Day(),
+		twoHoursBefore.Hour(), twoHoursBefore.Minute(), 0, 0, loc)
+
 	assert.Equal(t, dayJob.nextRun, expectedTime)
 }
 
