@@ -318,20 +318,20 @@ func TestDaily(t *testing.T) {
 	// schedule next run 1 day
 	dayJob := s.Every(1).Day()
 	dayJob.scheduleNextRun()
-	expectedTime := time.Date(now.Year(), now.Month(), now.Add(time.Duration(24*time.Hour)).Day(), 0, 0, 0, 0, loc)
+	expectedTime := time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, expectedTime, dayJob.nextRun)
 
 	// schedule next run 2 days
 	dayJob = s.Every(2).Days()
 	dayJob.scheduleNextRun()
-	expectedTime = time.Date(now.Year(), now.Month(), now.Add(time.Duration((24*2)*time.Hour)).Day(), 0, 0, 0, 0, loc)
+	expectedTime = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 2).Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, expectedTime, dayJob.nextRun)
 
 	// Job running longer than next schedule 1day 2 hours
 	dayJob = s.Every(1).Day()
 	dayJob.lastRun = time.Date(now.Year(), now.Month(), now.Day(), now.Add(time.Duration(2*time.Hour)).Hour(), 0, 0, 0, loc)
 	dayJob.scheduleNextRun()
-	expectedTime = time.Date(now.Year(), now.Month(), now.Add(time.Duration(24*time.Hour)).Day(), 0, 0, 0, 0, loc)
+	expectedTime = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, expectedTime, dayJob.nextRun)
 
 	// At() 2 hours before now
@@ -341,7 +341,7 @@ func TestDaily(t *testing.T) {
 	dayJob.scheduleNextRun()
 
 	expectedTime = time.Date(twoHoursBefore.Year(), twoHoursBefore.Month(),
-		twoHoursBefore.Add(time.Duration(24*time.Hour)).Day(),
+		twoHoursBefore.AddDate(0, 0, 1).Day(),
 		twoHoursBefore.Hour(), twoHoursBefore.Minute(), 0, 0, loc)
 
 	assert.Equal(t, expectedTime, dayJob.nextRun)
@@ -411,14 +411,16 @@ func TestWeekdayBeforeToday(t *testing.T) {
 	}
 
 	weekJob.scheduleNextRun()
-	exp := time.Date(now.Year(), now.Month(), now.Add(6*24*time.Hour).Day(), 0, 0, 0, 0, loc)
+	sixDaysFromNow := now.AddDate(0, 0, 6)
+
+	exp := time.Date(sixDaysFromNow.Year(), sixDaysFromNow.Month(), sixDaysFromNow.Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, exp, weekJob.nextRun)
 
 	// Simulate job run 7 days before
 	weekJob.lastRun = weekJob.nextRun.AddDate(0, 0, -7)
 	// Next run
 	weekJob.scheduleNextRun()
-	exp = time.Date(now.Year(), now.Month(), now.Add(6*24*time.Hour).Day(), 0, 0, 0, 0, loc)
+	exp = time.Date(sixDaysFromNow.Year(), sixDaysFromNow.Month(), sixDaysFromNow.Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, exp, weekJob.nextRun)
 }
 
@@ -453,14 +455,14 @@ func TestWeekdayAt(t *testing.T) {
 
 	// First run
 	weekJob.scheduleNextRun()
-	exp := time.Date(now.Year(), now.Month(), now.Add(24*time.Hour).Day(), hour, minute, 0, 0, loc)
+	exp := time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), hour, minute, 0, 0, loc)
 	assert.Equal(t, exp, weekJob.nextRun)
 
 	// Simulate job run 7 days before
 	weekJob.lastRun = weekJob.nextRun.AddDate(0, 0, -7)
 	// Next run
 	weekJob.scheduleNextRun()
-	exp = time.Date(now.Year(), now.Month(), now.Add(24*time.Hour).Day(), hour, minute, 0, 0, loc)
+	exp = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), hour, minute, 0, 0, loc)
 	assert.Equal(t, exp, weekJob.nextRun)
 }
 
