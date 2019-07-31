@@ -167,30 +167,44 @@ func Test_formatTime(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "notnumber",
+			name:     "not_a_number",
 			args:     "e:18",
 			wantHour: 0,
 			wantMin:  0,
 			wantErr:  true,
 		},
 		{
-			name:     "outofrange",
+			name:     "out_of_range_hour",
 			args:     "25:18",
-			wantHour: 25,
-			wantMin:  18,
+			wantHour: 0,
+			wantMin:  0,
 			wantErr:  true,
 		},
 		{
-			name:     "wrongformat",
+			name:     "out_of_range_minute",
+			args:     "23:60",
+			wantHour: 0,
+			wantMin:  0,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong_format",
 			args:     "19:18:17",
 			wantHour: 0,
 			wantMin:  0,
 			wantErr:  true,
 		},
 		{
-			name:     "wrongminute",
+			name:     "wrong_minute",
 			args:     "19:1e",
 			wantHour: 19,
+			wantMin:  0,
+			wantErr:  true,
+		},
+		{
+			name:     "wrong_hour",
+			args:     "1e:10",
+			wantHour: 11,
 			wantMin:  0,
 			wantErr:  true,
 		},
@@ -198,16 +212,12 @@ func Test_formatTime(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotHour, gotMin, err := formatTime(tt.args)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("formatTime() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				assert.NotEqual(t, nil, err, tt.args)
 				return
 			}
-			if gotHour != tt.wantHour {
-				t.Errorf("formatTime() gotHour = %v, want %v", gotHour, tt.wantHour)
-			}
-			if gotMin != tt.wantMin {
-				t.Errorf("formatTime() gotMin = %v, want %v", gotMin, tt.wantMin)
-			}
+			assert.Equal(t, tt.wantHour, gotHour, tt.args)
+			assert.Equal(t, tt.wantMin, gotMin, tt.args)
 		})
 	}
 }
@@ -318,18 +328,21 @@ func TestDaily(t *testing.T) {
 	// schedule next run 1 day
 	dayJob := s.Every(1).Day()
 	dayJob.scheduleNextRun()
-	expectedTime := time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), 0, 0, 0, 0, loc)
+	tomorrow := now.AddDate(0, 0, 1)
+	expectedTime := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, expectedTime, dayJob.nextRun)
 
 	// schedule next run 2 days
 	dayJob = s.Every(2).Days()
 	dayJob.scheduleNextRun()
-	expectedTime = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 2).Day(), 0, 0, 0, 0, loc)
+	twoDaysFromNow := now.AddDate(0, 0, 2)
+	expectedTime = time.Date(twoDaysFromNow.Year(), twoDaysFromNow.Month(), twoDaysFromNow.Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, expectedTime, dayJob.nextRun)
 
 	// Job running longer than next schedule 1day 2 hours
 	dayJob = s.Every(1).Day()
-	dayJob.lastRun = time.Date(now.Year(), now.Month(), now.Day(), now.Add(time.Duration(2*time.Hour)).Hour(), 0, 0, 0, loc)
+	twoHoursFromNow := now.Add(time.Duration(2 * time.Hour))
+	dayJob.lastRun = time.Date(twoHoursFromNow.Year(), twoHoursFromNow.Month(), twoHoursFromNow.Day(), twoHoursFromNow.Hour(), 0, 0, 0, loc)
 	dayJob.scheduleNextRun()
 	expectedTime = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), 0, 0, 0, 0, loc)
 	assert.Equal(t, expectedTime, dayJob.nextRun)
