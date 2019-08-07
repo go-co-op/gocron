@@ -380,7 +380,7 @@ func (s *Scheduler) Swap(i, j int) {
 }
 
 func (s *Scheduler) Less(i, j int) bool {
-	return s.jobs[j].nextRun.Second() >= s.jobs[i].nextRun.Second()
+	return s.jobs[j].nextRun.Unix() >= s.jobs[i].nextRun.Unix()
 }
 
 // NewScheduler creates a new scheduler
