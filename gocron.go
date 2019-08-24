@@ -37,6 +37,7 @@ var loc = time.Local
 // ChangeLoc change default the time location
 func ChangeLoc(newLocation *time.Location) {
 	loc = newLocation
+	defaultScheduler.ChangeLoc(newLocation)
 }
 
 // MAXJOBNUM max number of jobs, hack it if you need.
@@ -48,6 +49,7 @@ type Job struct {
 	jobFunc  string                   // the job jobFunc to run, func[jobFunc]
 	unit     string                   // time units, ,e.g. 'minutes', 'hours'...
 	atTime   time.Duration            // optional time at which this job runs
+	loc      *time.Location           // optional timezone that the atTime is in
 	lastRun  time.Time                // datetime of last run
 	nextRun  time.Time                // datetime of next run
 	startDay time.Weekday             // Specific day of the week to start on
@@ -76,6 +78,7 @@ func NewJob(interval uint64) *Job {
 	return &Job{
 		interval,
 		"", "", 0,
+		loc,
 		time.Unix(0, 0),
 		time.Unix(0, 0),
 		time.Sunday,
@@ -196,6 +199,13 @@ func (j *Job) At(t string) *Job {
 	return j
 }
 
+// Loc sets the location for which to interpret "At"
+//	s.Every(1).Day().At("10:30").Loc(time.UTC).Do(task)
+func (j *Job) Loc(loc *time.Location) *Job {
+	j.loc = loc
+	return j
+}
+
 func (j *Job) periodDuration() time.Duration {
 	interval := time.Duration(j.interval)
 	switch j.unit {
@@ -215,7 +225,7 @@ func (j *Job) periodDuration() time.Duration {
 
 // roundToMidnight truncate time to midnight
 func (j *Job) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, j.loc)
 }
 
 // scheduleNextRun Compute the instant when this job should run next
@@ -369,6 +379,7 @@ func (j *Job) Lock() *Job {
 type Scheduler struct {
 	jobs [MAXJOBNUM]*Job // Array store jobs
 	size int             // Size of jobs which jobs holding.
+	loc  *time.Location  // Location to use when scheduling jobs with specified times
 }
 
 func (s *Scheduler) Len() int {
@@ -385,7 +396,16 @@ func (s *Scheduler) Less(i, j int) bool {
 
 // NewScheduler creates a new scheduler
 func NewScheduler() *Scheduler {
-	return &Scheduler{[MAXJOBNUM]*Job{}, 0}
+	return &Scheduler{
+		jobs: [MAXJOBNUM]*Job{},
+		size: 0,
+		loc:  loc,
+	}
+}
+
+// ChangeLoc changes the default time location
+func (s *Scheduler) ChangeLoc(newLocation *time.Location) {
+	s.loc = newLocation
 }
 
 // Get the current runnable jobs, which shouldRun is True
@@ -415,7 +435,7 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 
 // Every schedule a new periodic job with interval
 func (s *Scheduler) Every(interval uint64) *Job {
-	job := NewJob(interval)
+	job := NewJob(interval).Loc(s.loc)
 	s.jobs[s.size] = job
 	s.size++
 	return job

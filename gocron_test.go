@@ -2,11 +2,12 @@ package gocron
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func task() {
@@ -126,6 +127,57 @@ func TestScheduler_WeekdaysTodayAfter(t *testing.T) {
 	if !job.NextScheduledTime().Equal(nextWeek) {
 		t.Errorf("Job should be scheduled for the correct time next week.\nGot %+v, expected %+v", job.NextScheduledTime(), nextWeek)
 	}
+}
+
+func TestScheduler_JobLocsSetProperly(t *testing.T) {
+	defaultScheduledJob := NewJob(10)
+	assert.Equal(t, defaultScheduledJob.loc, time.Local)
+	defaultScheduledJobFromScheduler := Every(10)
+	assert.Equal(t, defaultScheduledJobFromScheduler.loc, time.Local)
+
+	laLocation, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("unable to load America/Los_Angeles time location")
+	}
+
+	ChangeLoc(laLocation)
+	modifiedGlobalLocJob := NewJob(10)
+	assert.Equal(t, modifiedGlobalLocJob.loc, laLocation)
+	modifiedGlobalLocJobFromScheduler := Every(10)
+	assert.Equal(t, modifiedGlobalLocJobFromScheduler.loc, laLocation)
+
+	chiLocation, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		t.Fatalf("unable to load America/Chicago time location")
+	}
+
+	scheduler := NewScheduler()
+	scheduler.ChangeLoc(chiLocation)
+	modifiedGlobalLocJobFromScheduler = scheduler.Every(10)
+	assert.Equal(t, modifiedGlobalLocJobFromScheduler.loc, chiLocation)
+
+	// other tests depend on global state :(
+	ChangeLoc(time.Local)
+}
+
+func TestScheduleNextRunLoc(t *testing.T) {
+	laLocation, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("unable to load America/Los_Angeles time location")
+	}
+
+	sched := NewScheduler()
+	sched.ChangeLoc(time.UTC)
+
+	job := sched.Every(1).Day().At("20:44")
+
+	// job just ran (this is 20:45 UTC), so next run should be tomorrow
+	job.lastRun = time.Date(2019, 8, 24, 13, 45, 0, 0, laLocation)
+	job.Do(task)
+
+	assert.Equal(t, job.NextScheduledTime().UTC().Hour(), 20)
+	assert.Equal(t, job.NextScheduledTime().UTC().Minute(), 44)
+	assert.Equal(t, job.NextScheduledTime().UTC().Day(), 25)
 }
 
 // This is to ensure that if you schedule a job for today's weekday, and the time hasn't yet passed, the next run time
