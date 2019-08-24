@@ -161,6 +161,10 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 	j.Do(jobFun, params)
 }
 
+func Jobs() []*Job {
+	return defaultScheduler.Jobs()
+}
+
 func formatTime(t string) (hour, min int, err error) {
 	var er = errors.New("time format error")
 	ts := strings.Split(t, ":")
@@ -369,6 +373,10 @@ func (j *Job) Lock() *Job {
 type Scheduler struct {
 	jobs [MAXJOBNUM]*Job // Array store jobs
 	size int             // Size of jobs which jobs holding.
+}
+
+func (s *Scheduler) Jobs() []*Job {
+	return s.jobs[:s.size]
 }
 
 func (s *Scheduler) Len() int {

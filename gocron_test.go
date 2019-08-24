@@ -2,11 +2,12 @@ package gocron
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func task() {
@@ -576,4 +577,13 @@ func TestLocker(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestGetAllJobs(t *testing.T) {
+	Every(1).Minute().Do(task)
+	Every(2).Minutes().Do(task)
+	Every(3).Minutes().Do(task)
+	Every(4).Minutes().Do(task)
+	js := Jobs()
+	assert.Len(t, js, 4)
 }
