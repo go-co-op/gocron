@@ -2,11 +2,12 @@ package gocron
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func task() {
@@ -576,4 +577,17 @@ func TestLocker(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestTags(t *testing.T) {
+	j := Every(1).Minute()
+	j.Tag("some")
+	j.Tag("tag")
+	j.Tag("more")
+	j.Tag("tags")
+
+	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "more", "some"})
+
+	j.Untag("more")
+	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
 }
