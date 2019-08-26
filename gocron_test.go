@@ -587,3 +587,16 @@ func TestGetAllJobs(t *testing.T) {
 	js := Jobs()
 	assert.Len(t, js, 4)
 }
+
+func TestTags(t *testing.T) {
+	j := Every(1).Minute()
+	j.Tag("some")
+	j.Tag("tag")
+	j.Tag("more")
+	j.Tag("tags")
+
+	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "more", "some"})
+
+	j.Untag("more")
+	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
+}

@@ -54,6 +54,7 @@ type Job struct {
 	funcs    map[string]interface{}   // Map for the function task store
 	fparams  map[string][]interface{} // Map for function and  params of function
 	lock     bool                     // lock the job from running at same time form multiple instances
+	tags     []string                 // allow the user to tag jobs with certain labels
 }
 
 // Locker provides a method to lock jobs from running
@@ -82,6 +83,7 @@ func NewJob(interval uint64) *Job {
 		make(map[string]interface{}),
 		make(map[string][]interface{}),
 		false,
+		[]string{},
 	}
 }
 
@@ -198,6 +200,32 @@ func (j *Job) At(t string) *Job {
 	// save atTime start as duration from midnight
 	j.atTime = time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute
 	return j
+}
+
+// Tag allows you to add labels to a job
+// they don't impact the functionality of the job.
+func (j *Job) Tag(t string, others ...string) {
+	j.tags = append(j.tags, t)
+	for _, tag := range others {
+		j.tags = append(j.tags, tag)
+	}
+}
+
+// Untag removes a tag from a job
+func (j *Job) Untag(t string) {
+	newTags := []string{}
+	for _, tag := range j.tags {
+		if t != tag {
+			newTags = append(newTags, tag)
+		}
+	}
+
+	j.tags = newTags
+}
+
+// Tags returns the tags attached to the job
+func (j *Job) Tags() []string {
+	return j.tags
 }
 
 func (j *Job) periodDuration() time.Duration {
