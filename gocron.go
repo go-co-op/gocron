@@ -56,6 +56,7 @@ type Job struct {
 	funcs    map[string]interface{}   // Map for the function task store
 	fparams  map[string][]interface{} // Map for function and  params of function
 	lock     bool                     // lock the job from running at same time form multiple instances
+	tags     []string                 // allow the user to tag jobs with certain labels
 }
 
 // Locker provides a method to lock jobs from running
@@ -85,6 +86,7 @@ func NewJob(interval uint64) *Job {
 		make(map[string]interface{}),
 		make(map[string][]interface{}),
 		false,
+		[]string{},
 	}
 }
 
@@ -164,6 +166,10 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 	j.Do(jobFun, params)
 }
 
+func Jobs() []*Job {
+	return defaultScheduler.Jobs()
+}
+
 func formatTime(t string) (hour, min int, err error) {
 	var er = errors.New("time format error")
 	ts := strings.Split(t, ":")
@@ -204,6 +210,32 @@ func (j *Job) At(t string) *Job {
 func (j *Job) Loc(loc *time.Location) *Job {
 	j.loc = loc
 	return j
+}
+
+// Tag allows you to add labels to a job
+// they don't impact the functionality of the job.
+func (j *Job) Tag(t string, others ...string) {
+	j.tags = append(j.tags, t)
+	for _, tag := range others {
+		j.tags = append(j.tags, tag)
+	}
+}
+
+// Untag removes a tag from a job
+func (j *Job) Untag(t string) {
+	newTags := []string{}
+	for _, tag := range j.tags {
+		if t != tag {
+			newTags = append(newTags, tag)
+		}
+	}
+
+	j.tags = newTags
+}
+
+// Tags returns the tags attached to the job
+func (j *Job) Tags() []string {
+	return j.tags
 }
 
 func (j *Job) periodDuration() time.Duration {
@@ -380,6 +412,10 @@ type Scheduler struct {
 	jobs [MAXJOBNUM]*Job // Array store jobs
 	size int             // Size of jobs which jobs holding.
 	loc  *time.Location  // Location to use when scheduling jobs with specified times
+}
+
+func (s *Scheduler) Jobs() []*Job {
+	return s.jobs[:s.size]
 }
 
 func (s *Scheduler) Len() int {
