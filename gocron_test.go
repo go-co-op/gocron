@@ -600,3 +600,8 @@ func TestTags(t *testing.T) {
 	j.Untag("more")
 	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
 }
+
+func TestGetWeekday(t *testing.T) {
+	j := Every(1).Weekday(time.Wednesday)
+	assert.Equal(t, time.Wednesday, j.GetWeekday())
+}

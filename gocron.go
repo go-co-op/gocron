@@ -354,6 +354,12 @@ func (j *Job) Weekday(startDay time.Weekday) *Job {
 	return j.Weeks()
 }
 
+// GetWeekday returns which day of the week the job will run on
+// This should only be used when .Weekday(...) was called on the job.
+func (j *Job) GetWeekday() time.Weekday {
+	return j.startDay
+}
+
 // Monday set the start day with Monday
 // - s.Every(1).Monday().Do(task)
 func (j *Job) Monday() (job *Job) {
