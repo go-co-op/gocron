@@ -651,3 +651,8 @@ func TestTags(t *testing.T) {
 	j.Untag("more")
 	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
 }
+
+func TestGetAt(t *testing.T) {
+	j := Every(1).Minute().At("10:30")
+	assert.Equal(t, "10:30", j.GetAt())
+}
