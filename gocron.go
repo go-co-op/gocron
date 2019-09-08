@@ -483,27 +483,45 @@ func (s *Scheduler) RunAllwithDelay(d int) {
 	}
 }
 
-// Remove specific job j
+// Remove specific job j by function
 func (s *Scheduler) Remove(j interface{}) {
+	s.removeByCondition(func(someJob *Job) bool {
+		return someJob.jobFunc == getFunctionName(j)
+	})
+}
+
+// RemoveByRef removes specific job j by reference
+func (s *Scheduler) RemoveByRef(j *Job) {
+	s.removeByCondition(func(someJob *Job) bool {
+		return someJob == j
+	})
+}
+
+func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	i := 0
-	found := false
 
-	for ; i < s.size; i++ {
-		if s.jobs[i].jobFunc == getFunctionName(j) {
-			found = true
-			break
+	// keep deleting until no more jobs match the criteria
+	for {
+		found := false
+
+		for ; i < s.size; i++ {
+			if shouldRemove(s.jobs[i]) {
+				found = true
+				break
+			}
 		}
-	}
 
-	if !found {
-		return
-	}
+		if !found {
+			return
+		}
 
-	for j := (i + 1); j < s.size; j++ {
-		s.jobs[i] = s.jobs[j]
-		i++
+		for j := (i + 1); j < s.size; j++ {
+			s.jobs[i] = s.jobs[j]
+			i++
+		}
+		s.size--
+		s.jobs[s.size] = nil
 	}
-	s.size--
 }
 
 // Check if specific job j was already added
