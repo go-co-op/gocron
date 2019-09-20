@@ -311,6 +311,19 @@ func TestScheduler_Remove(t *testing.T) {
 	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
 }
 
+func TestScheduler_RemoveByRef(t *testing.T) {
+	scheduler := NewScheduler()
+	job1 := scheduler.Every(1).Minute()
+	job1.Do(task)
+	job2 := scheduler.Every(1).Minute()
+	job2.Do(taskWithParams, 1, "hello")
+
+	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+
+	scheduler.RemoveByRef(job1)
+	assert.ElementsMatch(t, []*Job{job2}, scheduler.Jobs())
+}
+
 func TestTaskAt(t *testing.T) {
 	// Create new scheduler to have clean test env
 	s := NewScheduler()
@@ -655,4 +668,9 @@ func TestTags(t *testing.T) {
 func TestGetAt(t *testing.T) {
 	j := Every(1).Minute().At("10:30")
 	assert.Equal(t, "10:30", j.GetAt())
+}
+
+func TestGetWeekday(t *testing.T) {
+	j := Every(1).Weekday(time.Wednesday)
+	assert.Equal(t, time.Wednesday, j.GetWeekday())
 }
