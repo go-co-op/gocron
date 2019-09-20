@@ -646,6 +646,7 @@ func TestLocker(t *testing.T) {
 }
 
 func TestGetAllJobs(t *testing.T) {
+	defaultScheduler = NewScheduler()
 	Every(1).Minute().Do(task)
 	Every(2).Minutes().Do(task)
 	Every(3).Minutes().Do(task)
