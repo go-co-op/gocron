@@ -26,19 +26,20 @@ func failingTask() {
 	log.Panic("I am panicking!")
 }
 
-func TestSeconds(t *testing.T) {
-	// .Second()
+func TestSecond(t *testing.T) {
 	job := defaultScheduler.Every(1).Second()
 	err := testJobWithInterval(t, job, 1)
 	if err != nil {
 		t.Error(err)
 	}
-	defaultScheduler.Clear()
+}
 
-	// .Seconds()
-	job = defaultScheduler.Every(2).Seconds()
-	err = testJobWithInterval(t, job, 2)
-	defaultScheduler.Clear()
+func TestSeconds(t *testing.T) {
+	job := defaultScheduler.Every(2).Seconds()
+	err := testJobWithInterval(t, job, 2)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
 func testJobWithInterval(t *testing.T, job *Job, expectedTimeBetweenRuns int64) error {
