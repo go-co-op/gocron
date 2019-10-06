@@ -28,21 +28,15 @@ func failingTask() {
 
 func TestSecond(t *testing.T) {
 	job := defaultScheduler.Every(1).Second()
-	err := testJobWithInterval(t, job, 1)
-	if err != nil {
-		t.Error(err)
-	}
+	testJobWithInterval(t, job, 1)
 }
 
 func TestSeconds(t *testing.T) {
 	job := defaultScheduler.Every(2).Seconds()
-	err := testJobWithInterval(t, job, 2)
-	if err != nil {
-		t.Error(err)
-	}
+	testJobWithInterval(t, job, 2)
 }
 
-func testJobWithInterval(t *testing.T, job *Job, expectedTimeBetweenRuns int64) error {
+func testJobWithInterval(t *testing.T, job *Job, expectedTimeBetweenRuns int64) {
 	jobDone := make(chan bool)
 	executionTimes := make([]int64, 0)
 	numberOfIterations := 5
@@ -64,7 +58,6 @@ func testJobWithInterval(t *testing.T, job *Job, expectedTimeBetweenRuns int64) 
 		durationBetweenExecutions := executionTimes[i] - executionTimes[i-1]
 		assert.Equal(t, expectedTimeBetweenRuns, durationBetweenExecutions, "Duration between tasks does not correspond to expectations")
 	}
-	return nil
 }
 
 func TestSafeExecution(t *testing.T) {
