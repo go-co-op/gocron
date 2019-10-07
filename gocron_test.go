@@ -27,16 +27,18 @@ func failingTask() {
 }
 
 func TestSecond(t *testing.T) {
-	job := defaultScheduler.Every(1).Second()
-	testJobWithInterval(t, job, 1)
+	sched := NewScheduler()
+	job := sched.Every(1).Second()
+	testJobWithInterval(t, sched, job, 1)
 }
 
 func TestSeconds(t *testing.T) {
-	job := defaultScheduler.Every(2).Seconds()
-	testJobWithInterval(t, job, 2)
+	sched := NewScheduler()
+	job := sched.Every(2).Seconds()
+	testJobWithInterval(t, sched, job, 2)
 }
 
-func testJobWithInterval(t *testing.T, job *Job, expectedTimeBetweenRuns int64) {
+func testJobWithInterval(t *testing.T, sched *Scheduler, job *Job, expectedTimeBetweenRuns int64) {
 	jobDone := make(chan bool)
 	executionTimes := make([]int64, 0)
 	numberOfIterations := 5
@@ -48,7 +50,7 @@ func testJobWithInterval(t *testing.T, job *Job, expectedTimeBetweenRuns int64) 
 		}
 	})
 
-	stop := defaultScheduler.Start()
+	stop := sched.Start()
 	<-jobDone // Wait job done
 	close(stop)
 
@@ -65,7 +67,6 @@ func TestSafeExecution(t *testing.T) {
 	success := false
 	sched.Every(1).Second().Do(mutatingTask, &success)
 	sched.RunAll()
-	sched.Clear()
 	assert.Equal(t, true, success, "Task did not get called")
 }
 
@@ -79,7 +80,6 @@ func TestSafeExecutionWithPanic(t *testing.T) {
 	sched := NewScheduler()
 	sched.Every(1).Second().DoSafely(failingTask)
 	sched.RunAll()
-	sched.Clear()
 }
 
 func TestScheduled(t *testing.T) {
