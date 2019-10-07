@@ -1,4 +1,4 @@
-module gocron
+module github.com/jasonlvhit/gocron
 
 go 1.13
 
