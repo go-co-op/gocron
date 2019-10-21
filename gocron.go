@@ -125,8 +125,8 @@ func (j *Job) run() (result []reflect.Value, err error) {
 	for k, param := range params {
 		in[k] = reflect.ValueOf(param)
 	}
-	result = f.Call(in)
 	j.lastRun = time.Now()
+	result = f.Call(in)
 	j.scheduleNextRun()
 	return
 }
