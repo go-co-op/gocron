@@ -18,14 +18,6 @@ func taskWithParams(a int, b string) {
 	fmt.Println(a, b)
 }
 
-func mutatingTask(mutableValue *bool) {
-	*mutableValue = !*mutableValue
-}
-
-func failingTask() {
-	log.Panic("I am panicking!")
-}
-
 func TestSecond(t *testing.T) {
 	sched := NewScheduler()
 	job := sched.Every(1).Second()
@@ -65,20 +57,24 @@ func testJobWithInterval(t *testing.T, sched *Scheduler, job *Job, expectedTimeB
 func TestSafeExecution(t *testing.T) {
 	sched := NewScheduler()
 	success := false
-	sched.Every(1).Second().Do(mutatingTask, &success)
+	sched.Every(1).Second().Do(func(mutableValue *bool) {
+		*mutableValue = !*mutableValue
+	}, &success)
 	sched.RunAll()
 	assert.Equal(t, true, success, "Task did not get called")
 }
 
 func TestSafeExecutionWithPanic(t *testing.T) {
 	defer func() {
-		if err := recover(); err != nil {
-			t.Errorf("Unexpected internal panic occurred: %s", err)
+		if r := recover(); r != nil {
+			t.Errorf("Unexpected internal panic occurred: %s", r)
 		}
 	}()
 
 	sched := NewScheduler()
-	sched.Every(1).Second().DoSafely(failingTask)
+	sched.Every(1).Second().DoSafely(func() {
+		log.Panic("I am panicking!")
+	})
 	sched.RunAll()
 }
 
