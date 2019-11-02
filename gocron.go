@@ -281,7 +281,7 @@ func (j *Job) scheduleNextRun() {
 	if j.lastRun == time.Unix(0, 0) {
 		j.lastRun = now
 	} else if j.lastRun == time.Unix(0, 1) {
-		j.nextRun = now.Add(time.Duration(1) * time.Second)
+		j.nextRun = now
 		return
 	}
 

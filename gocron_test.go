@@ -185,7 +185,7 @@ func TestScheduleNextRunBeginNow(t *testing.T) {
 	job := sched.Every(1).Hour().BeginNow()
 	job.Do(task)
 
-	assert.Exactly(t, now.Add(time.Duration(1)*time.Second).UTC().Second(), job.NextScheduledTime().UTC().Second())
+	assert.Exactly(t, now.UTC().Second(), job.NextScheduledTime().UTC().Second())
 }
 
 // This is to ensure that if you schedule a job for today's weekday, and the time hasn't yet passed, the next run time
