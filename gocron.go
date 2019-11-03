@@ -115,20 +115,22 @@ func (j *Job) run() (result []reflect.Value, err error) {
 		}()
 	}
 
-	f := reflect.ValueOf(j.funcs[j.jobFunc])
-	params := j.fparams[j.jobFunc]
+	j.lastRun = time.Now()
+	result, err = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	j.scheduleNextRun()
+	return
+}
+
+func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect.Value, error) {
+	f := reflect.ValueOf(jobFunc)
 	if len(params) != f.Type().NumIn() {
-		err = errors.New("the number of param is not adapted")
-		return
+		return nil, errors.New("the number of params is not matched")
 	}
 	in := make([]reflect.Value, len(params))
 	for k, param := range params {
 		in[k] = reflect.ValueOf(param)
 	}
-	j.lastRun = time.Now()
-	result = f.Call(in)
-	j.scheduleNextRun()
-	return
+	return f.Call(in), nil
 }
 
 // for given function fn, get the name of function.
@@ -157,13 +159,17 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) {
 
 // DoSafely does the same thing as Do, but logs unexpected panics, instead of unwinding them up the chain
 func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Printf("Internal panic occurred: %s", err)
-		}
-	}()
+	recoveryWrapperFunc := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("Internal panic occurred: %s", r)
+			}
+		}()
 
-	j.Do(jobFun, params)
+		_, _ = callJobFuncWithParams(jobFun, params)
+	}
+
+	j.Do(recoveryWrapperFunc, params...)
 }
 
 func Jobs() []*Job {
