@@ -115,8 +115,8 @@ func (j *Job) run() (result []reflect.Value, err error) {
 		}()
 	}
 
-	result, err = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 	j.lastRun = time.Now()
+	result, err = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 	j.scheduleNextRun()
 	return
 }
@@ -166,10 +166,7 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 			}
 		}()
 
-		_, err := callJobFuncWithParams(jobFun, params)
-		if err != nil {
-			log.Printf("ERROR: %v", err)
-		}
+		_, _ = callJobFuncWithParams(jobFun, params)
 	}
 
 	j.Do(recoveryWrapperFunc, params...)
