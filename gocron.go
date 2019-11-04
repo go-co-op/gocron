@@ -280,8 +280,9 @@ func (j *Job) scheduleNextRun() {
 	now := time.Now()
 	if j.lastRun == time.Unix(0, 0) {
 		j.lastRun = now
-	} else if j.lastRun == time.Unix(0, 1) {
-		j.nextRun = now
+	}
+
+	if j.nextRun.After(now) {
 		return
 	}
 
@@ -320,10 +321,16 @@ func (j *Job) mustInterval(i uint64) {
 	}
 }
 
-// BeginNow schedules the next run of the job immediately
-func (j *Job) BeginNow() *Job {
-	j.lastRun = time.Unix(0, 1)
+// From schedules the next run of the job
+func (j *Job) From(t *time.Time) *Job {
+	j.nextRun = *t
 	return j
+}
+
+// NowPlusSecond returns a pointer to time.Now() plus one second
+func NowPlusSecond() *time.Time {
+	now := time.Now().Add(time.Second)
+	return &now
 }
 
 // setUnit sets unit type

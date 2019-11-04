@@ -58,7 +58,7 @@ func main() {
 	gocron.Every(1).Monday().At("18:30").Do(task)
 
 	// Begin job immediately upon start
-	gocron.Every(1).Hour().BeginNow().Do(task)
+	gocron.Every(1).Hour().From(gocron.Now()).Do(task)
 
 	// remove, clear and next_run
 	_, time := gocron.NextRun()
