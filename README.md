@@ -60,7 +60,7 @@ func main() {
 	gocron.Every(1).Monday().At("18:30").Do(task)
 
 	// Begin job immediately upon start
-	gocron.Every(1).Hour().From(gocron.NowPlusSecond()).Do(task)
+	gocron.Every(1).Hour().From(gocron.NextTick()).Do(task)
 	
 	// Begin job at a specific date/time
 	t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.Local)

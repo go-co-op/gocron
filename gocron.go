@@ -327,8 +327,8 @@ func (j *Job) From(t *time.Time) *Job {
 	return j
 }
 
-// NowPlusSecond returns a pointer to time.Now() plus one second
-func NowPlusSecond() *time.Time {
+// NextTick returns a pointer to a time that will run at the next tick
+func NextTick() *time.Time {
 	now := time.Now().Add(time.Second)
 	return &now
 }

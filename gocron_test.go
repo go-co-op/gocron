@@ -182,7 +182,7 @@ func TestScheduleNextRunFromNow(t *testing.T) {
 	sched := NewScheduler()
 	sched.ChangeLoc(time.UTC)
 
-	job := sched.Every(1).Hour().From(NowPlusSecond())
+	job := sched.Every(1).Hour().From(NextTick())
 	job.Do(task)
 
 	next := job.NextScheduledTime()
