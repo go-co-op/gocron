@@ -43,6 +43,14 @@ func ChangeLoc(newLocation *time.Location) {
 // MAXJOBNUM max number of jobs, hack it if you need.
 const MAXJOBNUM = 10000
 
+const (
+	seconds = "seconds"
+	minutes = "minutes"
+	hours   = "hours"
+	days    = "days"
+	weeks   = "weeks"
+)
+
 // Job struct keeping information about job
 type Job struct {
 	interval uint64                   // pause interval * unit bettween runs
@@ -172,6 +180,7 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 	j.Do(recoveryWrapperFunc, params...)
 }
 
+// Jobs returns the list of Jobs from the defaultScheduler
 func Jobs() []*Job {
 	return defaultScheduler.Jobs()
 }
@@ -253,15 +262,15 @@ func (j *Job) Tags() []string {
 func (j *Job) periodDuration() time.Duration {
 	interval := time.Duration(j.interval)
 	switch j.unit {
-	case "seconds":
+	case seconds:
 		return interval * time.Second
-	case "minutes":
+	case minutes:
 		return interval * time.Minute
-	case "hours":
+	case hours:
 		return interval * time.Hour
-	case "days":
+	case days:
 		return time.Duration(interval * time.Hour * 24)
-	case "weeks":
+	case weeks:
 		return time.Duration(interval * time.Hour * 24 * 7)
 	}
 	panic("unspecified job period") // unspecified period
@@ -279,13 +288,17 @@ func (j *Job) scheduleNextRun() {
 		j.lastRun = now
 	}
 
+	if j.nextRun.After(now) {
+		return
+	}
+
 	switch j.unit {
-	case "seconds", "minutes", "hours":
+	case seconds, minutes, hours:
 		j.nextRun = j.lastRun.Add(j.periodDuration())
-	case "days":
+	case days:
 		j.nextRun = j.roundToMidnight(j.lastRun)
 		j.nextRun = j.nextRun.Add(j.atTime)
-	case "weeks":
+	case weeks:
 		j.nextRun = j.roundToMidnight(j.lastRun)
 		dayDiff := int(j.startDay)
 		dayDiff -= int(j.nextRun.Weekday())
@@ -312,6 +325,18 @@ func (j *Job) mustInterval(i uint64) {
 	if j.interval != i {
 		panic(fmt.Sprintf("interval must be %d", i))
 	}
+}
+
+// From schedules the next run of the job
+func (j *Job) From(t *time.Time) *Job {
+	j.nextRun = *t
+	return j
+}
+
+// NextTick returns a pointer to a time that will run at the next tick
+func NextTick() *time.Time {
+	now := time.Now().Add(time.Second)
+	return &now
 }
 
 // setUnit sets unit type
@@ -432,6 +457,7 @@ type Scheduler struct {
 	loc  *time.Location  // Location to use when scheduling jobs with specified times
 }
 
+// Jobs returns the list of Jobs from the Scheduler
 func (s *Scheduler) Jobs() []*Job {
 	return s.jobs[:s.size]
 }
@@ -562,7 +588,7 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	}
 }
 
-// Check if specific job j was already added
+// Scheduled checks if specific job j was already added
 func (s *Scheduler) Scheduled(j interface{}) bool {
 	for _, job := range s.jobs {
 		if job.jobFunc == getFunctionName(j) {
@@ -602,7 +628,7 @@ func (s *Scheduler) Start() chan bool {
 }
 
 // The following methods are shortcuts for not having to
-// create a Schduler instance
+// create a Scheduler instance
 
 var defaultScheduler = NewScheduler()
 
@@ -651,7 +677,7 @@ func Remove(j interface{}) {
 	defaultScheduler.Remove(j)
 }
 
-// Check if specific job j was already added
+// Scheduled checks if specific job j was already added
 func Scheduled(j interface{}) bool {
 	for _, job := range defaultScheduler.jobs {
 		if job.jobFunc == getFunctionName(j) {
