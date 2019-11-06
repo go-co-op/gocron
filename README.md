@@ -14,6 +14,9 @@ See also this two great articles:
 - [Rethinking Cron](http://adam.herokuapp.com/past/2010/4/13/rethinking_cron/)
 - [Replace Cron with Clockwork](http://adam.herokuapp.com/past/2010/6/30/replace_cron_with_clockwork/)
 
+If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
+
+
 Back to this package, you could just use this simple API as below, to run a cron scheduler.
 
 ```go
