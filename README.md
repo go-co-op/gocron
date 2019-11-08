@@ -30,7 +30,7 @@ import (
 )
 
 func task() {
-	fmt.Println("I am runnning task.")
+	fmt.Println("I am running task.")
 }
 
 func taskWithParams(a int, b string) {
@@ -53,12 +53,14 @@ func main() {
 	gocron.Every(2).Hours().Do(task)
 	gocron.Every(1).Day().Do(task)
 	gocron.Every(2).Days().Do(task)
+	gocron.Every(1).Week().Do(task)
+	gocron.Every(2).Weeks().Do(task)
 
 	// Do jobs on specific weekday
 	gocron.Every(1).Monday().Do(task)
 	gocron.Every(1).Thursday().Do(task)
 
-	// function At() take a string like 'hour:min'
+	// Do a job at a specific time - 'hour:min'
 	gocron.Every(1).Day().At("10:30").Do(task)
 	gocron.Every(1).Monday().At("18:30").Do(task)
 
@@ -69,14 +71,17 @@ func main() {
 	t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.Local)
 	gocron.Every(1).Hour().From(&t).Do(task)
 
-	// remove, clear and next_run
+	// NextRun gets the next running time
 	_, time := gocron.NextRun()
 	fmt.Println(time)
 
+    // Remove a specific job
 	gocron.Remove(task)
+	
+	// Clear all scheduled jobs
 	gocron.Clear()
 
-	// function Start start all the pending jobs
+	// Start all the pending jobs
 	<- gocron.Start()
 
 	// also, you can create a new scheduler
