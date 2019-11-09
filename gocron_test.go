@@ -33,7 +33,7 @@ func TestSeconds(t *testing.T) {
 func testJobWithInterval(t *testing.T, sched *Scheduler, job *Job, expectedTimeBetweenRuns int64) {
 	jobDone := make(chan bool)
 	executionTimes := make([]int64, 0)
-	numberOfIterations := 5
+	numberOfIterations := 2
 
 	job.Do(func() {
 		executionTimes = append(executionTimes, time.Now().Unix())
@@ -46,7 +46,7 @@ func testJobWithInterval(t *testing.T, sched *Scheduler, job *Job, expectedTimeB
 	<-jobDone // Wait job done
 	close(stop)
 
-	assert.Equal(t, numberOfIterations, len(executionTimes), "did not ran expected amount of times")
+	assert.Equal(t, numberOfIterations, len(executionTimes), "did not run expected number of times")
 
 	for i := 1; i < numberOfIterations; i++ {
 		durationBetweenExecutions := executionTimes[i] - executionTimes[i-1]
@@ -82,7 +82,7 @@ func TestScheduled(t *testing.T) {
 	n := NewScheduler()
 	n.Every(1).Second().Do(task)
 	if !n.Scheduled(task) {
-		t.Fatal("Task was scheduled but function couldn't found it")
+		t.Fatal("Task was scheduled but function couldn't find it")
 	}
 }
 
@@ -601,7 +601,7 @@ func TestLocker(t *testing.T) {
 	result := make([]lockerResult, 0)
 	task := func(key string, i int) {
 		s := time.Now()
-		time.Sleep(time.Millisecond * 1000)
+		time.Sleep(time.Millisecond * 100)
 		e := time.Now()
 		l.Lock()
 		result = append(result, lockerResult{
@@ -618,7 +618,7 @@ func TestLocker(t *testing.T) {
 		sync.Mutex{},
 	})
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 5; i++ {
 		s1 := NewScheduler()
 		s1.Every(1).Seconds().Lock().Do(task, "A", i)
 
@@ -632,7 +632,7 @@ func TestLocker(t *testing.T) {
 		stop2 := s2.Start()
 		stop3 := s3.Start()
 
-		time.Sleep(time.Millisecond * 1500)
+		time.Sleep(time.Millisecond * 100)
 
 		close(stop1)
 		close(stop2)

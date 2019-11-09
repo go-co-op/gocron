@@ -347,51 +347,57 @@ func (j *Job) setUnit(unit string) *Job {
 
 // Seconds set the unit with seconds
 func (j *Job) Seconds() *Job {
-	return j.setUnit("seconds")
+	return j.setUnit(seconds)
 }
 
 // Minutes set the unit with minute
 func (j *Job) Minutes() *Job {
-	return j.setUnit("minutes")
+	return j.setUnit(minutes)
 }
 
 // Hours set the unit with hours
 func (j *Job) Hours() *Job {
-	return j.setUnit("hours")
+	return j.setUnit(hours)
 }
 
 // Days set the job's unit with days
 func (j *Job) Days() *Job {
-	return j.setUnit("days")
+	return j.setUnit(days)
 }
 
-//Weeks sets the units as weeks
+// Weeks sets the units as weeks
 func (j *Job) Weeks() *Job {
-	return j.setUnit("weeks")
+	return j.setUnit(weeks)
 }
 
-// Second set the unit with second
+// Second sets the unit with second
 func (j *Job) Second() *Job {
 	j.mustInterval(1)
 	return j.Seconds()
 }
 
-// Minute set the unit  with minute, which interval is 1
+// Minute sets the unit  with minute, which interval is 1
 func (j *Job) Minute() *Job {
 	j.mustInterval(1)
 	return j.Minutes()
 }
 
-// Hour set the unit with hour, which interval is 1
+// Hour sets the unit with hour, which interval is 1
 func (j *Job) Hour() *Job {
 	j.mustInterval(1)
 	return j.Hours()
 }
 
-// Day set the job's unit with day, which interval is 1
+// Day sets the job's unit with day, which interval is 1
 func (j *Job) Day() *Job {
 	j.mustInterval(1)
 	return j.Days()
+}
+
+// Week sets the job's unit with week, which interval is 1
+func (j *Job) Week() *Job {
+	j.mustInterval(1)
+	return j.Weeks()
 }
 
 // Weekday start job on specific Weekday
@@ -672,7 +678,7 @@ func Clear() {
 	defaultScheduler.Clear()
 }
 
-// Remove specific job
+// Remove a specific job
 func Remove(j interface{}) {
 	defaultScheduler.Remove(j)
 }
