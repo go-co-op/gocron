@@ -104,4 +104,14 @@ gocron.Every(1).Hour().Lock().Do(task)
 
 Once again, thanks to the great works of Ruby clockwork and Python schedule package. BSD license is used, see the file License for detail.
 
+Looking to contribute? Try to follow these guidelines:
+ * Use issues for everything
+ * For a small change, just send a PR!
+ * For bigger changes, please open an issue for discussion before sending a PR.
+ * PRs should have: tests, documentation and examples (if it makes sense)
+ * You can also contribute by: 
+    * Reporting issues 
+    * Suggesting new features or enhancements 
+    * Improving/fixing documentation
+
 Have fun!
