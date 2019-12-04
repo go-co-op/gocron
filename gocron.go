@@ -123,6 +123,10 @@ func (j *Job) run() (result []reflect.Value, err error) {
 		}()
 	}
 
+	for time.Now().Before(j.nextRun) {
+		time.Sleep(500 * time.Nanosecond)
+	}
+
 	j.lastRun = time.Now()
 	result, err = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 	j.scheduleNextRun()
