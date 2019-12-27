@@ -171,7 +171,7 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) {
 
 // DoSafely does the same thing as Do, but logs unexpected panics, instead of unwinding them up the chain
 func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
-	recoveryWrapperFunc := func(params ...interface{}) {
+	recoveryWrapperFunc := func() {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("Internal panic occurred: %s", r)
@@ -181,7 +181,7 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 		_, _ = callJobFuncWithParams(jobFun, params)
 	}
 
-	j.Do(recoveryWrapperFunc, params...)
+	j.Do(recoveryWrapperFunc)
 }
 
 // Jobs returns the list of Jobs from the defaultScheduler
