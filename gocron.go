@@ -185,10 +185,10 @@ func Jobs() []*Job {
 	return defaultScheduler.Jobs()
 }
 
-func formatTime(t string) (hour, min int, err error) {
+func formatTime(t string) (hour, min, sec int, err error) {
 	var er = errors.New("time format error")
 	ts := strings.Split(t, ":")
-	if len(ts) != 2 {
+	if len(ts) < 2 || len(ts) > 3 {
 		err = er
 		return
 	}
@@ -199,24 +199,29 @@ func formatTime(t string) (hour, min int, err error) {
 	if min, err = strconv.Atoi(ts[1]); err != nil {
 		return
 	}
+	if len(ts) == 3 {
+		if sec, err = strconv.Atoi(ts[2]); err != nil {
+			return
+		}
+	}
 
-	if hour < 0 || hour > 23 || min < 0 || min > 59 {
+	if hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59 {
 		err = er
 		return
 	}
-	return hour, min, nil
+	return hour, min, sec, nil
 }
 
 // At schedules job at specific time of day
-//	s.Every(1).Day().At("10:30").Do(task)
-//	s.Every(1).Monday().At("10:30").Do(task)
+//	s.Every(1).Day().At("10:30:01").Do(task)
+//	s.Every(1).Monday().At("10:30:01").Do(task)
 func (j *Job) At(t string) *Job {
-	hour, min, err := formatTime(t)
+	hour, min, sec, err := formatTime(t)
 	if err != nil {
 		panic(err)
 	}
 	// save atTime start as duration from midnight
-	j.atTime = time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute
+	j.atTime = time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second
 	return j
 }
 

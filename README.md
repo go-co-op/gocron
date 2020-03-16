@@ -25,7 +25,7 @@ package main
 import (
 	"fmt"
 	"time"
-	
+
 	"github.com/jasonlvhit/gocron"
 )
 
@@ -40,7 +40,7 @@ func taskWithParams(a int, b string) {
 func main() {
 	// Do jobs with params
 	gocron.Every(1).Second().Do(taskWithParams, 1, "hello")
-	
+
 	// Do jobs safely, preventing an unexpected panic from bubbling up
 	gocron.Every(1).Second().DoSafely(taskWithParams, 1, "hello")
 
@@ -60,13 +60,14 @@ func main() {
 	gocron.Every(1).Monday().Do(task)
 	gocron.Every(1).Thursday().Do(task)
 
-	// Do a job at a specific time - 'hour:min'
+	// Do a job at a specific time - 'hour:min:sec' - seconds optional
 	gocron.Every(1).Day().At("10:30").Do(task)
 	gocron.Every(1).Monday().At("18:30").Do(task)
+	gocron.Every(1).Tuesday().At("18:30:59").Do(task)
 
 	// Begin job immediately upon start
 	gocron.Every(1).Hour().From(gocron.NextTick()).Do(task)
-	
+
 	// Begin job at a specific date/time
 	t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.Local)
 	gocron.Every(1).Hour().From(&t).Do(task)
@@ -77,7 +78,7 @@ func main() {
 
     // Remove a specific job
 	gocron.Remove(task)
-	
+
 	// Clear all scheduled jobs
 	gocron.Clear()
 
@@ -109,9 +110,9 @@ Looking to contribute? Try to follow these guidelines:
  * For a small change, just send a PR!
  * For bigger changes, please open an issue for discussion before sending a PR.
  * PRs should have: tests, documentation and examples (if it makes sense)
- * You can also contribute by: 
-    * Reporting issues 
-    * Suggesting new features or enhancements 
+ * You can also contribute by:
+    * Reporting issues
+    * Suggesting new features or enhancements
     * Improving/fixing documentation
 
 Have fun!
