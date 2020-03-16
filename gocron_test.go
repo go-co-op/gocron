@@ -211,6 +211,7 @@ func Test_formatTime(t *testing.T) {
 		args     string
 		wantHour int
 		wantMin  int
+		wantSec  int
 		wantErr  bool
 	}{
 		{
@@ -221,10 +222,11 @@ func Test_formatTime(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:     "normal",
-			args:     "6:18",
+			name:     "normal_with_second",
+			args:     "6:18:01",
 			wantHour: 6,
 			wantMin:  18,
+			wantSec:  1,
 			wantErr:  false,
 		},
 		{
@@ -250,7 +252,7 @@ func Test_formatTime(t *testing.T) {
 		},
 		{
 			name:     "wrong_format",
-			args:     "19:18:17",
+			args:     "19:18:17:17",
 			wantHour: 0,
 			wantMin:  0,
 			wantErr:  true,
@@ -272,13 +274,18 @@ func Test_formatTime(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotHour, gotMin, err := formatTime(tt.args)
+			gotHour, gotMin, gotSec, err := formatTime(tt.args)
 			if tt.wantErr {
 				assert.NotEqual(t, nil, err, tt.args)
 				return
 			}
 			assert.Equal(t, tt.wantHour, gotHour, tt.args)
 			assert.Equal(t, tt.wantMin, gotMin, tt.args)
+			if tt.wantSec != 0 {
+				assert.Equal(t, tt.wantSec, gotSec)
+			} else {
+				assert.Zero(t, gotSec)
+			}
 		})
 	}
 }
