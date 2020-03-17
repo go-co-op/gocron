@@ -43,19 +43,22 @@ func ChangeLoc(newLocation *time.Location) {
 // MAXJOBNUM max number of jobs, hack it if you need.
 const MAXJOBNUM = 10000
 
+type timeUnit int
+
+//go:generate stringer -type=timeUnit
 const (
-	seconds = "seconds"
-	minutes = "minutes"
-	hours   = "hours"
-	days    = "days"
-	weeks   = "weeks"
+	seconds timeUnit = iota + 1
+	minutes
+	hours
+	days
+	weeks
 )
 
 // Job struct keeping information about job
 type Job struct {
 	interval uint64                   // pause interval * unit bettween runs
 	jobFunc  string                   // the job jobFunc to run, func[jobFunc]
-	unit     string                   // time units, ,e.g. 'minutes', 'hours'...
+	unit     timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	atTime   time.Duration            // optional time at which this job runs
 	loc      *time.Location           // optional timezone that the atTime is in
 	lastRun  time.Time                // datetime of last run
@@ -86,7 +89,7 @@ func SetLocker(l Locker) {
 func NewJob(interval uint64) *Job {
 	return &Job{
 		interval,
-		"", "", 0,
+		"", 0, 0,
 		loc,
 		time.Unix(0, 0),
 		time.Unix(0, 0),
@@ -345,7 +348,7 @@ func NextTick() *time.Time {
 }
 
 // setUnit sets unit type
-func (j *Job) setUnit(unit string) *Job {
+func (j *Job) setUnit(unit timeUnit) *Job {
 	j.unit = unit
 	return j
 }
