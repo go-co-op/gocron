@@ -1,18 +1,28 @@
 package gocron
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
 	"time"
 )
 
+var (
+	ErrTimeFormat           = errors.New("time format error")
+	ErrParamsNotAdapted     = errors.New("the number of params is not adapted")
+	ErrNotAFunction         = errors.New("only functions can be schedule into the job queue")
+	ErrPeriodNotSpecified   = errors.New("unspecified job period")
+	ErrParameterCannotBeNil = errors.New("nil paramaters cannot be used with reflection")
+)
+
 // Job struct keeping information about job
 type Job struct {
-	interval uint64                   // pause interval * unit bettween runs
+	interval uint64                   // pause interval * unit between runs
 	jobFunc  string                   // the job jobFunc to run, func[jobFunc]
 	unit     timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	atTime   time.Duration            // optional time at which this job runs
+	err      error                    // error related to job
 	loc      *time.Location           // optional timezone that the atTime is in
 	lastRun  time.Time                // datetime of last run
 	nextRun  time.Time                // datetime of next run
@@ -26,16 +36,14 @@ type Job struct {
 // NewJob creates a new job with the time interval.
 func NewJob(interval uint64) *Job {
 	return &Job{
-		interval,
-		"", 0, 0,
-		loc,
-		time.Unix(0, 0),
-		time.Unix(0, 0),
-		time.Sunday,
-		make(map[string]interface{}),
-		make(map[string][]interface{}),
-		false,
-		[]string{},
+		interval: interval,
+		loc:      loc,
+		lastRun:  time.Unix(0, 0),
+		nextRun:  time.Unix(0, 0),
+		startDay: time.Sunday,
+		funcs:    make(map[string]interface{}),
+		fparams:  make(map[string][]interface{}),
+		tags:     []string{},
 	}
 }
 
@@ -45,46 +53,55 @@ func (j *Job) shouldRun() bool {
 }
 
 //Run the job and immediately reschedule it
-func (j *Job) run() (result []reflect.Value, err error) {
+func (j *Job) run() ([]reflect.Value, error) {
 	if j.lock {
 		if locker == nil {
-			err = fmt.Errorf("trying to lock %s with nil locker", j.jobFunc)
-			return
+			return nil, fmt.Errorf("trying to lock %s with nil locker", j.jobFunc)
 		}
 		key := getFunctionKey(j.jobFunc)
 
-		if ok, err := locker.Lock(key); err != nil || !ok {
-			return nil, err
-		}
-
-		defer func() {
-			if e := locker.Unlock(key); e != nil {
-				err = e
-			}
-		}()
+		locker.Lock(key)
+		defer locker.Unlock(key)
 	}
 
 	j.lastRun = time.Now()
-	result, err = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
-	j.scheduleNextRun()
-	return
+	if err := j.scheduleNextRun(); err != nil {
+		return nil, err
+	}
+	result, err := callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Err should be checked to ensure an error didn't occur creating the job
+func (j *Job) Err() error {
+	return j.err
 }
 
 // Do specifies the jobFunc that should be called every time the job runs
-func (j *Job) Do(jobFun interface{}, params ...interface{}) {
+func (j *Job) Do(jobFun interface{}, params ...interface{}) error {
+	if j.err != nil {
+		return j.err
+	}
+
 	typ := reflect.TypeOf(jobFun)
 	if typ.Kind() != reflect.Func {
-		panic("only function can be schedule into the job queue.")
+		return ErrNotAFunction
 	}
 	fname := getFunctionName(jobFun)
 	j.funcs[fname] = jobFun
 	j.fparams[fname] = params
 	j.jobFunc = fname
 	j.scheduleNextRun()
+
+	return nil
 }
 
 // DoSafely does the same thing as Do, but logs unexpected panics, instead of unwinding them up the chain
-func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
+// Deprecated: DoSafely exists due to historical compatibility and will be removed soon. Use Do instead
+func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) error {
 	recoveryWrapperFunc := func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -95,7 +112,7 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 		_, _ = callJobFuncWithParams(jobFun, params)
 	}
 
-	j.Do(recoveryWrapperFunc)
+	return j.Do(recoveryWrapperFunc)
 }
 
 // At schedules job at specific time of day
@@ -104,7 +121,8 @@ func (j *Job) DoSafely(jobFun interface{}, params ...interface{}) {
 func (j *Job) At(t string) *Job {
 	hour, min, sec, err := formatTime(t)
 	if err != nil {
-		panic(err)
+		j.err = ErrTimeFormat
+		return j
 	}
 	// save atTime start as duration from midnight
 	j.atTime = time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second
@@ -150,21 +168,21 @@ func (j *Job) Tags() []string {
 	return j.tags
 }
 
-func (j *Job) periodDuration() time.Duration {
+func (j *Job) periodDuration() (time.Duration, error) {
 	interval := time.Duration(j.interval)
 	switch j.unit {
 	case seconds:
-		return interval * time.Second
+		return interval * time.Second, nil
 	case minutes:
-		return interval * time.Minute
+		return interval * time.Minute, nil
 	case hours:
-		return interval * time.Hour
+		return interval * time.Hour, nil
 	case days:
-		return time.Duration(interval * time.Hour * 24)
+		return interval * time.Hour * 24, nil
 	case weeks:
-		return time.Duration(interval * time.Hour * 24 * 7)
+		return interval * time.Hour * 24 * 7, nil
 	}
-	panic("unspecified job period") // unspecified period
+	return 0, ErrPeriodNotSpecified
 }
 
 // roundToMidnight truncate time to midnight
@@ -173,19 +191,24 @@ func (j *Job) roundToMidnight(t time.Time) time.Time {
 }
 
 // scheduleNextRun Compute the instant when this job should run next
-func (j *Job) scheduleNextRun() {
+func (j *Job) scheduleNextRun() error {
 	now := time.Now()
 	if j.lastRun == time.Unix(0, 0) {
 		j.lastRun = now
 	}
 
 	if j.nextRun.After(now) {
-		return
+		return nil
+	}
+
+	periodDuration, err := j.periodDuration()
+	if err != nil {
+		return err
 	}
 
 	switch j.unit {
 	case seconds, minutes, hours:
-		j.nextRun = j.lastRun.Add(j.periodDuration())
+		j.nextRun = j.lastRun.Add(periodDuration)
 	case days:
 		j.nextRun = j.roundToMidnight(j.lastRun)
 		j.nextRun = j.nextRun.Add(j.atTime)
@@ -201,8 +224,10 @@ func (j *Job) scheduleNextRun() {
 
 	// advance to next possible schedule
 	for j.nextRun.Before(now) || j.nextRun.Before(j.lastRun) {
-		j.nextRun = j.nextRun.Add(j.periodDuration())
+		j.nextRun = j.nextRun.Add(periodDuration)
 	}
+
+	return nil
 }
 
 // NextScheduledTime returns the time of when this job is to run next
@@ -210,12 +235,12 @@ func (j *Job) NextScheduledTime() time.Time {
 	return j.nextRun
 }
 
-// the follow functions set the job's unit with seconds,minutes,hours...
-
-func (j *Job) mustInterval(i uint64) {
+// set the job's unit with seconds,minutes,hours...
+func (j *Job) mustInterval(i uint64) error {
 	if j.interval != i {
-		panic(fmt.Sprintf("interval must be %d", i))
+		return fmt.Errorf("interval must be %d", i)
 	}
+	return nil
 }
 
 // From schedules the next run of the job
