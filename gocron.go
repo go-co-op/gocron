@@ -20,7 +20,6 @@ package gocron
 
 import (
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -70,7 +69,7 @@ func SetLocker(l Locker) {
 func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect.Value, error) {
 	f := reflect.ValueOf(jobFunc)
 	if len(params) != f.Type().NumIn() {
-		return nil, errors.New("the number of params is not matched")
+		return nil, ErrParamsNotAdapted
 	}
 	in := make([]reflect.Value, len(params))
 	for k, param := range params {
@@ -96,29 +95,27 @@ func Jobs() []*Job {
 }
 
 func formatTime(t string) (hour, min, sec int, err error) {
-	var er = errors.New("time format error")
 	ts := strings.Split(t, ":")
 	if len(ts) < 2 || len(ts) > 3 {
-		err = er
-		return
+		return 0, 0, 0, ErrTimeFormat
 	}
 
 	if hour, err = strconv.Atoi(ts[0]); err != nil {
-		return
+		return 0, 0, 0, err
 	}
 	if min, err = strconv.Atoi(ts[1]); err != nil {
-		return
+		return 0, 0, 0, err
 	}
 	if len(ts) == 3 {
 		if sec, err = strconv.Atoi(ts[2]); err != nil {
-			return
+			return 0, 0, 0, err
 		}
 	}
 
 	if hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59 {
-		err = er
-		return
+		return 0, 0, 0, ErrTimeFormat
 	}
+
 	return hour, min, sec, nil
 }
 
