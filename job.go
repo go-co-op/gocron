@@ -170,19 +170,23 @@ func (j *Job) Tags() []string {
 
 func (j *Job) periodDuration() (time.Duration, error) {
 	interval := time.Duration(j.interval)
+	var periodDuration time.Duration
+
 	switch j.unit {
 	case seconds:
-		return interval * time.Second, nil
+		periodDuration = interval * time.Second
 	case minutes:
-		return interval * time.Minute, nil
+		periodDuration = interval * time.Minute
 	case hours:
-		return interval * time.Hour, nil
+		periodDuration = interval * time.Hour
 	case days:
-		return interval * time.Hour * 24, nil
+		periodDuration = interval * time.Hour * 24
 	case weeks:
-		return interval * time.Hour * 24 * 7, nil
+		periodDuration = interval * time.Hour * 24 * 7
+	default:
+		return 0, ErrPeriodNotSpecified
 	}
-	return 0, ErrPeriodNotSpecified
+	return periodDuration, nil
 }
 
 // roundToMidnight truncate time to midnight
