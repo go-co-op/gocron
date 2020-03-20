@@ -1,7 +1,6 @@
-This package is currently looking for new maintainers (cause @jasonlvhit is in [ICU](https://github.com/996icu/996.ICU)). Please message @jasonlvhit if you are interested.
+# goCron: A Golang Job Scheduling Package.
 
-## goCron: A Golang Job Scheduling Package.
-
+[![CI State](https://github.com/go-co-op/gocron/workflows/Go%20Test/badge.svg)](https://github.com/go-co-op/gocron/actions?query=workflow%3A"Go+Test")
 [![GgoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/jasonlvhit/gocron)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jasonlvhit/gocron)](https://goreportcard.com/report/github.com/jasonlvhit/gocron)
 
