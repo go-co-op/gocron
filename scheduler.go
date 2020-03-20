@@ -209,8 +209,11 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 }
 
 func removeAtIndex(jobs []*Job, i int) []*Job {
-	jobs[i] = jobs[len(jobs)-1]
-	return jobs[:len(jobs)-1]
+	if i == len(jobs)-1 {
+		return jobs[:i]
+	}
+	jobs = append(jobs[:i], jobs[i+1:]...)
+	return jobs
 }
 
 // Scheduled checks if specific job j was already added
