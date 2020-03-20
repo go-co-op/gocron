@@ -18,32 +18,32 @@ var (
 
 // Job struct keeping information about job
 type Job struct {
-	interval uint64                   // pause interval * unit between runs
-	jobFunc  string                   // the job jobFunc to run, func[jobFunc]
-	unit     timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
-	atTime   time.Duration            // optional time at which this job runs
-	err      error                    // error related to job
-	loc      *time.Location           // optional timezone that the atTime is in
-	lastRun  time.Time                // datetime of last run
-	nextRun  time.Time                // datetime of next run
-	startDay time.Weekday             // Specific day of the week to start on
-	funcs    map[string]interface{}   // Map for the function task store
-	fparams  map[string][]interface{} // Map for function and  params of function
-	lock     bool                     // lock the job from running at same time form multiple instances
-	tags     []string                 // allow the user to tag jobs with certain labels
+	scheduler *Scheduler               // scheduler in charge of this job
+	interval  uint64                   // pause interval * unit between runs
+	jobFunc   string                   // the job jobFunc to run, func[jobFunc]
+	unit      timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
+	atTime    time.Duration            // optional time at which this job runs
+	err       error                    // error related to job
+	lastRun   time.Time                // datetime of last run
+	nextRun   time.Time                // datetime of next run
+	startDay  time.Weekday             // Specific day of the week to start on
+	funcs     map[string]interface{}   // Map for the function task store
+	fparams   map[string][]interface{} // Map for function and  params of function
+	lock      bool                     // lock the job from running at same time form multiple instances
+	tags      []string                 // allow the user to tag jobs with certain labels
 }
 
 // NewJob creates a new job with the time interval.
-func NewJob(interval uint64) *Job {
+func NewJob(s *Scheduler, interval uint64) *Job {
 	return &Job{
-		interval: interval,
-		loc:      loc,
-		lastRun:  time.Unix(0, 0),
-		nextRun:  time.Unix(0, 0),
-		startDay: time.Sunday,
-		funcs:    make(map[string]interface{}),
-		fparams:  make(map[string][]interface{}),
-		tags:     []string{},
+		scheduler: s,
+		interval:  interval,
+		lastRun:   time.Unix(0, 0),
+		nextRun:   time.Unix(0, 0),
+		startDay:  time.Sunday,
+		funcs:     make(map[string]interface{}),
+		fparams:   make(map[string][]interface{}),
+		tags:      []string{},
 	}
 }
 
@@ -65,7 +65,7 @@ func (j *Job) run() ([]reflect.Value, error) {
 	}
 
 	j.lastRun = time.Now()
-	if err := j.scheduleNextRun(); err != nil {
+	if err := j.scheduler.scheduleNextRun(j); err != nil {
 		return nil, err
 	}
 	result, err := callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
@@ -94,7 +94,7 @@ func (j *Job) Do(jobFun interface{}, params ...interface{}) error {
 	j.funcs[fname] = jobFun
 	j.fparams[fname] = params
 	j.jobFunc = fname
-	j.scheduleNextRun()
+	j.scheduler.scheduleNextRun(j)
 
 	return nil
 }
@@ -133,13 +133,6 @@ func (j *Job) At(t string) *Job {
 //	s.Every(1).Day().At("10:30").GetAt() == "10:30"
 func (j *Job) GetAt() string {
 	return fmt.Sprintf("%d:%d", j.atTime/time.Hour, (j.atTime%time.Hour)/time.Minute)
-}
-
-// Loc sets the location for which to interpret "At"
-//	s.Every(1).Day().At("10:30").Loc(time.UTC).Do(task)
-func (j *Job) Loc(loc *time.Location) *Job {
-	j.loc = loc
-	return j
 }
 
 // Tag allows you to add labels to a job
@@ -187,51 +180,6 @@ func (j *Job) periodDuration() (time.Duration, error) {
 		return 0, ErrPeriodNotSpecified
 	}
 	return periodDuration, nil
-}
-
-// roundToMidnight truncate time to midnight
-func (j *Job) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, j.loc)
-}
-
-// scheduleNextRun Compute the instant when this job should run next
-func (j *Job) scheduleNextRun() error {
-	now := time.Now()
-	if j.lastRun == time.Unix(0, 0) {
-		j.lastRun = now
-	}
-
-	if j.nextRun.After(now) {
-		return nil
-	}
-
-	periodDuration, err := j.periodDuration()
-	if err != nil {
-		return err
-	}
-
-	switch j.unit {
-	case seconds, minutes, hours:
-		j.nextRun = j.lastRun.Add(periodDuration)
-	case days:
-		j.nextRun = j.roundToMidnight(j.lastRun)
-		j.nextRun = j.nextRun.Add(j.atTime)
-	case weeks:
-		j.nextRun = j.roundToMidnight(j.lastRun)
-		dayDiff := int(j.startDay)
-		dayDiff -= int(j.nextRun.Weekday())
-		if dayDiff != 0 {
-			j.nextRun = j.nextRun.Add(time.Duration(dayDiff) * 24 * time.Hour)
-		}
-		j.nextRun = j.nextRun.Add(j.atTime)
-	}
-
-	// advance to next possible schedule
-	for j.nextRun.Before(now) || j.nextRun.Before(j.lastRun) {
-		j.nextRun = j.nextRun.Add(periodDuration)
-	}
-
-	return nil
 }
 
 // NextScheduledTime returns the time of when this job is to run next

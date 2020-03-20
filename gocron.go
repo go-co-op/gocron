@@ -38,9 +38,6 @@ type Locker interface {
 
 type timeUnit int
 
-// MAXJOBNUM max number of jobs, hack it if you need.
-const MAXJOBNUM = 10000
-
 //go:generate stringer -type=timeUnit
 const (
 	seconds timeUnit = iota + 1
@@ -51,13 +48,11 @@ const (
 )
 
 var (
-	loc    = time.Local // Time location, default set by the time.Local (*time.Location)
 	locker Locker
 )
 
 // ChangeLoc change default the time location
 func ChangeLoc(newLocation *time.Location) {
-	loc = newLocation
 	defaultScheduler.ChangeLoc(newLocation)
 }
 
