@@ -10,8 +10,8 @@ import (
 // Scheduler struct, the only data member is the list of jobs.
 // - implements the sort.Interface{} for sorting jobs, by the time nextRun
 type Scheduler struct {
-	jobs []*Job         // Array store jobs
-	loc  *time.Location // Location to use when scheduling jobs with specified times
+	jobs []*Job
+	loc  *time.Location
 }
 
 // NewScheduler creates a new scheduler
