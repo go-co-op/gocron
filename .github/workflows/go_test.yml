@@ -5,6 +5,7 @@ on:
   pull_request:
     branches:
       - master
+
 name: Go Test
 jobs:
   test:
@@ -20,5 +21,13 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Checkout code
         uses: actions/checkout@v1
-      - name: Test
+      - name: fmt
+        run: gofmt -w .
+      - name: lint
+        run: |
+          go get golang.org/x/lint/golint
+          /home/runner/go/bin/golint -set_exit_status ./...
+      - name: vet
+        run: go vet ./...
+      - name: test
         run: go test ./...
