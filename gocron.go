@@ -51,11 +51,6 @@ var (
 	locker Locker
 )
 
-// ChangeLoc change default the time location
-func ChangeLoc(newLocation *time.Location) {
-	defaultScheduler.ChangeLoc(newLocation)
-}
-
 // SetLocker sets a locker implementation
 func SetLocker(l Locker) {
 	locker = l
@@ -82,11 +77,6 @@ func getFunctionKey(funcName string) string {
 	h := sha256.New()
 	h.Write([]byte(funcName))
 	return fmt.Sprintf("%x", h.Sum(nil))
-}
-
-// Jobs returns the list of Jobs from the defaultScheduler
-func Jobs() []*Job {
-	return defaultScheduler.Jobs()
 }
 
 func formatTime(t string) (hour, min, sec int, err error) {
