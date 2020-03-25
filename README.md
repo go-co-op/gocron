@@ -1,12 +1,10 @@
-# goCron: A Golang Job Scheduling Package.
+## goCron: A Golang Job Scheduling Package.
 
 [![CI State](https://github.com/go-co-op/gocron/workflows/Go%20Test/badge.svg)](https://github.com/go-co-op/gocron/actions?query=workflow%3A"Go+Test")
-[![GgoDoc](https://godoc.org/github.com/golang/gddo?status.svg)](http://godoc.org/github.com/jasonlvhit/gocron)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jasonlvhit/gocron)](https://goreportcard.com/report/github.com/jasonlvhit/gocron)
 
 goCron is a Golang job scheduling package which lets you run Go functions periodically at pre-determined interval using a simple, human-friendly syntax.
 
-goCron is a Golang implementation of Ruby module [clockwork](https://github.com/tomykaira/clockwork) and Python job scheduling package [schedule](https://github.com/dbader/schedule), and personally, this package is my first Golang program, just for fun and practice.
+goCron is a Golang implementation of Ruby module [clockwork](https://github.com/tomykaira/clockwork) and Python job scheduling package [schedule](https://github.com/dbader/schedule).
 
 See also this two great articles:
 
@@ -15,8 +13,7 @@ See also this two great articles:
 
 If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
-
-Back to this package, you could just use this simple API as below, to run a cron scheduler.
+Examples:
 
 ```go
 package main
@@ -25,67 +22,68 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jasonlvhit/gocron"
+	"github.com/go-co-op/gocron"
 )
 
 func task() {
-	fmt.Println("I am running task.")
+    fmt.Println("I am running task.")
 }
 
 func taskWithParams(a int, b string) {
-	fmt.Println(a, b)
+    fmt.Println(a, b)
 }
 
 func main() {
-	// Do jobs without params
-	gocron.Every(1).Second().Do(task)
-	gocron.Every(2).Seconds().Do(task)
-	gocron.Every(1).Minute().Do(task)
-	gocron.Every(2).Minutes().Do(task)
-	gocron.Every(1).Hour().Do(task)
-	gocron.Every(2).Hours().Do(task)
-	gocron.Every(1).Day().Do(task)
-	gocron.Every(2).Days().Do(task)
-	gocron.Every(1).Week().Do(task)
-	gocron.Every(2).Weeks().Do(task)
+    
+    s1 := gocron.NewScheduler(time.UTC)
+    s1.Every(3).Seconds().Do(task)
+    <- s1.Start() // starts running (blocks current thread)
 
-	// Do jobs with params
-	gocron.Every(1).Second().Do(taskWithParams, 1, "hello")
+    // Do jobs without params
+    s2 := gocron.NewScheduler(time.UTC)
+    s2.Every(1).Second().Do(task)
+    s2.Every(2).Seconds().Do(task)
+    s2.Every(1).Minute().Do(task)
+    s2.Every(2).Minutes().Do(task)
+    s2.Every(1).Hour().Do(task)
+    s2.Every(2).Hours().Do(task)
+    s2.Every(1).Day().Do(task)
+    s2.Every(2).Days().Do(task)
+    s2.Every(1).Week().Do(task)
+    s2.Every(2).Weeks().Do(task)
 
-	// Do jobs on specific weekday
-	gocron.Every(1).Monday().Do(task)
-	gocron.Every(1).Thursday().Do(task)
+    // Do jobs with params
+    s2.Every(1).Second().Do(taskWithParams, 1, "hello")
 
-	// Do a job at a specific time - 'hour:min:sec' - seconds optional
-	gocron.Every(1).Day().At("10:30").Do(task)
-	gocron.Every(1).Monday().At("18:30").Do(task)
-	gocron.Every(1).Tuesday().At("18:30:59").Do(task)
+    // Do jobs on specific weekday
+    s2.Every(1).Monday().Do(task)
+    s2.Every(1).Thursday().Do(task)
 
-	// Begin job immediately upon start
-	gocron.Every(1).Hour().From(gocron.NextTick()).Do(task)
+    // Do a job at a specific time - 'hour:min:sec' - seconds optional
+    s2.Every(1).Day().At("10:30").Do(task)
+    s2.Every(1).Monday().At("18:30").Do(task)
+    s2.Every(1).Tuesday().At("18:30:59").Do(task)
 
-	// Begin job at a specific date/time
-	t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.Local)
-	gocron.Every(1).Hour().From(&t).Do(task)
+    // use .From(gocron.NextTick()) to run job immediately upon start
+    s2.Every(1).Hour().From(gocron.NextTick()).Do(task)
 
-	// NextRun gets the next running time
-	_, time := gocron.NextRun()
-	fmt.Println(time)
+    // Begin job at a specific date/time. 
+    // Attention: scheduler timezone has precedence over job's timezone!
+    t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)
+    s2.Every(1).Hour().From(&t).Do(task)
 
-	// Remove a specific job
-	gocron.Remove(task)
+    // NextRun gets the next running time
+    _, time := s2.NextRun()
+    fmt.Println(time)
 
-	// Clear all scheduled jobs
-	gocron.Clear()
+    // Remove a specific job
+    s2.Remove(task)
 
-	// Start all the pending jobs
-	<- gocron.Start()
+    // Clear all scheduled jobs
+    s2.Clear()
 
-	// also, you can create a new scheduler
-	// to run two schedulers concurrently
-	s := gocron.NewScheduler()
-	s.Every(3).Seconds().Do(task)
-	<- s.Start()
+    // Start all the pending jobs
+    <- gocron.Start()
 }
 ```
 
@@ -99,8 +97,6 @@ gocron.SetLocker(lockerImplementation)
 gocron.Every(1).Hour().Lock().Do(task)
 ```
 
-Once again, thanks to the great works of Ruby clockwork and Python schedule package. BSD license is used, see the file License for detail.
-
 Looking to contribute? Try to follow these guidelines:
  * Use issues for everything
  * For a small change, just send a PR!
@@ -110,5 +106,3 @@ Looking to contribute? Try to follow these guidelines:
     * Reporting issues
     * Suggesting new features or enhancements
     * Improving/fixing documentation
-
-Have fun!

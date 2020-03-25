@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/jasonlvhit/gocron"
+	"github.com/go-co-op/gocron"
 
 	"github.com/go-redis/redis"
 )
@@ -68,6 +68,7 @@ func main() {
 		arg = args[0]
 	}
 
-	gocron.Every(1).Second().Lock().Do(lockedTask, arg)
-	<-gocron.Start()
+	s := gocron.NewScheduler(time.UTC)
+	s.Every(1).Second().Lock().Do(lockedTask, arg)
+	<-s.Start()
 }
