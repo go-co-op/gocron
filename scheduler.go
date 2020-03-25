@@ -285,7 +285,7 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 	return s
 }
 
-// NextTick returns a pointer to a time that will run at the next tick
+// StartImmediately sets the jobs next run as soon as the scheduler starts
 func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
 	job.nextRun = time.Now().In(s.loc)
