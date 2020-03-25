@@ -67,10 +67,6 @@ func (s *Scheduler) ChangeLoc(newLocation *time.Location) {
 
 // scheduleNextRun Compute the instant when this job should run next
 func (s *Scheduler) scheduleNextRun(j *Job) error {
-	if j.nextRun.Location() != s.loc {
-		j.nextRun = j.nextRun.In(s.loc)
-	}
-
 	now := time.Now().In(s.loc)
 	if j.lastRun == time.Unix(0, 0) {
 		j.lastRun = now
@@ -110,8 +106,8 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 }
 
 // roundToMidnight truncate time to midnight
-func (j *Scheduler) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, j.loc)
+func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.loc)
 }
 
 // Get the current runnable jobs, which shouldRun is True
@@ -252,8 +248,11 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	j.funcs[fname] = jobFun
 	j.fparams[fname] = params
 	j.jobFunc = fname
-	if err := s.scheduleNextRun(j); err != nil {
-		return nil, err
+
+	if !j.startsImmediately {
+		if err := s.scheduleNextRun(j); err != nil {
+			return nil, err
+		}
 	}
 
 	return j, nil
@@ -280,10 +279,17 @@ func (j *Job) GetAt() string {
 	return fmt.Sprintf("%d:%d", j.atTime/time.Hour, (j.atTime%time.Hour)/time.Minute)
 }
 
-// From schedules the next run of the job
-func (s *Scheduler) From(t *time.Time) *Scheduler {
-	currentJob := s.getCurrentJob()
-	currentJob.nextRun = *t
+// StartAt schedules the next run of the job
+func (s *Scheduler) StartAt(t time.Time) *Scheduler {
+	s.getCurrentJob().nextRun = t
+	return s
+}
+
+// NextTick returns a pointer to a time that will run at the next tick
+func (s *Scheduler) StartImmediately() *Scheduler {
+	job := s.getCurrentJob()
+	job.nextRun = time.Now().In(s.loc)
+	job.startsImmediately = true
 	return s
 }
 
@@ -345,6 +351,12 @@ func (s *Scheduler) Days() *Scheduler {
 // Week sets the job's unit with week, which interval is 1
 func (s *Scheduler) Week() *Scheduler {
 	s.mustInterval(1)
+	s.setUnit(weeks)
+	return s
+}
+
+// Weeks sets the job's unit with weeks
+func (s *Scheduler) Weeks() *Scheduler {
 	s.setUnit(weeks)
 	return s
 }

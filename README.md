@@ -64,13 +64,14 @@ func main() {
     s2.Every(1).Monday().At("18:30").Do(task)
     s2.Every(1).Tuesday().At("18:30:59").Do(task)
 
-    // use .From(gocron.NextTick()) to run job immediately upon start
-    s2.Every(1).Hour().From(gocron.NextTick()).Do(task)
-
     // Begin job at a specific date/time. 
     // Attention: scheduler timezone has precedence over job's timezone!
     t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)
-    s2.Every(1).Hour().From(&t).Do(task)
+    s2.Every(1).Hour().StartAt(t).Do(task)
+
+    // use .StartImmediately() to run job upon scheduler start
+    s2.Every(1).Hour().StartImmediately().Do(task)
+
 
     // NextRun gets the next running time
     _, time := s2.NextRun()
@@ -83,7 +84,7 @@ func main() {
     s2.Clear()
 
     // Start all the pending jobs
-    <- gocron.Start()
+    <- s2.Start()
 }
 ```
 

@@ -25,7 +25,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Locker provides a method to lock jobs from running
@@ -102,10 +101,4 @@ func formatTime(t string) (hour, min, sec int, err error) {
 	}
 
 	return hour, min, sec, nil
-}
-
-// NextTick returns a pointer to a time that will run at the next tick
-func NextTick() *time.Time {
-	now := time.Now().Add(time.Second)
-	return &now
 }
