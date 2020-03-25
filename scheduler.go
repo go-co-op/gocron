@@ -171,7 +171,7 @@ func (s *Scheduler) RunAll() {
 	s.RunAllWithDelay(0)
 }
 
-// RunAllwithDelay runs all jobs with delay seconds
+// RunAllWithDelay runs all jobs with delay seconds
 func (s *Scheduler) RunAllWithDelay(d int) {
 	for _, job := range s.jobs {
 		err := s.runJob(job)
