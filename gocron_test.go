@@ -90,36 +90,15 @@ func TestScheduler_WeekdaysTodayAfter(t *testing.T) {
 	}
 }
 
-func TestScheduleNextRunLoc(t *testing.T) {
-	laLocation, err := time.LoadLocation("America/Los_Angeles")
-	if err != nil {
-		t.Fatalf("unable to load America/Los_Angeles time location")
-	}
-
-	sched := NewScheduler(time.UTC)
-
-	job, _ := sched.Every(1).Day().At("20:44").Do(task)
-
-	// job just ran (this is 20:45 UTC), so next run should be tomorrow
-	today := time.Now().In(laLocation)
-	job.lastRun = time.Date(today.Year(), today.Month(), today.Day(), 13, 45, 0, 0, laLocation)
-
-	tomorrow := today.AddDate(0, 0, 1)
-	assert.Equal(t, 20, job.NextScheduledTime().UTC().Hour())
-	assert.Equal(t, 44, job.NextScheduledTime().UTC().Minute())
-	assert.Equal(t, tomorrow.Day(), job.NextScheduledTime().UTC().Day())
-}
-
 func TestScheduleNextRunFromNow(t *testing.T) {
 	sched := NewScheduler(time.UTC)
 	now := time.Now().UTC()
 
-	job, _ := sched.Every(1).Hour().From(NextTick()).Do(task)
-
+	job, _ := sched.Every(1).Hour().StartImmediately().Do(task)
 	next := job.NextScheduledTime()
-	nextRounded := time.Date(next.Year(), next.Month(), next.Day(), next.Hour(), next.Minute(), next.Second(), 0, time.UTC)
 
-	expected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC).Add(time.Second)
+	nextRounded := time.Date(next.Year(), next.Month(), next.Day(), next.Hour(), next.Minute(), next.Second(), 0, time.UTC)
+	expected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC)
 
 	assert.Exactly(t, expected, nextRounded)
 }

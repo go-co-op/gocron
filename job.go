@@ -15,18 +15,19 @@ var (
 
 // Job struct keeping information about job
 type Job struct {
-	interval uint64                   // pause interval * unit between runs
-	jobFunc  string                   // the job jobFunc to run, func[jobFunc]
-	unit     timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
-	atTime   time.Duration            // optional time at which this job runs
-	err      error                    // error related to job
-	lastRun  time.Time                // datetime of last run
-	nextRun  time.Time                // datetime of next run
-	startDay time.Weekday             // Specific day of the week to start on
-	funcs    map[string]interface{}   // Map for the function task store
-	fparams  map[string][]interface{} // Map for function and  params of function
-	lock     bool                     // lock the job from running at same time form multiple instances
-	tags     []string                 // allow the user to tag jobs with certain labels
+	interval          uint64                   // pause interval * unit between runs
+	startsImmediately bool                     // if the job should run upon scheduler start
+	jobFunc           string                   // the job jobFunc to run, func[jobFunc]
+	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
+	atTime            time.Duration            // optional time at which this job runs
+	err               error                    // error related to job
+	lastRun           time.Time                // datetime of last run
+	nextRun           time.Time                // datetime of next run
+	startDay          time.Weekday             // Specific day of the week to start on
+	funcs             map[string]interface{}   // Map for the function task store
+	fparams           map[string][]interface{} // Map for function and  params of function
+	lock              bool                     // lock the job from running at same time form multiple instances
+	tags              []string                 // allow the user to tag jobs with certain labels
 }
 
 // NewJob creates a new job with the time interval.
