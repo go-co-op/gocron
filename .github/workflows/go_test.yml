@@ -11,9 +11,10 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.12, 1.13]
-        platform: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.platform }}
+        go-version:
+          - 1.13
+          - 1.14
+    runs-on: ubuntu-latest
     steps:
       - name: Install Go
         uses: actions/setup-go@v1
