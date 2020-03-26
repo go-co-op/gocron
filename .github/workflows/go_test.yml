@@ -5,14 +5,16 @@ on:
   pull_request:
     branches:
       - master
+
 name: Go Test
 jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.12, 1.13]
-        platform: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.platform }}
+        go-version:
+          - 1.13
+          - 1.14
+    runs-on: ubuntu-latest
     steps:
       - name: Install Go
         uses: actions/setup-go@v1
@@ -20,5 +22,13 @@ jobs:
           go-version: ${{ matrix.go-version }}
       - name: Checkout code
         uses: actions/checkout@v1
-      - name: Test
+      - name: fmt
+        run: gofmt -w .
+      - name: lint
+        run: |
+          go get golang.org/x/lint/golint
+          $(go list -f {{.Target}} golang.org/x/lint/golint) -set_exit_status ./...
+      - name: vet
+        run: go vet ./...
+      - name: test
         run: go test ./...

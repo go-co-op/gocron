@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Error declarations for gocron
 var (
 	ErrTimeFormat           = errors.New("time format error")
 	ErrParamsNotAdapted     = errors.New("the number of params is not adapted")
