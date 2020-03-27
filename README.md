@@ -1,4 +1,4 @@
-## goCron: A Golang Job Scheduling Package.
+# goCron: A Golang Job Scheduling Package.
 
 [![CI State](https://github.com/go-co-op/gocron/workflows/Go%20Test/badge.svg)](https://github.com/go-co-op/gocron/actions?query=workflow%3A"Go+Test") ![Go Report Card](https://goreportcard.com/badge/github.com/go-co-op/gocron)
 
