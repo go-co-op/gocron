@@ -34,7 +34,6 @@ func taskWithParams(a int, b string) {
 }
 
 func main() {
-    
     s1 := gocron.NewScheduler(time.UTC)
     s1.Every(3).Seconds().Do(task)
     <- s1.Start() // starts running (blocks current thread)
