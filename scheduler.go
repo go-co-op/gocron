@@ -24,8 +24,8 @@ func NewScheduler(loc *time.Location) *Scheduler {
 
 // Start all the pending jobs
 // Add seconds ticker
-func (s *Scheduler) Start() chan bool {
-	stopped := make(chan bool)
+func (s *Scheduler) Start() chan struct{} {
+	stopped := make(chan struct{})
 	ticker := time.NewTicker(1 * time.Second)
 
 	go func() {
