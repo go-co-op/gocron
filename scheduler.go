@@ -12,6 +12,7 @@ import (
 type Scheduler struct {
 	jobs []*Job
 	loc  *time.Location
+	time timeHelper // an instance of timeHelper to interact with the time package
 }
 
 // NewScheduler creates a new scheduler
@@ -19,6 +20,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 	return &Scheduler{
 		jobs: newEmptyJobSlice(),
 		loc:  loc,
+		time: newTimeHelper(),
 	}
 }
 
@@ -26,7 +28,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 // Add seconds ticker
 func (s *Scheduler) Start() chan struct{} {
 	stopped := make(chan struct{})
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := s.time.NewTicker(1 * time.Second)
 
 	go func() {
 		for {
@@ -67,8 +69,8 @@ func (s *Scheduler) ChangeLoc(newLocation *time.Location) {
 
 // scheduleNextRun Compute the instant when this job should run next
 func (s *Scheduler) scheduleNextRun(j *Job) error {
-	now := time.Now().In(s.loc)
-	if j.lastRun == time.Unix(0, 0) {
+	now := s.time.Now().In(s.loc)
+	if j.lastRun == s.time.Unix(0, 0) {
 		j.lastRun = now
 	}
 
@@ -107,7 +109,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 // roundToMidnight truncate time to midnight
 func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.loc)
+	return s.time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.loc)
 }
 
 // Get the current runnable jobs, which shouldRun is True
@@ -127,7 +129,7 @@ func (s *Scheduler) getRunnableJobs() []*Job {
 // NextRun datetime when the next job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.jobs) <= 0 {
-		return nil, time.Now()
+		return nil, s.time.Now()
 	}
 	sort.Sort(s)
 	return s.jobs[0], s.jobs[0].nextRun
@@ -178,7 +180,7 @@ func (s *Scheduler) RunAllWithDelay(d int) {
 		if err != nil {
 			continue
 		}
-		time.Sleep(time.Duration(d) * time.Second)
+		s.time.Sleep(time.Duration(d) * time.Second)
 	}
 }
 
@@ -288,7 +290,7 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 // StartImmediately sets the jobs next run as soon as the scheduler starts
 func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
-	job.nextRun = time.Now().In(s.loc)
+	job.nextRun = s.time.Now().In(s.loc)
 	job.startsImmediately = true
 	return s
 }
