@@ -48,7 +48,6 @@ const (
 
 var (
 	locker Locker
-	th     = newTimeHelper()
 )
 
 // SetLocker sets a locker implementation
