@@ -62,8 +62,8 @@ func (s *Scheduler) Less(i, j int) bool {
 	return s.jobs[j].nextRun.Unix() >= s.jobs[i].nextRun.Unix()
 }
 
-// ChangeLoc changes the default time location
-func (s *Scheduler) ChangeLoc(newLocation *time.Location) {
+// SetLocation changes the default time location
+func (s *Scheduler) SetLocation(newLocation *time.Location) {
 	s.loc = newLocation
 }
 
