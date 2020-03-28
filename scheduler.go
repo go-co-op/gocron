@@ -26,7 +26,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 // Add seconds ticker
 func (s *Scheduler) Start() chan struct{} {
 	stopped := make(chan struct{})
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := th.NewTicker(1 * time.Second)
 
 	go func() {
 		for {
@@ -67,8 +67,8 @@ func (s *Scheduler) ChangeLoc(newLocation *time.Location) {
 
 // scheduleNextRun Compute the instant when this job should run next
 func (s *Scheduler) scheduleNextRun(j *Job) error {
-	now := time.Now().In(s.loc)
-	if j.lastRun == time.Unix(0, 0) {
+	now := th.Now().In(s.loc)
+	if j.lastRun == th.Unix(0, 0) {
 		j.lastRun = now
 	}
 
@@ -107,7 +107,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 // roundToMidnight truncate time to midnight
 func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.loc)
+	return th.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.loc)
 }
 
 // Get the current runnable jobs, which shouldRun is True
@@ -127,7 +127,7 @@ func (s *Scheduler) getRunnableJobs() []*Job {
 // NextRun datetime when the next job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.jobs) <= 0 {
-		return nil, time.Now()
+		return nil, th.Now()
 	}
 	sort.Sort(s)
 	return s.jobs[0], s.jobs[0].nextRun
@@ -178,7 +178,7 @@ func (s *Scheduler) RunAllWithDelay(d int) {
 		if err != nil {
 			continue
 		}
-		time.Sleep(time.Duration(d) * time.Second)
+		th.Sleep(time.Duration(d) * time.Second)
 	}
 }
 
@@ -288,7 +288,7 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 // StartImmediately sets the jobs next run as soon as the scheduler starts
 func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
-	job.nextRun = time.Now().In(s.loc)
+	job.nextRun = th.Now().In(s.loc)
 	job.startsImmediately = true
 	return s
 }

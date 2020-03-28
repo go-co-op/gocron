@@ -35,8 +35,8 @@ type Job struct {
 func NewJob(interval uint64) *Job {
 	return &Job{
 		interval: interval,
-		lastRun:  time.Unix(0, 0),
-		nextRun:  time.Unix(0, 0),
+		lastRun:  th.Unix(0, 0),
+		nextRun:  th.Unix(0, 0),
 		startDay: time.Sunday,
 		funcs:    make(map[string]interface{}),
 		fparams:  make(map[string][]interface{}),
@@ -46,12 +46,12 @@ func NewJob(interval uint64) *Job {
 
 // True if the job should be run now
 func (j *Job) shouldRun() bool {
-	return time.Now().Unix() >= j.nextRun.Unix()
+	return th.Now().Unix() >= j.nextRun.Unix()
 }
 
 //Run the job and immediately reschedule it
 func (j *Job) run() {
-	j.lastRun = time.Now()
+	j.lastRun = th.Now()
 	go callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 }
 
