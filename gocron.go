@@ -37,7 +37,6 @@ type Locker interface {
 
 type timeUnit int
 
-//go:generate stringer -type=timeUnit
 const (
 	seconds timeUnit = iota + 1
 	minutes

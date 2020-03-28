@@ -457,11 +457,11 @@ func TestSetUnit(t *testing.T) {
 		desc     string
 		timeUnit timeUnit
 	}{
-		{seconds.String(), seconds},
-		{minutes.String(), minutes},
-		{hours.String(), hours},
-		{days.String(), days},
-		{weeks.String(), weeks},
+		{"seconds", seconds},
+		{"minutes", minutes},
+		{"hours", hours},
+		{"days", days},
+		{"weeks", weeks},
 	}
 
 	for _, tc := range testCases {
