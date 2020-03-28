@@ -319,25 +319,21 @@ func (s *Scheduler) Hours() *Scheduler {
 
 // Second sets the unit with second
 func (s *Scheduler) Second() *Scheduler {
-	s.mustInterval(1)
 	return s.Seconds()
 }
 
 // Minute sets the unit  with minute, which interval is 1
 func (s *Scheduler) Minute() *Scheduler {
-	s.mustInterval(1)
 	return s.Minutes()
 }
 
 // Hour sets the unit with hour, which interval is 1
 func (s *Scheduler) Hour() *Scheduler {
-	s.mustInterval(1)
 	return s.Hours()
 }
 
 // Day sets the job's unit with day, which interval is 1
 func (s *Scheduler) Day() *Scheduler {
-	s.mustInterval(1)
 	s.setUnit(days)
 	return s
 }
@@ -350,7 +346,6 @@ func (s *Scheduler) Days() *Scheduler {
 
 // Week sets the job's unit with week, which interval is 1
 func (s *Scheduler) Week() *Scheduler {
-	s.mustInterval(1)
 	s.setUnit(weeks)
 	return s
 }
@@ -363,7 +358,6 @@ func (s *Scheduler) Weeks() *Scheduler {
 
 // Weekday start job on specific Weekday
 func (s *Scheduler) Weekday(startDay time.Weekday) *Scheduler {
-	s.mustInterval(1)
 	s.getCurrentJob().startDay = startDay
 	s.setUnit(weeks)
 	return s
@@ -413,12 +407,4 @@ func (s *Scheduler) getCurrentJob() *Job {
 func (s *Scheduler) Lock() *Scheduler {
 	s.getCurrentJob().lock = true
 	return s
-}
-
-// set the job's unit with seconds,minutes,hours...
-func (s *Scheduler) mustInterval(i uint64) error {
-	if s.getCurrentJob().interval != i {
-		return fmt.Errorf("interval must be %d", i)
-	}
-	return nil
 }
