@@ -26,7 +26,6 @@ var (
 	ErrParamsNotAdapted     = errors.New("the number of params is not adapted")
 	ErrNotAFunction         = errors.New("only functions can be schedule into the job queue")
 	ErrPeriodNotSpecified   = errors.New("unspecified job period")
-	ErrParameterCannotBeNil = errors.New("nil paramaters cannot be used with reflection")
 	ErrNotScheduledWeekday  = errors.New("job not scheduled weekly on a weekday")
 )
 

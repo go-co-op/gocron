@@ -106,8 +106,8 @@ func (j *Job) NextScheduledTime() time.Time {
 	return j.nextRun
 }
 
-// GetAt returns the specific time of day the Job will run at
-func (j *Job) GetAt() string {
+// GetScheduledTime returns the specific time of day the Job will run at
+func (j *Job) GetScheduledTime() time.Time {
 	return fmt.Sprintf("%d:%d", j.atTime/time.Hour, (j.atTime%time.Hour)/time.Minute)
 }
 

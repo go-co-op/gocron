@@ -19,9 +19,9 @@ func ExampleScheduler_At() {
 	s.Every(1).Monday().At("10:30:01").Do(func() { fmt.Println("I am a task") })
 }
 
-func ExampleJob_GetAt() {
+func ExampleJob_GetScheduledTime() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Day().At("10:30").Do(func() { fmt.Println("I am a task") })
-	fmt.Println(job.GetAt())
+	fmt.Println(job.GetScheduledTime())
 	// Output: 10:30
 }
