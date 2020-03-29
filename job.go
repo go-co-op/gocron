@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -110,7 +111,7 @@ func (j *Job) GetAt() string {
 	return fmt.Sprintf("%d:%d", j.atTime/time.Hour, (j.atTime%time.Hour)/time.Minute)
 }
 
-// GetWeekday returns which day of the week the Job will run on and 
+// GetWeekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
 func (j *Job) GetWeekday() (time.Weekday, error) {
 	if j.unit == weeks {

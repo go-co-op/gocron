@@ -25,9 +25,9 @@ func NewScheduler(loc *time.Location) *Scheduler {
 }
 
 // Start all the pending Jobs using a per second ticker
-func (s *Scheduler) Start() chan bool {
+func (s *Scheduler) Start() chan struct{} {
 	stopped := make(chan struct{})
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := s.time.NewTicker(1 * time.Second)
 
 	go func() {
 		for {
