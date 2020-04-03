@@ -22,20 +22,12 @@ import (
 
 // Error declarations for gocron related errors
 var (
-	ErrTimeFormat           = errors.New("time format error")
-	ErrParamsNotAdapted     = errors.New("the number of params is not adapted")
-	ErrNotAFunction         = errors.New("only functions can be schedule into the job queue")
-	ErrPeriodNotSpecified   = errors.New("unspecified job period")
-	ErrNotScheduledWeekday  = errors.New("job not scheduled weekly on a weekday")
+	ErrTimeFormat          = errors.New("time format error")
+	ErrParamsNotAdapted    = errors.New("the number of params is not adapted")
+	ErrNotAFunction        = errors.New("only functions can be schedule into the job queue")
+	ErrPeriodNotSpecified  = errors.New("unspecified job period")
+	ErrNotScheduledWeekday = errors.New("job not scheduled weekly on a weekday")
 )
-
-// Locker provides an interface for implementing job locking
-// to prevent jobs from running at the same time on multiple
-// instances of gocron
-type Locker interface {
-	Lock(key string) (bool, error)
-	Unlock(key string) error
-}
 
 type timeUnit int
 
@@ -46,16 +38,6 @@ const (
 	days
 	weeks
 )
-
-var (
-	locker Locker
-)
-
-// SetLocker sets a locker implementation to be used by
-// the scheduler for locking jobs
-func SetLocker(l Locker) {
-	locker = l
-}
 
 func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect.Value, error) {
 	f := reflect.ValueOf(jobFunc)
