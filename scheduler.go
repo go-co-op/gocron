@@ -70,7 +70,7 @@ func (s *Scheduler) SetLocation(newLocation *time.Location) {
 
 // scheduleNextRun Compute the instant when this Job should run next
 func (s *Scheduler) scheduleNextRun(j *Job) error {
-	now := s.time.NowRoundedDownToSeconds(s.loc)
+	now := s.time.Now(s.loc)
 
 	if j.nextRun.Unix() > now.Unix() {
 		return nil
@@ -127,7 +127,7 @@ func (s *Scheduler) getRunnableJobs() []*Job {
 // NextRun datetime when the next Job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.jobs) <= 0 {
-		return nil, s.time.NowRoundedDownToSeconds(s.loc)
+		return nil, s.time.Now(s.loc)
 	}
 	sort.Sort(s)
 	return s.jobs[0], s.jobs[0].nextRun
@@ -158,7 +158,7 @@ func (s *Scheduler) runJob(job *Job) error {
 		locker.Lock(key)
 		defer locker.Unlock(key)
 	}
-	job.lastRun = s.time.NowRoundedDownToSeconds(s.loc)
+	job.lastRun = s.time.Now(s.loc)
 	job.run()
 	err := s.scheduleNextRun(job)
 	if err != nil {
@@ -257,7 +257,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		}
 
 		if j.lastRun == s.time.Unix(0, 0) {
-			j.lastRun = s.time.NowRoundedDownToSeconds(s.loc)
+			j.lastRun = s.time.Now(s.loc)
 
 			if j.atTime != 0 {
 				j.lastRun = j.lastRun.Add(-periodDuration)
@@ -294,7 +294,7 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 // StartImmediately sets the Jobs next run as soon as the scheduler starts
 func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
-	job.nextRun = s.time.NowRoundedDownToSeconds(s.loc)
+	job.nextRun = s.time.Now(s.loc)
 	job.startsImmediately = true
 	return s
 }
