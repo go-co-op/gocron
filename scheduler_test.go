@@ -39,7 +39,7 @@ func TestExecutionSeconds(t *testing.T) {
 		}
 	})
 
-	stop := sched.Start()
+	stop := sched.StartAsync()
 	<-jobDone // Wait job done
 	close(stop)
 
@@ -90,7 +90,7 @@ func TestAt(t *testing.T) {
 	nextRun := dayJob.NextScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 
-	sStop := s.Start()
+	sStop := s.StartAsync()
 	<-dayJobDone // Wait job done
 	close(sStop)
 	time.Sleep(time.Second) // wait for scheduler to reschedule job

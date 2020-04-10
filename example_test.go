@@ -10,7 +10,7 @@ import (
 func ExampleScheduler_Start() {
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(3).Seconds().Do(func() { fmt.Println("I am a task") })
-	<-s.Start()
+	<-s.StartAsync()
 }
 
 func ExampleScheduler_At() {

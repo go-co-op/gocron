@@ -24,8 +24,13 @@ func NewScheduler(loc *time.Location) *Scheduler {
 	}
 }
 
-// Start all the pending Jobs using a per second ticker
-func (s *Scheduler) Start() chan struct{} {
+// StartBlocking starts all the pending jobs using a second-long ticker and blocks current thread
+func (s *Scheduler) StartBlocking() {
+	<-s.StartAsync()
+}
+
+// StartAsync starts a goroutine that runs all the pending using a second-long ticker
+func (s *Scheduler) StartAsync() chan struct{} {
 	stopped := make(chan struct{})
 	ticker := s.time.NewTicker(1 * time.Second)
 

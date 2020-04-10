@@ -6,7 +6,7 @@ goCron is a Golang job scheduling package which lets you run Go functions period
 
 goCron is a Golang implementation of Ruby module [clockwork](https://github.com/tomykaira/clockwork) and Python job scheduling package [schedule](https://github.com/dbader/schedule).
 
-See also this two great articles:
+See also these two great articles:
 
 - [Rethinking Cron](http://adam.herokuapp.com/past/2010/4/13/rethinking_cron/)
 - [Replace Cron with Clockwork](http://adam.herokuapp.com/past/2010/6/30/replace_cron_with_clockwork/)
@@ -34,9 +34,13 @@ func taskWithParams(a int, b string) {
 }
 
 func main() {
+    // defines a new scheduler that schedules and runs jobs
     s1 := gocron.NewScheduler(time.UTC)
+
     s1.Every(3).Seconds().Do(task)
-    <- s1.Start() // starts running (blocks current thread)
+
+    // scheduler starts running jobs and current thread continues to execute
+    s1.StartAsync()
 
     // Do jobs without params
     s2 := gocron.NewScheduler(time.UTC)
@@ -82,8 +86,10 @@ func main() {
     // Clear all scheduled jobs
     s2.Clear()
 
-    // Start all the pending jobs
-    <- s2.Start()
+    // executes the scheduler and blocks current thread
+    s2.StartBlocking()
+
+    // this line is never reached
 }
 ```
 
