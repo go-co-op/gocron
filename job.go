@@ -20,7 +20,6 @@ type Job struct {
 	fparams           map[string][]interface{} // Map for function and  params of function
 	lock              bool                     // lock the Job from running at same time form multiple instances
 	tags              []string                 // allow the user to tag Jobs with certain labels
-	time              timeHelper               // an instance of timeHelper to interact with the time package
 }
 
 // NewJob creates a new Job with the provided interval
@@ -34,18 +33,11 @@ func NewJob(interval uint64) *Job {
 		funcs:    make(map[string]interface{}),
 		fparams:  make(map[string][]interface{}),
 		tags:     []string{},
-		time:     th,
 	}
-}
-
-// shouldRun returns true if the Job should be run now
-func (j *Job) shouldRun() bool {
-	return j.time.Now().Unix() >= j.nextRun.Unix()
 }
 
 // Run the Job and immediately reschedule it
 func (j *Job) run() {
-	j.lastRun = j.time.Now()
 	go callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 }
 

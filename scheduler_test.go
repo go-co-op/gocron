@@ -75,18 +75,18 @@ func TestStartImmediately(t *testing.T) {
 func TestAt(t *testing.T) {
 	s := NewScheduler(time.UTC)
 
-	// Schedule to run in next minute
+	// Schedule to run in next 2 seconds
 	now := time.Now().UTC()
 	dayJobDone := make(chan bool, 1)
 
 	// Schedule every day At
-	startAt := fmt.Sprintf("%02d:%02d", now.Hour(), now.Add(time.Minute).Minute())
+	startAt := fmt.Sprintf("%02d:%02d:%02d", now.Hour(), now.Minute(), now.Add(time.Second*2).Second())
 	dayJob, _ := s.Every(1).Day().At(startAt).Do(func() {
 		dayJobDone <- true
 	})
 
 	// Expected start time
-	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, time.UTC)
+	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Add(time.Second*2).Second(), 0, time.UTC)
 	nextRun := dayJob.NextScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 
