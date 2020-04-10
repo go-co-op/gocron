@@ -72,7 +72,7 @@ func (s *Scheduler) SetLocation(newLocation *time.Location) {
 func (s *Scheduler) scheduleNextRun(j *Job) error {
 	now := s.time.NowRoundedDownToSeconds(s.loc)
 
-	if j.nextRun.Second() > now.Second() {
+	if j.nextRun.Unix() > now.Unix() {
 		return nil
 	}
 
