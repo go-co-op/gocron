@@ -72,10 +72,6 @@ func (s *Scheduler) SetLocation(newLocation *time.Location) {
 func (s *Scheduler) scheduleNextRun(j *Job) error {
 	now := s.time.Now(s.loc)
 
-	if j.nextRun.Unix() > now.Unix() {
-		return nil
-	}
-
 	periodDuration, err := j.periodDuration()
 	if err != nil {
 		return err
@@ -144,11 +140,21 @@ func (s *Scheduler) Every(interval uint64) *Scheduler {
 func (s *Scheduler) RunPending() {
 	runnableJobs := s.getRunnableJobs()
 	for _, job := range runnableJobs {
-		s.runJob(job)
+		s.runAndReschedule(job) // we should handle this error somehow
 	}
 }
 
-func (s *Scheduler) runJob(job *Job) error {
+func (s *Scheduler) runAndReschedule(job *Job) error {
+	if err := s.run(job); err != nil {
+		return err
+	}
+	if err := s.scheduleNextRun(job); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Scheduler) run(job *Job) error {
 	if job.lock {
 		if locker == nil {
 			return fmt.Errorf("trying to lock %s with nil locker", job.jobFunc)
@@ -158,12 +164,10 @@ func (s *Scheduler) runJob(job *Job) error {
 		locker.Lock(key)
 		defer locker.Unlock(key)
 	}
+
 	job.lastRun = s.time.Now(s.loc)
-	job.run()
-	err := s.scheduleNextRun(job)
-	if err != nil {
-		return err
-	}
+	go job.run()
+
 	return nil
 }
 
@@ -175,7 +179,7 @@ func (s *Scheduler) RunAll() {
 // RunAllWithDelay runs all Jobs with delay seconds
 func (s *Scheduler) RunAllWithDelay(d int) {
 	for _, job := range s.jobs {
-		err := s.runJob(job)
+		err := s.run(job)
 		if err != nil {
 			continue
 		}

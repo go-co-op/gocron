@@ -38,7 +38,7 @@ func NewJob(interval uint64) *Job {
 
 // Run the Job and immediately reschedule it
 func (j *Job) run() {
-	go callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 }
 
 // Err returns an error if one ocurred while creating the Job

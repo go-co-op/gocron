@@ -30,7 +30,7 @@ func TestExecutionSeconds(t *testing.T) {
 	sched := NewScheduler(time.UTC)
 	jobDone := make(chan bool)
 	executionTimes := make([]int64, 0, 2)
-	numberOfIterations := 2
+	numberOfIterations := 20
 
 	sched.Every(2).Seconds().Do(func() {
 		executionTimes = append(executionTimes, time.Now().Unix())
