@@ -24,7 +24,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 	}
 }
 
-// StartBlocking starts all the pending jobs using a second-long ticker and blocks current thread
+// StartBlocking starts all the pending jobs using a second-long ticker and blocks the current thread
 func (s *Scheduler) StartBlocking() {
 	<-s.StartAsync()
 }
