@@ -168,9 +168,9 @@ func TestLocker(t *testing.T) {
 		s3 := NewScheduler(time.UTC)
 		s3.Every(1).Seconds().Lock().Do(task, "C", i)
 
-		stop1 := s1.Start()
-		stop2 := s2.Start()
-		stop3 := s3.Start()
+		stop1 := s1.StartAsync()
+		stop2 := s2.StartAsync()
+		stop3 := s3.StartAsync()
 
 		time.Sleep(time.Millisecond * 100)
 

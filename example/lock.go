@@ -70,5 +70,5 @@ func main() {
 
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Second().Lock().Do(lockedTask, arg)
-	<-s.Start()
+	s.StartBlocking()
 }
