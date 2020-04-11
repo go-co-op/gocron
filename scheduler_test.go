@@ -64,7 +64,7 @@ func TestStartImmediately(t *testing.T) {
 	now := time.Now().UTC()
 
 	job, _ := sched.Every(1).Hour().StartImmediately().Do(task)
-	next := job.NextScheduledTime()
+	next := job.ScheduledTime()
 
 	nextRounded := time.Date(next.Year(), next.Month(), next.Day(), next.Hour(), next.Minute(), next.Second(), 0, time.UTC)
 	expected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC)
@@ -87,7 +87,7 @@ func TestAt(t *testing.T) {
 
 	// Expected start time
 	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Add(time.Second*2).Second(), 0, time.UTC)
-	nextRun := dayJob.NextScheduledTime()
+	nextRun := dayJob.ScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 
 	stop := s.StartAsync()
@@ -97,7 +97,7 @@ func TestAt(t *testing.T) {
 
 	// Expected next start time 1 day after
 	expectedNextRun := expectedStartTime.AddDate(0, 0, 1)
-	nextRun = dayJob.NextScheduledTime()
+	nextRun = dayJob.ScheduledTime()
 	assert.Equal(t, expectedNextRun, nextRun)
 }
 
@@ -117,13 +117,13 @@ func TestAtFuture(t *testing.T) {
 
 	// Check first run
 	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), 0, 0, time.UTC)
-	nextRun := dayJob.NextScheduledTime()
+	nextRun := dayJob.ScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 
 	s.RunPending()
 
 	// Check next run's scheduled time
-	nextRun = dayJob.NextScheduledTime()
+	nextRun = dayJob.ScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 	assert.Equal(t, false, shouldBeFalse, "Day job was not expected to run as it was in the future")
 }
@@ -196,9 +196,9 @@ func TestWeekdays(t *testing.T) {
 
 	job1, _ := scheduler.Every(1).Monday().At("23:59").Do(task)
 	job2, _ := scheduler.Every(1).Wednesday().At("23:59").Do(task)
-	t.Logf("job1 scheduled for %s", job1.NextScheduledTime())
-	t.Logf("job2 scheduled for %s", job2.NextScheduledTime())
-	assert.NotEqual(t, job1.NextScheduledTime(), job2.NextScheduledTime(), "Two jobs scheduled at the same time on two different weekdays should never run at the same time")
+	t.Logf("job1 scheduled for %s", job1.ScheduledTime())
+	t.Logf("job2 scheduled for %s", job2.ScheduledTime())
+	assert.NotEqual(t, job1.ScheduledTime(), job2.ScheduledTime(), "Two jobs scheduled at the same time on two different weekdays should never run at the same time")
 }
 
 // This ensures that if you schedule a job for today's weekday, but the time is already passed, it will be scheduled for
@@ -210,13 +210,13 @@ func TestWeekdaysTodayAfter(t *testing.T) {
 
 	runTime := fmt.Sprintf("%02d:%02d", timeToSchedule.Hour(), timeToSchedule.Minute())
 	job, _ := getWeekday(scheduler.Every(1), time.UTC).At(runTime).Do(task)
-	t.Logf("job is scheduled for %s", job.NextScheduledTime())
-	if job.NextScheduledTime().Weekday() != timeToSchedule.Weekday() {
+	t.Logf("job is scheduled for %s", job.ScheduledTime())
+	if job.ScheduledTime().Weekday() != timeToSchedule.Weekday() {
 		t.Errorf("Job scheduled for current weekday for earlier time, should still be scheduled for current weekday (but next week)")
 	}
 	nextWeek := time.Date(now.Year(), now.Month(), now.Day()+7, now.Hour(), now.Minute()-1, 0, 0, time.UTC)
-	if !job.NextScheduledTime().Equal(nextWeek) {
-		t.Errorf("Job should be scheduled for the correct time next week.\nGot %+v, expected %+v", job.NextScheduledTime(), nextWeek)
+	if !job.ScheduledTime().Equal(nextWeek) {
+		t.Errorf("Job should be scheduled for the correct time next week.\nGot %+v, expected %+v", job.ScheduledTime(), nextWeek)
 	}
 }
 
@@ -230,8 +230,8 @@ func TestWeekdaysTodayBefore(t *testing.T) {
 
 	runTime := fmt.Sprintf("%02d:%02d", timeToSchedule.Hour(), timeToSchedule.Minute())
 	job, _ := getWeekday(scheduler.Every(1), time.UTC).At(runTime).Do(task)
-	t.Logf("job is scheduled for %s", job.NextScheduledTime())
-	if !job.NextScheduledTime().Equal(timeToSchedule) {
+	t.Logf("job is scheduled for %s", job.ScheduledTime())
+	if !job.ScheduledTime().Equal(timeToSchedule) {
 		t.Error("Job should be run today, at the set time.")
 	}
 }
@@ -377,7 +377,7 @@ func TestRemoveByRef(t *testing.T) {
 
 	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
 
-	scheduler.RemoveByRef(job1)
+	scheduler.RemoveByReference(job1)
 	assert.ElementsMatch(t, []*Job{job2}, scheduler.Jobs())
 }
 
@@ -434,7 +434,7 @@ func TestSetLocation(t *testing.T) {
 
 	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.loc)
 
-	s.SetLocation(time.UTC)
+	s.ChangeLocation(time.UTC)
 
 	assert.Equal(t, time.UTC, s.loc)
 }

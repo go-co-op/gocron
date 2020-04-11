@@ -68,8 +68,8 @@ func (s *Scheduler) Less(i, j int) bool {
 	return s.jobs[j].nextRun.Unix() >= s.jobs[i].nextRun.Unix()
 }
 
-// SetLocation changes the default time location
-func (s *Scheduler) SetLocation(newLocation *time.Location) {
+// ChangeLocation changes the default time location
+func (s *Scheduler) ChangeLocation(newLocation *time.Location) {
 	s.loc = newLocation
 }
 
@@ -77,17 +77,12 @@ func (s *Scheduler) SetLocation(newLocation *time.Location) {
 func (s *Scheduler) scheduleNextRun(j *Job) error {
 	now := s.time.Now(s.loc)
 
-	periodDuration, err := j.periodDuration()
-	if err != nil {
-		return err
-	}
-
 	switch j.unit {
 	case seconds, minutes, hours:
-		j.nextRun = j.lastRun.Add(periodDuration)
+		j.nextRun = j.lastRun.Add(j.periodDuration)
 	case days:
 		j.nextRun = s.roundToMidnight(j.lastRun)
-		j.nextRun = j.nextRun.Add(j.atTime).Add(periodDuration)
+		j.nextRun = j.nextRun.Add(j.atTime).Add(j.periodDuration)
 	case weeks:
 		j.nextRun = s.roundToMidnight(j.lastRun)
 		dayDiff := int(j.startDay)
@@ -100,7 +95,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 	// advance to next possible Schedule
 	for j.nextRun.Before(now) || j.nextRun.Before(j.lastRun) {
-		j.nextRun = j.nextRun.Add(periodDuration)
+		j.nextRun = j.nextRun.Add(j.periodDuration)
 	}
 
 	return nil
@@ -112,7 +107,7 @@ func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
 }
 
 // Get the current runnable Jobs, which shouldRun is True
-func (s *Scheduler) getRunnableJobs() []*Job {
+func (s *Scheduler) runnableJobs() []*Job {
 	var runnableJobs []*Job
 	sort.Sort(s)
 	for _, job := range s.jobs {
@@ -143,7 +138,7 @@ func (s *Scheduler) Every(interval uint64) *Scheduler {
 
 // RunPending runs all the Jobs that are scheduled to run.
 func (s *Scheduler) RunPending() {
-	runnableJobs := s.getRunnableJobs()
+	runnableJobs := s.runnableJobs()
 	for _, job := range runnableJobs {
 		s.runAndReschedule(job) // we should handle this error somehow
 	}
@@ -199,8 +194,8 @@ func (s *Scheduler) Remove(j interface{}) {
 	})
 }
 
-// RemoveByRef removes specific Job j by reference
-func (s *Scheduler) RemoveByRef(j *Job) {
+// RemoveByReference removes specific Job j by reference
+func (s *Scheduler) RemoveByReference(j *Job) {
 	s.removeByCondition(func(someJob *Job) bool {
 		return someJob == j
 	})
@@ -259,17 +254,20 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	j.fparams[fname] = params
 	j.jobFunc = fname
 
-	if !j.startsImmediately {
-		periodDuration, err := j.periodDuration()
+	if j.periodDuration == 0 {
+		err := j.setPeriodDuration()
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if !j.startsImmediately {
 
 		if j.lastRun == s.time.Unix(0, 0) {
 			j.lastRun = s.time.Now(s.loc)
 
 			if j.atTime != 0 {
-				j.lastRun = j.lastRun.Add(-periodDuration)
+				j.lastRun = j.lastRun.Add(-j.periodDuration)
 			}
 		}
 

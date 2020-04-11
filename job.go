@@ -8,9 +8,10 @@ import (
 // Job struct stores the information necessary to run a Job
 type Job struct {
 	interval          uint64                   // pause interval * unit between runs
+	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
+	periodDuration    time.Duration            // interval * unit
 	startsImmediately bool                     // if the Job should run upon scheduler start
 	jobFunc           string                   // the Job jobFunc to run, func[jobFunc]
-	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	atTime            time.Duration            // optional time at which this Job runs
 	err               error                    // error related to Job
 	lastRun           time.Time                // datetime of last run
@@ -72,40 +73,39 @@ func (j *Job) Tags() []string {
 	return j.tags
 }
 
-func (j *Job) periodDuration() (time.Duration, error) {
+func (j *Job) setPeriodDuration() error {
 	interval := time.Duration(j.interval)
-	var periodDuration time.Duration
 
 	switch j.unit {
 	case seconds:
-		periodDuration = interval * time.Second
+		j.periodDuration = interval * time.Second
 	case minutes:
-		periodDuration = interval * time.Minute
+		j.periodDuration = interval * time.Minute
 	case hours:
-		periodDuration = interval * time.Hour
+		j.periodDuration = interval * time.Hour
 	case days:
-		periodDuration = interval * time.Hour * 24
+		j.periodDuration = interval * time.Hour * 24
 	case weeks:
-		periodDuration = interval * time.Hour * 24 * 7
+		j.periodDuration = interval * time.Hour * 24 * 7
 	default:
-		return 0, ErrPeriodNotSpecified
+		return ErrPeriodNotSpecified
 	}
-	return periodDuration, nil
+	return nil
 }
 
-// NextScheduledTime returns the time of the Job's next scheduled run
-func (j *Job) NextScheduledTime() time.Time {
+// ScheduledTime returns the time of the Job's next scheduled run
+func (j *Job) ScheduledTime() time.Time {
 	return j.nextRun
 }
 
-// GetScheduledTime returns the specific time of day the Job will run at
-func (j *Job) GetScheduledTime() string {
+// ScheduledAtTime returns the specific time of day the Job will run at
+func (j *Job) ScheduledAtTime() string {
 	return fmt.Sprintf("%d:%d", j.atTime/time.Hour, (j.atTime%time.Hour)/time.Minute)
 }
 
-// GetWeekday returns which day of the week the Job will run on and
+// Weekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
-func (j *Job) GetWeekday() (time.Weekday, error) {
+func (j *Job) Weekday() (time.Weekday, error) {
 	if j.unit == weeks {
 		return j.startDay, nil
 	}
