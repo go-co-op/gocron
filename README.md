@@ -112,3 +112,5 @@ Looking to contribute? Try to follow these guidelines:
     * Reporting issues
     * Suggesting new features or enhancements
     * Improving/fixing documentation
+---
+[Jetbrains](https://www.jetbrains.com/?from=gocron) supports this project with GoLand licenses. We appreciate their support for free and open source software!
