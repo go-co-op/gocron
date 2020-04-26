@@ -58,6 +58,18 @@ func main() {
     // Do jobs with params
     s2.Every(1).Second().Do(taskWithParams, 1, "hello")
 
+    // Do Jobs with tags
+    // initialize tag
+    tag1 := []string{"tag1"}
+    tag2 := []string{"tag2"}
+
+
+    s2.Every(1).Week().SetTag(tag1).Do(task)
+    s2.Every(1).Week().SetTag(tag2).Do(task)
+
+    // Removing Job Based on Tag
+    scheduler.RemoveJobByTag("tag1")
+
     // Do jobs on specific weekday
     s2.Every(1).Monday().Do(task)
     s2.Every(1).Thursday().Do(task)

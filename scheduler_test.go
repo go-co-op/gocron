@@ -59,6 +59,15 @@ func TestScheduled(t *testing.T) {
 	}
 }
 
+func TestScheduledWithTag(t *testing.T) {
+	sched := NewScheduler(time.UTC)
+	customtag := []string{"mycustomtag"}
+	sched.Every(1).Hour().SetTag(customtag).Do(task)
+	if !sched.Scheduled(task) {
+		t.Fatal("Task was scheduled but function couldn't find it")
+	}
+}
+
 func TestStartImmediately(t *testing.T) {
 	sched := NewScheduler(time.UTC)
 	now := time.Now().UTC()
@@ -379,6 +388,31 @@ func TestRemoveByRef(t *testing.T) {
 
 	scheduler.RemoveByReference(job1)
 	assert.ElementsMatch(t, []*Job{job2}, scheduler.Jobs())
+}
+
+func TestRemoveByTag(t *testing.T) {
+	scheduler := NewScheduler(time.UTC)
+
+	// Creating 2 Jobs with Unique tags
+	customtag1 := []string{"tag one"}
+	customtag2 := []string{"tag two"}
+	scheduler.Every(1).Minute().SetTag(customtag1).Do(taskWithParams, 1, "hello") // index 0
+	scheduler.Every(1).Minute().SetTag(customtag2).Do(taskWithParams, 2, "world") // index 1
+
+	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+
+	// check Jobs()[0] tags is equal with tag "tag one" (customtag1)
+	assert.Equal(t, scheduler.Jobs()[0].Tags(), customtag1, "Job With Tag 'tag one' is removed from index 0")
+
+	scheduler.RemoveJobByTag("tag one")
+	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 1 job")
+
+	// check Jobs()[0] tags is equal with tag "tag two" (customtag2) after removing "tag one"
+	assert.Equal(t, scheduler.Jobs()[0].Tags(), customtag2, "Job With Tag 'tag two' is removed from index 0")
+
+	// Removing Non Existent Job with "tag one" because already removed above (will not removing any jobs because tag not match)
+	scheduler.RemoveJobByTag("tag one")
+	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
 }
 
 func TestJobs(t *testing.T) {
