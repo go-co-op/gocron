@@ -210,23 +210,24 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	}
 }
 
-// Remove First found Job by Tag
-func (s *Scheduler) RemoveJobByTag(tag string) {
-	jobindex := s.findJobsIndexByTag(tag)
+// RemoveJobByTag will Remove Jobs by Tag
+func (s *Scheduler) RemoveJobByTag(tag string) error {
+	jobindex, err := s.findJobsIndexByTag(tag)
 	// Remove Only if return valid index
-	if jobindex >= 0 {
+	if err == nil && jobindex >= 0 {
 		s.jobs = removeAtIndex(s.jobs, jobindex)
 	}
+	return err
 }
 
 // Find first job index by given string
-func (s *Scheduler) findJobsIndexByTag(tag string) int {
+func (s *Scheduler) findJobsIndexByTag(tag string) (int, error) {
 	for i, job := range s.jobs {
 		if strings.Contains(strings.Join(job.Tags(), " "), tag) {
-			return i
+			return i, nil
 		}
 	}
-	return -1
+	return -1, ErrJobNotFoundWithTag
 }
 
 func removeAtIndex(jobs []*Job, i int) []*Job {
@@ -312,7 +313,7 @@ func (s *Scheduler) At(t string) *Scheduler {
 	return s
 }
 
-// Set Tag when creating a job
+// SetTag will add tag when creating a job
 func (s *Scheduler) SetTag(t []string) *Scheduler {
 	job := s.getCurrentJob()
 	job.tags = t
