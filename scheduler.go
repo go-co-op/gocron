@@ -213,11 +213,12 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 // RemoveJobByTag will Remove Jobs by Tag
 func (s *Scheduler) RemoveJobByTag(tag string) error {
 	jobindex, err := s.findJobsIndexByTag(tag)
-	// Remove Only if return valid index
-	if err == nil && jobindex >= 0 {
-		s.jobs = removeAtIndex(s.jobs, jobindex)
+	if err != nil {
+		return err
 	}
-	return err
+	// Remove job if jobindex is valid
+	s.jobs = removeAtIndex(s.jobs, jobindex)
+	return nil
 }
 
 // Find first job index by given string
