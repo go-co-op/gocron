@@ -27,6 +27,7 @@ var (
 	ErrNotAFunction        = errors.New("only functions can be schedule into the job queue")
 	ErrPeriodNotSpecified  = errors.New("unspecified job period")
 	ErrNotScheduledWeekday = errors.New("job not scheduled weekly on a weekday")
+	ErrJobNotFoundWithTag  = errors.New("no jobs found with given tag")
 )
 
 type timeUnit int

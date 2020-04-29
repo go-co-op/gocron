@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -209,6 +210,27 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	}
 }
 
+// RemoveJobByTag will Remove Jobs by Tag
+func (s *Scheduler) RemoveJobByTag(tag string) error {
+	jobindex, err := s.findJobsIndexByTag(tag)
+	if err != nil {
+		return err
+	}
+	// Remove job if jobindex is valid
+	s.jobs = removeAtIndex(s.jobs, jobindex)
+	return nil
+}
+
+// Find first job index by given string
+func (s *Scheduler) findJobsIndexByTag(tag string) (int, error) {
+	for i, job := range s.jobs {
+		if strings.Contains(strings.Join(job.Tags(), " "), tag) {
+			return i, nil
+		}
+	}
+	return -1, ErrJobNotFoundWithTag
+}
+
 func removeAtIndex(jobs []*Job, i int) []*Job {
 	if i == len(jobs)-1 {
 		return jobs[:i]
@@ -289,6 +311,13 @@ func (s *Scheduler) At(t string) *Scheduler {
 	}
 	// save atTime start as duration from midnight
 	j.atTime = time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second
+	return s
+}
+
+// SetTag will add tag when creating a job
+func (s *Scheduler) SetTag(t []string) *Scheduler {
+	job := s.getCurrentJob()
+	job.tags = t
 	return s
 }
 
