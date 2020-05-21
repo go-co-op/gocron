@@ -2,7 +2,7 @@ package gocron
 
 import "time"
 
-type timeHelper interface {
+type timeWrapper interface {
 	Now(*time.Location) time.Time
 	Unix(int64, int64) time.Time
 	Sleep(time.Duration)
@@ -10,7 +10,7 @@ type timeHelper interface {
 	NewTicker(time.Duration) *time.Ticker
 }
 
-func newTimeHelper() timeHelper {
+func newTimeWrapper() timeWrapper {
 	return &trueTime{}
 }
 

@@ -13,15 +13,21 @@ import (
 type Scheduler struct {
 	jobs []*Job
 	loc  *time.Location
-	time timeHelper // an instance of timeHelper to interact with the time package
+
+	running  bool
+	stopChan chan struct{} // signal to stop scheduling
+
+	time timeWrapper // wrapper around time.Time
 }
 
 // NewScheduler creates a new Scheduler
 func NewScheduler(loc *time.Location) *Scheduler {
 	return &Scheduler{
-		jobs: newEmptyJobSlice(),
-		loc:  loc,
-		time: newTimeHelper(),
+		jobs:     make([]*Job, 0),
+		loc:      loc,
+		running:  false,
+		stopChan: make(chan struct{}),
+		time:     newTimeWrapper(),
 	}
 }
 
@@ -32,22 +38,26 @@ func (s *Scheduler) StartBlocking() {
 
 // StartAsync starts a goroutine that runs all the pending using a second-long ticker
 func (s *Scheduler) StartAsync() chan struct{} {
-	stopped := make(chan struct{})
-	ticker := s.time.NewTicker(1 * time.Second)
+	if s.running {
+		return s.stopChan
+	}
+	s.running = true
 
+	ticker := s.time.NewTicker(1 * time.Second)
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
 				s.RunPending()
-			case <-stopped:
+			case <-s.stopChan:
 				ticker.Stop()
+				s.running = false
 				return
 			}
 		}
 	}()
 
-	return stopped
+	return s.stopChan
 }
 
 // Jobs returns the list of Jobs from the Scheduler
@@ -249,14 +259,18 @@ func (s *Scheduler) Scheduled(j interface{}) bool {
 	return false
 }
 
-// Clear delete all scheduled Jobs
+// Clear deletes all Jobs
 func (s *Scheduler) Clear() {
-	s.jobs = newEmptyJobSlice()
+	s.jobs = make([]*Job, 0)
 }
 
-func newEmptyJobSlice() []*Job {
-	const initialCapacity = 256
-	return make([]*Job, 0, initialCapacity)
+// Stop stops the scheduler. This is a no-op if the scheduler is already stopped .
+func (s *Scheduler) Stop() {
+	s.stopScheduler()
+}
+
+func (s *Scheduler) stopScheduler() {
+	s.stopChan <- struct{}{}
 }
 
 // Do specifies the jobFunc that should be called every time the Job runs
