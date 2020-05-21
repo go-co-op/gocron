@@ -259,14 +259,16 @@ func (s *Scheduler) Scheduled(j interface{}) bool {
 	return false
 }
 
-// Clear deletes all Jobs
+// Clear clear all Jobs from this scheduler
 func (s *Scheduler) Clear() {
 	s.jobs = make([]*Job, 0)
 }
 
 // Stop stops the scheduler. This is a no-op if the scheduler is already stopped .
 func (s *Scheduler) Stop() {
-	s.stopScheduler()
+	if s.running {
+		s.stopScheduler()
+	}
 }
 
 func (s *Scheduler) stopScheduler() {
