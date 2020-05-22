@@ -68,7 +68,7 @@ func main() {
     s2.Every(1).Week().SetTag(tag2).Do(task)
 
     // Removing Job Based on Tag
-    scheduler.RemoveJobByTag("tag1")
+    s2.RemoveJobByTag("tag1")
 
     // Do jobs on specific weekday
     s2.Every(1).Monday().Do(task)
@@ -97,6 +97,9 @@ func main() {
 
     // Clear all scheduled jobs
     s2.Clear()
+
+    // stop our first scheduler (it still exists but doesn't run anymore)
+    s1.Stop() 
 
     // executes the scheduler and blocks current thread
     s2.StartBlocking()
