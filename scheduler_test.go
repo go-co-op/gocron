@@ -518,5 +518,18 @@ func TestSetUnit(t *testing.T) {
 			assert.Equal(t, tc.timeUnit, j.unit)
 		})
 	}
+}
 
+func TestScheduler_Stop(t *testing.T) {
+	t.Run("stops a running scheduler", func(t *testing.T) {
+		sched := NewScheduler(time.UTC)
+		sched.StartAsync()
+		sched.Stop()
+		assert.False(t, sched.running)
+	})
+	t.Run("noop on stopped scheduler", func(t *testing.T) {
+		sched := NewScheduler(time.UTC)
+		sched.Stop()
+		assert.False(t, sched.running)
+	})
 }

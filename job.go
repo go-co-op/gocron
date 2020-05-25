@@ -25,7 +25,7 @@ type Job struct {
 
 // NewJob creates a new Job with the provided interval
 func NewJob(interval uint64) *Job {
-	th := newTimeHelper()
+	th := newTimeWrapper()
 	return &Job{
 		interval: interval,
 		lastRun:  th.Unix(0, 0),
