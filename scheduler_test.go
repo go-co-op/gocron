@@ -369,11 +369,12 @@ func TestRemove(t *testing.T) {
 	scheduler := NewScheduler(time.UTC)
 	scheduler.Every(1).Minute().Do(task)
 	scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
+	scheduler.Every(1).Minute().Do(task)
 
-	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+	assert.Equal(t, 3, scheduler.Len(), "Incorrect number of jobs")
 
 	scheduler.Remove(task)
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 1 job")
+	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 2 job")
 
 	scheduler.Remove(task)
 	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
