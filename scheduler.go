@@ -213,9 +213,11 @@ func (s *Scheduler) RemoveByReference(j *Job) {
 }
 
 func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
-	for i, job := range s.jobs {
-		if shouldRemove(job) {
+	for i := 0; i < len(s.jobs); {
+		if shouldRemove(s.jobs[i]) {
 			s.jobs = removeAtIndex(s.jobs, i)
+		} else {
+			i++
 		}
 	}
 }
