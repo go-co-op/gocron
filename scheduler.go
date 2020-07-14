@@ -213,11 +213,13 @@ func (s *Scheduler) RemoveByReference(j *Job) {
 }
 
 func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
-	for i, job := range s.jobs {
-		if shouldRemove(job) {
-			s.jobs = removeAtIndex(s.jobs, i)
+	retainedJobs := make([]*Job, 0)
+	for _, job := range s.jobs {
+		if !shouldRemove(job) {
+			retainedJobs = append(retainedJobs, job)
 		}
 	}
+	s.jobs = retainedJobs
 }
 
 // RemoveJobByTag will Remove Jobs by Tag
