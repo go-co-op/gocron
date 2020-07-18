@@ -534,3 +534,15 @@ func TestScheduler_Stop(t *testing.T) {
 		assert.False(t, sched.running)
 	})
 }
+
+func TestMonths(t *testing.T) {
+	scheduler := NewScheduler(time.Local)
+	now := time.Now()
+	scheduler.Every(1).Month(now.Day()).Do(func() {})
+	_, nextRun := scheduler.NextRun()
+	assert.Equal(
+		t,
+		time.Date(now.Year(), (now.Month()+time.Month(1))%12, now.Day(), 0, 0, 0, 0, time.Local),
+		nextRun,
+	)
+}

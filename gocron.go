@@ -38,6 +38,7 @@ const (
 	hours
 	days
 	weeks
+	months
 )
 
 func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect.Value, error) {
