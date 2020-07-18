@@ -54,6 +54,8 @@ func main() {
     s2.Every(2).Days().Do(task)
     s2.Every(1).Week().Do(task)
     s2.Every(2).Weeks().Do(task)
+    s2.Every(1).Month(time.Now().Day()).Do(task)
+    s2.Every(2).Months(15).Do(task)
 
     // Do jobs with params
     s2.Every(1).Second().Do(taskWithParams, 1, "hello")
