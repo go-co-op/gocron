@@ -327,7 +327,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 // At schedules the Job at a specific time of day in the form "HH:MM:SS" or "HH:MM"
 func (s *Scheduler) At(t string) *Scheduler {
 	j := s.getCurrentJob()
-	hour, min, sec, err := formatTime(t)
+	hour, min, sec, err := parseTime(t)
 	if err != nil {
 		j.err = ErrTimeFormat
 		return s

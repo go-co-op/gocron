@@ -26,7 +26,7 @@ func TestFormatTime(t *testing.T) {
 		},
 		{
 			name:     "normal_with_second",
-			args:     "6:18:01",
+			args:     "06:18:01",
 			wantHour: 6,
 			wantMin:  18,
 			wantSec:  1,
@@ -77,7 +77,7 @@ func TestFormatTime(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotHour, gotMin, gotSec, err := formatTime(tt.args)
+			gotHour, gotMin, gotSec, err := parseTime(tt.args)
 			if tt.wantErr {
 				assert.NotEqual(t, nil, err, tt.args)
 				return
