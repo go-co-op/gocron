@@ -17,6 +17,7 @@ type Job struct {
 	lastRun           time.Time                // datetime of last run
 	nextRun           time.Time                // datetime of next run
 	startDay          time.Weekday             // Specific day of the week to start on
+	dayOfTheMonth     int                      // Specific day of the month to run the job
 	funcs             map[string]interface{}   // Map for the function task store
 	fparams           map[string][]interface{} // Map for function and  params of function
 	lock              bool                     // lock the Job from running at same time form multiple instances
@@ -87,6 +88,8 @@ func (j *Job) setPeriodDuration() error {
 		j.periodDuration = interval * time.Hour * 24
 	case weeks:
 		j.periodDuration = interval * time.Hour * 24 * 7
+	case months:
+		// periodDuration doesn't apply here
 	default:
 		return ErrPeriodNotSpecified
 	}
