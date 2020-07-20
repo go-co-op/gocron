@@ -15,19 +15,26 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"runtime"
-	"strconv"
-	"strings"
+	"time"
 )
 
 // Error declarations for gocron related errors
 var (
-	ErrTimeFormat          = errors.New("time format error")
-	ErrParamsNotAdapted    = errors.New("the number of params is not adapted")
-	ErrNotAFunction        = errors.New("only functions can be schedule into the job queue")
-	ErrPeriodNotSpecified  = errors.New("unspecified job period")
-	ErrNotScheduledWeekday = errors.New("job not scheduled weekly on a weekday")
-	ErrJobNotFoundWithTag  = errors.New("no jobs found with given tag")
+	ErrTimeFormat            = errors.New("time format error")
+	ErrParamsNotAdapted      = errors.New("the number of params is not adapted")
+	ErrNotAFunction          = errors.New("only functions can be schedule into the job queue")
+	ErrPeriodNotSpecified    = errors.New("unspecified job period")
+	ErrNotScheduledWeekday   = errors.New("job not scheduled weekly on a weekday")
+	ErrJobNotFoundWithTag    = errors.New("no jobs found with given tag")
+	ErrUnsupportedTimeFormat = errors.New("the given time format is not supported")
+)
+
+// regex patterns for supported time formats
+var (
+	timeWithSeconds    = regexp.MustCompile(`(?m)^\d\d:\d\d:\d\d$`)
+	timeWithoutSeconds = regexp.MustCompile(`(?m)^\d\d:\d\d$`)
 )
 
 type timeUnit int
@@ -63,27 +70,20 @@ func getFunctionKey(funcName string) string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func formatTime(t string) (hour, min, sec int, err error) {
-	ts := strings.Split(t, ":")
-	if len(ts) < 2 || len(ts) > 3 {
-		return 0, 0, 0, ErrTimeFormat
+func parseTime(t string) (hour, min, sec int, err error) {
+	var timeLayout string
+	switch {
+	case timeWithSeconds.Match([]byte(t)):
+		timeLayout = "15:04:05"
+	case timeWithoutSeconds.Match([]byte(t)):
+		timeLayout = "15:04"
+	default:
+		return 0, 0, 0, ErrUnsupportedTimeFormat
 	}
 
-	if hour, err = strconv.Atoi(ts[0]); err != nil {
-		return 0, 0, 0, err
+	parsedTime, err := time.Parse(timeLayout, t)
+	if err != nil {
+		return 0, 0, 0, ErrUnsupportedTimeFormat
 	}
-	if min, err = strconv.Atoi(ts[1]); err != nil {
-		return 0, 0, 0, err
-	}
-	if len(ts) == 3 {
-		if sec, err = strconv.Atoi(ts[2]); err != nil {
-			return 0, 0, 0, err
-		}
-	}
-
-	if hour < 0 || hour > 23 || min < 0 || min > 59 || sec < 0 || sec > 59 {
-		return 0, 0, 0, ErrTimeFormat
-	}
-
-	return hour, min, sec, nil
+	return parsedTime.Hour(), parsedTime.Minute(), parsedTime.Second(), nil
 }
