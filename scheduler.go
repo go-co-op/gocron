@@ -316,8 +316,10 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 			}
 		}
 
-		if err := s.scheduleNextRun(j); err != nil {
-			return nil, err
+		if j.nextRun == s.time.Unix(0, 0) {
+			if err := s.scheduleNextRun(j); err != nil {
+				return nil, err
+			}
 		}
 	}
 
