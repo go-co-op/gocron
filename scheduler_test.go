@@ -546,3 +546,27 @@ func TestMonths(t *testing.T) {
 		nextRun,
 	)
 }
+
+func TestScheduler_StartAt(t *testing.T) {
+	scheduler := NewScheduler(time.Local)
+	now := time.Now()
+
+	// With StartAt
+	job, _ := scheduler.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
+	_, nextRun := scheduler.NextRun()
+	assert.Equal(
+		t,
+		now.Add(time.Second*5),
+		nextRun,
+	)
+	scheduler.Remove(job)
+
+	// Without StartAt
+	scheduler.Every(3).Seconds().Do(func() {})
+	_, nextRun = scheduler.NextRun()
+	assert.Equal(
+		t,
+		now.Add(time.Second*3).Second(),
+		nextRun.Second(),
+	)
+}
