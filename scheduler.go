@@ -101,13 +101,13 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 	switch j.unit {
 	case seconds, minutes, hours:
-		if j.neverRan() && j.atTime != 0 && s.shouldRunToday(delta, j) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
-			j.nextRun = s.roundToMidnight(delta.Add(j.periodDuration)).Add(j.atTime)
+		if j.neverRan() && j.atTime != 0 && s.shouldRunAt(now, j) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
+			j.nextRun = s.roundToMidnight(delta).Add(j.atTime)
 			return nil
 		}
 		j.nextRun = delta.Add(j.periodDuration)
 	case days:
-		if s.shouldRunToday(now, j) {
+		if s.shouldRunAt(now, j) {
 			j.nextRun = s.roundToMidnight(delta).Add(j.atTime)
 			return nil
 		}
@@ -164,7 +164,7 @@ func (s *Scheduler) calculateFirstWeekday(now time.Time, daysToWeekday int, j *J
 	return 7
 }
 
-func (s *Scheduler) shouldRunToday(now time.Time, job *Job) bool {
+func (s *Scheduler) shouldRunAt(now time.Time, job *Job) bool {
 	atTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.loc).Add(job.atTime)
 	return now.Before(atTime)
 }
