@@ -41,7 +41,7 @@ func (j *Job) run() {
 	callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 }
 
-func (j Job) NeverRan() bool {
+func (j Job) neverRan() bool {
 	return j.lastRun.IsZero()
 }
 

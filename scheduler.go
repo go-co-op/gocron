@@ -90,7 +90,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 	now := s.time.Now(s.loc)
 
 	var delta time.Time
-	if j.NeverRan() {
+	if j.neverRan() {
 		if !j.nextRun.IsZero() { // scheduled for future run, wait to run at least once
 			return nil
 		}
@@ -126,7 +126,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 func (s *Scheduler) calculateWeekday(now time.Time, j *Job) int {
 	remainingDaysToWeekday := remainingDaysToWeekday(now.Weekday(), *j.scheduledWeekday)
-	if j.NeverRan() || j.startImmediatelyFlag {
+	if j.neverRan() || j.startImmediatelyFlag {
 		if j.startImmediatelyFlag {
 			j.startImmediatelyFlag = false
 		}
@@ -400,7 +400,7 @@ func (s *Scheduler) StartImmediately() *Scheduler {
 
 // shouldRun returns true if the Job should be run now
 func (s *Scheduler) shouldRun(j *Job) bool {
-	if j.NeverRan() && j.startImmediatelyFlag {
+	if j.neverRan() && j.startImmediatelyFlag {
 		return true
 	}
 	return s.time.Now(s.loc).Unix() >= j.nextRun.Unix()
