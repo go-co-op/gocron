@@ -27,7 +27,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		loc:      loc,
 		running:  false,
 		stopChan: make(chan struct{}),
-		time:     newTimeWrapper(),
+		time:     &trueTime{},
 	}
 }
 

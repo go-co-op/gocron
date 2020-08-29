@@ -9,13 +9,7 @@ type timeWrapper interface {
 	NewTicker(time.Duration) *time.Ticker
 }
 
-func newTimeWrapper() timeWrapper {
-	return &trueTime{}
-}
-
-type trueTime struct {
-	*time.Time
-}
+type trueTime struct{}
 
 func (t *trueTime) Now(location *time.Location) time.Time {
 	return time.Now().In(location)
