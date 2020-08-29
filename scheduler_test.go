@@ -1024,16 +1024,37 @@ func TestScheduler_ScheduleDuration(t *testing.T) {
 			}
 			sched.scheduleAllJobs()
 
-			// should be scheduled 5 seconds from start At time
 			assert.Equal(t, startRunningTime.Add(10*time.Second), j.nextRun)
 
 			// then it ran
 			fakeTime.onNow = tick(startRunningTime, 10*time.Second)
 			sched.runAndReschedule(j)
 
-			// should be scheduled 12 seconds from start At time
 			assert.Equal(t, startRunningTime.Add(12*time.Second), j.nextRun)
 		})
+	})
+
+	t.Run("2 seconds starting at 10 seconds in the past should start immediately", func(t *testing.T) {
+		j, err := sched.Every(2).Seconds().At("15:15:05").Do(func() {})
+		assert.Nil(t, err)
+
+		// scheduler started
+		startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
+		fakeTime.onNow = func(location *time.Location) time.Time {
+			return startRunningTime
+		}
+		sched.scheduleAllJobs()
+
+		expectedFirstRun := startRunningTime.Add(2 * time.Second)
+		assert.Equal(t, expectedFirstRun, j.nextRun)
+
+		// then it ran
+		fakeTime.onNow = func(location *time.Location) time.Time {
+			return expectedFirstRun
+		}
+		sched.runAndReschedule(j)
+
+		assert.Equal(t, expectedFirstRun.Add(2*time.Second), j.nextRun)
 	})
 
 	t.Run("schedule for minutes", func(t *testing.T) {

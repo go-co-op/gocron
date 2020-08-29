@@ -101,7 +101,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 	switch j.unit {
 	case seconds, minutes, hours:
-		if j.neverRan() && j.atTime != 0 { // in order to avoid this maybe we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
+		if j.neverRan() && j.atTime != 0 && s.shouldRunToday(delta, j) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
 			j.nextRun = s.roundToMidnight(delta.Add(j.periodDuration)).Add(j.atTime)
 			return nil
 		}
