@@ -116,7 +116,13 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 	case weeks:
 		days := int(j.interval) * 7
 		if j.scheduledWeekday != nil { // Every().Monday(), for example
-			days = s.calculateWeekday(now, j)
+			remainingDaysToWeekday := remainingDaysToWeekday(now.Weekday(), *j.scheduledWeekday)
+			if j.neverRan() || j.startsImmediately {
+				if j.startsImmediately {
+					j.startsImmediately = false
+				}
+				days = s.calculateFirstWeekday(now, remainingDaysToWeekday, j)
+			}
 		}
 		delta = s.roundToMidnight(delta)
 		j.nextRun = delta.AddDate(0, 0, days).Add(j.atTime)
@@ -126,18 +132,6 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 	}
 
 	return nil
-}
-
-func (s *Scheduler) calculateWeekday(now time.Time, j *Job) int {
-	remainingDaysToWeekday := remainingDaysToWeekday(now.Weekday(), *j.scheduledWeekday)
-	if j.neverRan() || j.startsImmediately {
-		if j.startsImmediately {
-			j.startsImmediately = false
-		}
-		return s.calculateFirstWeekday(now, remainingDaysToWeekday, j)
-	}
-
-	return int(j.interval) * 7
 }
 
 func (s *Scheduler) calculateFirstWeekday(now time.Time, daysToWeekday int, j *Job) int {
