@@ -101,7 +101,11 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 	switch j.unit {
 	case seconds, minutes, hours:
-		j.nextRun = delta.Add(j.periodDuration + j.atTime)
+		if j.neverRan() && j.atTime != 0 { // in order to avoid this maybe we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
+			j.nextRun = s.roundToMidnight(delta.Add(j.periodDuration)).Add(j.atTime)
+			return nil
+		}
+		j.nextRun = delta.Add(j.periodDuration)
 	case days:
 		if s.shouldRunToday(now, j) {
 			j.nextRun = s.roundToMidnight(delta).Add(j.atTime)
@@ -126,9 +130,9 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 
 func (s *Scheduler) calculateWeekday(now time.Time, j *Job) int {
 	remainingDaysToWeekday := remainingDaysToWeekday(now.Weekday(), *j.scheduledWeekday)
-	if j.neverRan() || j.startImmediatelyFlag {
-		if j.startImmediatelyFlag {
-			j.startImmediatelyFlag = false
+	if j.neverRan() || j.startsImmediately {
+		if j.startsImmediately {
+			j.startsImmediately = false
 		}
 		return s.calculateFirstWeekday(now, remainingDaysToWeekday, j)
 	}
@@ -394,13 +398,13 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
 	job.nextRun = s.time.Now(s.loc)
-	job.startImmediatelyFlag = true
+	job.startsImmediately = true
 	return s
 }
 
 // shouldRun returns true if the Job should be run now
 func (s *Scheduler) shouldRun(j *Job) bool {
-	if j.neverRan() && j.startImmediatelyFlag {
+	if j.neverRan() && j.startsImmediately {
 		return true
 	}
 	return s.time.Now(s.loc).Unix() >= j.nextRun.Unix()
