@@ -100,7 +100,7 @@ func TestAt(t *testing.T) {
 		expectedStartTime := time.Date(scheduletime.Year(), scheduletime.Month(), scheduletime.Day(), now.Hour(), now.Minute(), now.Add(3*time.Second).Second(), 0, time.UTC)
 		assert.Equal(t, expectedStartTime, job.ScheduledTime())
 	})
-	t.Run("runAt(3 seconds in the past) should run tomorrow at current time plus 3 seconds", func(t *testing.T) {
+	t.Run("runAt(3 seconds in the past) should run tomorrow at current time minus 3 seconds", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		now := time.Now().UTC()
 		scheduletime := now.Add(3 * (-time.Second))
