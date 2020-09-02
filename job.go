@@ -9,7 +9,6 @@ import (
 type Job struct {
 	interval          uint64                   // pause interval * unit between runs
 	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
-	periodDuration    time.Duration            // interval * unit
 	startsImmediately bool                     // if the Job should run upon scheduler start
 	jobFunc           string                   // the Job jobFunc to run, func[jobFunc]
 	atTime            time.Duration            // optional time at which this Job runs
@@ -74,28 +73,6 @@ func (j *Job) Untag(t string) {
 // Tags returns the tags attached to the Job
 func (j *Job) Tags() []string {
 	return j.tags
-}
-
-func (j *Job) setPeriodDuration() error {
-	interval := time.Duration(j.interval)
-
-	switch j.unit {
-	case seconds:
-		j.periodDuration = interval * time.Second
-	case minutes:
-		j.periodDuration = interval * time.Minute
-	case hours:
-		j.periodDuration = interval * time.Hour
-	case days:
-		j.periodDuration = interval * time.Hour * 24
-	case weeks:
-		j.periodDuration = interval * time.Hour * 24 * 7
-	case months:
-		// periodDuration doesn't apply here
-	default:
-		return ErrPeriodNotSpecified
-	}
-	return nil
 }
 
 // ScheduledTime returns the time of the Job's next scheduled run

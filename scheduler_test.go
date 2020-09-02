@@ -959,195 +959,97 @@ func TestScheduler_ScheduleWeekdays(t *testing.T) {
 }
 
 func TestScheduler_ScheduleDuration(t *testing.T) {
-	sched := NewScheduler(time.UTC)
-	fakeTime := fakeTime{}
-	sched.time = &fakeTime
-
 	tick := func(date time.Time, duration time.Duration) func(location *time.Location) time.Time {
 		return func(location *time.Location) time.Time {
 			return date.Add(duration)
 		}
 	}
+	getJob := func(fn func(interface{}, ...interface{}) (*Job, error)) *Job {
+		j, _ := fn(func() {})
+		return j
+	}
 
-	t.Run("schedule for seconds", func(t *testing.T) {
-		t.Run("1 second", func(t *testing.T) {
-			j, err := sched.Every(1).Second().Do(func() {})
-			assert.Nil(t, err)
+	fakeTime := fakeTime{}
+	sched := NewScheduler(time.UTC)
+	sched.time = &fakeTime
+	startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
+	s := startRunningTime // small alias :)
+	var durationTests = []struct {
+		description       string
+		durationType      time.Duration
+		job               *Job
+		wantNextSchedules []time.Time
+	}{
+		{
+			description:       "1 second test",
+			job:               getJob(sched.Every(1).Second().Do),
+			durationType:      time.Second,
+			wantNextSchedules: []time.Time{s.Add(time.Second), s.Add(2 * time.Second), s.Add(3 * time.Second)},
+		},
+		{
+			description:       "2 seconds test",
+			job:               getJob(sched.Every(2).Seconds().Do),
+			durationType:      time.Second,
+			wantNextSchedules: []time.Time{s.Add(2 * time.Second), s.Add(4 * time.Second), s.Add(6 * time.Second)},
+		},
+		{
+			description:       "62 seconds test",
+			job:               getJob(sched.Every(62).Seconds().Do),
+			durationType:      time.Second,
+			wantNextSchedules: []time.Time{s.Add(62 * time.Second), s.Add(62 * 2 * time.Second), s.Add(62 * 3 * time.Second)},
+		},
+		{
+			description:       "1 minute test",
+			job:               getJob(sched.Every(1).Minute().Do),
+			durationType:      time.Minute,
+			wantNextSchedules: []time.Time{s.Add(1 * time.Minute), s.Add(2 * time.Minute), s.Add(3 * time.Minute)},
+		},
+		{
+			description:       "2 minutes test",
+			job:               getJob(sched.Every(2).Minutes().Do),
+			durationType:      time.Minute,
+			wantNextSchedules: []time.Time{s.Add(2 * time.Minute), s.Add(4 * time.Minute), s.Add(6 * time.Minute)},
+		},
+		{
+			description:       "62 minutes test",
+			job:               getJob(sched.Every(62).Minutes().Do),
+			durationType:      time.Minute,
+			wantNextSchedules: []time.Time{s.Add(62 * time.Minute), s.Add(62 * 2 * time.Minute), s.Add(62 * 3 * time.Minute)},
+		},
+		{
+			description:       "1 hour test",
+			job:               getJob(sched.Every(1).Hour().Do),
+			durationType:      time.Hour,
+			wantNextSchedules: []time.Time{s.Add(1 * time.Hour), s.Add(2 * time.Hour), s.Add(3 * time.Hour)},
+		},
+		{
+			description:       "2 hours test",
+			job:               getJob(sched.Every(2).Hours().Do),
+			durationType:      time.Hour,
+			wantNextSchedules: []time.Time{s.Add(2 * time.Hour), s.Add(4 * time.Hour), s.Add(6 * time.Hour)},
+		},
+		{
+			description:       "25 hours test",
+			job:               getJob(sched.Every(25).Hours().Do),
+			durationType:      time.Hour,
+			wantNextSchedules: []time.Time{s.Add(25 * time.Hour), s.Add(25 * 2 * time.Hour), s.Add(25 * 3 * time.Hour)},
+		},
+	}
+	for _, tt := range durationTests {
+		job := tt.job
 
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			// should be scheduled for next second
-			assert.Equal(t, startRunningTime.Add(1*time.Second), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 1*time.Second)
-			sched.runAndReschedule(j)
-
-			// should be scheduled for 2 seconds from start
-			assert.Equal(t, startRunningTime.Add(2*time.Second), j.nextRun)
-		})
-		t.Run("5 seconds", func(t *testing.T) {
-			j, err := sched.Every(5).Seconds().Do(func() {})
-			assert.Nil(t, err)
-
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			// should be scheduled 5 seconds from start
-			assert.Equal(t, startRunningTime.Add(5*time.Second), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 5*time.Second)
-			sched.runAndReschedule(j)
-
-			// should be scheduled 10 seconds from start
-			assert.Equal(t, startRunningTime.Add(10*time.Second), j.nextRun)
-		})
-
-		t.Run("2 seconds starting at 10 seconds in the future", func(t *testing.T) {
-			j, err := sched.Every(2).Seconds().At("15:15:25").Do(func() {})
-			assert.Nil(t, err)
-
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			assert.Equal(t, startRunningTime.Add(10*time.Second), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 10*time.Second)
-			sched.runAndReschedule(j)
-
-			assert.Equal(t, startRunningTime.Add(12*time.Second), j.nextRun)
-		})
-	})
-
-	t.Run("2 seconds starting at 10 seconds in the past should start immediately", func(t *testing.T) {
-		j, err := sched.Every(2).Seconds().At("15:15:05").Do(func() {})
-		assert.Nil(t, err)
-
-		// scheduler started
-		startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
 		fakeTime.onNow = func(location *time.Location) time.Time {
 			return startRunningTime
 		}
 		sched.scheduleAllJobs()
+		for j, want := range tt.wantNextSchedules {
+			assert.Equal(t, want, job.nextRun, tt.description)
 
-		expectedFirstRun := startRunningTime.Add(2 * time.Second)
-		assert.Equal(t, expectedFirstRun, j.nextRun)
-
-		// then it ran
-		fakeTime.onNow = func(location *time.Location) time.Time {
-			return expectedFirstRun
+			// time passes, schedules rerun and reschedule job
+			fakeTime.onNow = tick(startRunningTime, tt.durationType*time.Duration(job.interval)*time.Duration(j+1))
+			sched.runAndReschedule(job)
 		}
-		sched.runAndReschedule(j)
-
-		assert.Equal(t, expectedFirstRun.Add(2*time.Second), j.nextRun)
-	})
-
-	t.Run("schedule for minutes", func(t *testing.T) {
-		t.Run("1 minute", func(t *testing.T) {
-			j, err := sched.Every(1).Minute().Do(func() {})
-			assert.Nil(t, err)
-
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			// should be scheduled 1 minute from start
-			assert.Equal(t, startRunningTime.Add(1*time.Minute), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 1*time.Minute)
-			sched.runAndReschedule(j)
-
-			// should be scheduled 2 minutes from start
-			assert.Equal(t, startRunningTime.Add(2*time.Minute), j.nextRun)
-		})
-
-		t.Run("five minutes", func(t *testing.T) {
-			j, err := sched.Every(5).Minutes().Do(func() {})
-			assert.Nil(t, err)
-
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			// should be scheduled 5 minutes from start
-			assert.Equal(t, startRunningTime.Add(5*time.Minute), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 5*time.Minute)
-			sched.runAndReschedule(j)
-
-			// should be scheduled 10 minutes from start
-			assert.Equal(t, startRunningTime.Add(10*time.Minute), j.nextRun)
-		})
-	})
-
-	t.Run("schedule for hours", func(t *testing.T) {
-		t.Run("1 hour", func(t *testing.T) {
-			j, err := sched.Every(1).Hour().Do(func() {})
-			assert.Nil(t, err)
-
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			// should be scheduled 1 hour from start
-			assert.Equal(t, startRunningTime.Add(1*time.Hour), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 1*time.Hour)
-			sched.runAndReschedule(j)
-
-			// should be scheduled 2 hours from start
-			assert.Equal(t, startRunningTime.Add(2*time.Hour), j.nextRun)
-		})
-
-		t.Run("5 hours", func(t *testing.T) {
-			j, err := sched.Every(5).Hours().Do(func() {})
-			assert.Nil(t, err)
-
-			// scheduler started
-			startRunningTime := time.Date(2020, time.August, 27, 15, 15, 15, 0, time.UTC)
-			fakeTime.onNow = func(location *time.Location) time.Time {
-				return startRunningTime
-			}
-			sched.scheduleAllJobs()
-
-			// should be scheduled 5 hours from start
-			assert.Equal(t, startRunningTime.Add(5*time.Hour), j.nextRun)
-
-			// then it ran
-			fakeTime.onNow = tick(startRunningTime, 5*time.Hour)
-			sched.runAndReschedule(j)
-
-			// should be scheduled 10 hours from start
-			assert.Equal(t, startRunningTime.Add(10*time.Hour), j.nextRun)
-		})
-	})
+	}
 }
 
 type fakeTime struct {

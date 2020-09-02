@@ -105,7 +105,7 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 			j.nextRun = s.roundToMidnight(delta).Add(j.atTime)
 			return nil
 		}
-		j.nextRun = delta.Add(j.periodDuration)
+		j.nextRun = delta.Add(getPeriodDuration(j))
 	case days:
 		if s.shouldRunAt(now, j) {
 			j.nextRun = s.roundToMidnight(delta).Add(j.atTime)
@@ -132,6 +132,19 @@ func (s *Scheduler) scheduleNextRun(j *Job) error {
 	}
 
 	return nil
+}
+
+func getPeriodDuration(j *Job) time.Duration {
+	var periodDuration time.Duration
+	switch j.unit {
+	case seconds:
+		periodDuration = time.Duration(j.interval) * time.Second
+	case minutes:
+		periodDuration = time.Duration(j.interval) * time.Minute
+	case hours:
+		periodDuration = time.Duration(j.interval) * time.Hour
+	}
+	return periodDuration
 }
 
 func (s *Scheduler) calculateFirstWeekday(now time.Time, daysToWeekday int, j *Job) int {
@@ -351,13 +364,6 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	j.funcs[fname] = jobFun
 	j.fparams[fname] = params
 	j.jobFunc = fname
-
-	if j.periodDuration == 0 {
-		err := j.setPeriodDuration()
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	return j, nil
 }
