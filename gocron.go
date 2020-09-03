@@ -33,8 +33,8 @@ var (
 
 // regex patterns for supported time formats
 var (
-	timeWithSeconds    = regexp.MustCompile(`(?m)^\d\d:\d\d:\d\d$`)
-	timeWithoutSeconds = regexp.MustCompile(`(?m)^\d\d:\d\d$`)
+	timeWithSeconds    = regexp.MustCompile(`(?m)^\d{1,2}:\d\d:\d\d$`)
+	timeWithoutSeconds = regexp.MustCompile(`(?m)^\d{1,2}:\d\d$`)
 )
 
 type timeUnit int
