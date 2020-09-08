@@ -87,9 +87,9 @@ func (j *Job) ScheduledAtTime() string {
 
 // Weekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
-func (j *Job) Weekday() (*time.Weekday, error) {
+func (j *Job) Weekday() (time.Weekday, error) {
 	if j.scheduledWeekday == nil {
-		return nil, ErrNotScheduledWeekday
+		return time.Sunday, ErrNotScheduledWeekday
 	}
-	return j.scheduledWeekday, nil
+	return *j.scheduledWeekday, nil
 }
