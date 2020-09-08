@@ -34,11 +34,11 @@ func TestGetWeekday(t *testing.T) {
 	testCases := []struct {
 		desc            string
 		job             *Job
-		expectedWeekday *time.Weekday
+		expectedWeekday time.Weekday
 		expectedError   error
 	}{
-		{"success", weedayJob, &wednesday, nil},
-		{"fail - not set for weekday", nonWeekdayJob, nil, ErrNotScheduledWeekday},
+		{"success", weedayJob, wednesday, nil},
+		{"fail - not set for weekday", nonWeekdayJob, time.Sunday, ErrNotScheduledWeekday},
 	}
 
 	for _, tc := range testCases {

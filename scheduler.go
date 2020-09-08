@@ -424,7 +424,6 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 // StartImmediately sets the Jobs next run as soon as the scheduler starts
 func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
-	//job.nextRun = s.time.Now(s.loc)
 	job.startsImmediately = true
 	return s
 }
