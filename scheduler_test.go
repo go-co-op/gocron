@@ -393,9 +393,6 @@ func TestScheduler_StartAt(t *testing.T) {
 	job, _ := scheduler.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
 	scheduler.scheduleAllJobs()
 	_, nextRun := scheduler.NextRun()
-	t.Log("now: " + now.String())
-	t.Log("next run : " + nextRun.String())
-	t.Log("now plus 5 run : " + now.Add(time.Second*5).String())
 	assert.Equal(t, now.Add(time.Second*5), nextRun)
 	scheduler.Remove(job)
 
