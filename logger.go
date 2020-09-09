@@ -1,5 +1,7 @@
 package gocron
 
+// Logger interface the custom logger should
+// conform to
 type Logger interface {
 	Debugf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
