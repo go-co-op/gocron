@@ -22,7 +22,8 @@ type Scheduler struct {
 }
 
 // NewScheduler creates a new Scheduler
-func NewScheduler(loc *time.Location) *Scheduler {
+func NewScheduler(loc *time.Location, options ...interface{}) *Scheduler {
+	handleOptions(options...)
 	return &Scheduler{
 		jobs:     make([]*Job, 0),
 		loc:      loc,
@@ -568,5 +569,17 @@ func (s *Scheduler) Lock() *Scheduler {
 func (s *Scheduler) scheduleAllJobs() {
 	for _, j := range s.jobs {
 		s.scheduleNextRun(j)
+	}
+}
+
+func handleOptions(options ...interface{}) {
+	for _, option := range options {
+		switch option.(type) {
+		case Logger:
+			// Note: The logger will only be initilized if the Logger
+			// interface is conformed to. The logs will not be printed
+			// in this case
+			initLogger(option.(Logger))
+		}
 	}
 }
