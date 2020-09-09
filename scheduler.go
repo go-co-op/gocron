@@ -20,8 +20,13 @@ type Scheduler struct {
 	logger   Logger        // optional custom logger
 }
 
+// SchedulerOption represents any option the client
+// might want to pass to the scheduler to customize
+// it's behaviour
+type SchedulerOption func(*Scheduler)
+
 // NewScheduler creates a new Scheduler
-func NewScheduler(loc *time.Location, options ...interface{}) *Scheduler {
+func NewScheduler(loc *time.Location, options ...SchedulerOption) *Scheduler {
 	scheduler := &Scheduler{
 		jobs:     make([]*Job, 0),
 		loc:      loc,
@@ -572,14 +577,8 @@ func (s *Scheduler) scheduleAllJobs() {
 	}
 }
 
-func (s *Scheduler) handleOptions(options ...interface{}) {
+func (s *Scheduler) handleOptions(options ...SchedulerOption) {
 	for _, option := range options {
-		switch option.(type) {
-		case Logger:
-			// Note: The logger will only be initilized if the Logger
-			// interface is conformed to. The logs will not be printed
-			// if the logger is not initilized.
-			s.initLogger(option.(Logger))
-		}
+		option(s)
 	}
 }

@@ -12,6 +12,14 @@ type Logger interface {
 	Error(args ...interface{})
 }
 
+// OptionLogger returns the SchedulerOption for
+// for passing in a custom logger to NewScheduler
+func OptionLogger(logger Logger) SchedulerOption {
+	return func(s *Scheduler) {
+		s.logger = logger
+	}
+}
+
 func (s *Scheduler) initLogger(l Logger) {
 	s.logger = l
 }
