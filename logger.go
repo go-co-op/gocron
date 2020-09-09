@@ -12,46 +12,42 @@ type Logger interface {
 	Error(args ...interface{})
 }
 
-var (
-	logger Logger
-)
-
-func initLogger(l Logger) {
-	logger = l
+func (s *Scheduler) initLogger(l Logger) {
+	s.logger = l
 }
 
-func debugf(format string, args ...interface{}) {
-	if logger != nil {
-		logger.Debugf(format, args...)
+func (s *Scheduler) debugf(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Debugf(format, args...)
 	}
 }
 
-func debug(args ...interface{}) {
-	if logger != nil {
-		logger.Debug(args...)
+func (s *Scheduler) debug(args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Debug(args...)
 	}
 }
 
-func infof(format string, args ...interface{}) {
-	if logger != nil {
-		logger.Infof(format, args...)
+func (s *Scheduler) infof(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Infof(format, args...)
 	}
 }
 
-func info(args ...interface{}) {
-	if logger != nil {
-		logger.Info(args...)
+func (s *Scheduler) info(args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Info(args...)
 	}
 }
 
-func errf(format string, args ...interface{}) {
-	if logger != nil {
-		logger.Errorf(format, args...)
+func (s *Scheduler) errorf(format string, args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Errorf(format, args...)
 	}
 }
 
-func err(args ...interface{}) {
-	if logger != nil {
-		logger.Error(args...)
+func (s *Scheduler) error(args ...interface{}) {
+	if s.logger != nil {
+		s.logger.Error(args...)
 	}
 }

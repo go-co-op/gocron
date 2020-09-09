@@ -12,25 +12,25 @@ import (
 // Scheduler struct stores a list of Jobs and the location of time Scheduler
 // Scheduler implements the sort.Interface{} for sorting Jobs, by the time of nextRun
 type Scheduler struct {
-	jobs []*Job
-	loc  *time.Location
-
+	jobs     []*Job
+	loc      *time.Location
 	running  bool
 	stopChan chan struct{} // signal to stop scheduling
-
-	time timeWrapper // wrapper around time.Time
+	time     timeWrapper   // wrapper around time.Time
+	logger   Logger        // optional custom logger
 }
 
 // NewScheduler creates a new Scheduler
 func NewScheduler(loc *time.Location, options ...interface{}) *Scheduler {
-	handleOptions(options...)
-	return &Scheduler{
+	scheduler := &Scheduler{
 		jobs:     make([]*Job, 0),
 		loc:      loc,
 		running:  false,
 		stopChan: make(chan struct{}),
 		time:     &trueTime{},
 	}
+	scheduler.handleOptions(options...)
+	return scheduler
 }
 
 // StartBlocking starts all the pending jobs using a second-long ticker and blocks the current thread
@@ -572,14 +572,14 @@ func (s *Scheduler) scheduleAllJobs() {
 	}
 }
 
-func handleOptions(options ...interface{}) {
+func (s *Scheduler) handleOptions(options ...interface{}) {
 	for _, option := range options {
 		switch option.(type) {
 		case Logger:
 			// Note: The logger will only be initilized if the Logger
 			// interface is conformed to. The logs will not be printed
-			// in this case
-			initLogger(option.(Logger))
+			// if the logger is not initilized.
+			s.initLogger(option.(Logger))
 		}
 	}
 }
