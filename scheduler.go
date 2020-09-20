@@ -392,6 +392,10 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	j.fparams[fname] = params
 	j.jobFunc = fname
 
+	if s.running {
+		s.scheduleNextRun(j)
+	}
+
 	return j, nil
 }
 

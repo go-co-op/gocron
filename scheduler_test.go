@@ -631,3 +631,21 @@ func (f fakeTime) Sleep(duration time.Duration) {
 func (f fakeTime) NewTicker(duration time.Duration) *time.Ticker {
 	panic("implement me")
 }
+
+func TestScheduler_Do(t *testing.T) {
+	t.Run("adding a new job before scheduler starts does not schedule job", func(t *testing.T) { // we should not schedule because we cannot guarantee how long it will take for the scheduler to start
+		s := NewScheduler(time.UTC)
+		s.running = false
+		job, err := s.Every(1).Second().Do(func() {})
+		assert.Equal(t, nil, err)
+		assert.True(t, job.nextRun.IsZero())
+	})
+
+	t.Run("adding a new job when scheduler is running schedules job", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		s.running = true
+		job, err := s.Every(1).Second().Do(func() {})
+		assert.Equal(t, nil, err)
+		assert.False(t, job.nextRun.IsZero())
+	})
+}
