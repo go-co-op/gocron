@@ -392,6 +392,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	j.fparams[fname] = params
 	j.jobFunc = fname
 
+	// we should not schedule if not running since we cant foresee how long it will take for the scheduler to start
 	if s.running {
 		s.scheduleNextRun(j)
 	}

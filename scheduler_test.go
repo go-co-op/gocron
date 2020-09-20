@@ -633,7 +633,7 @@ func (f fakeTime) NewTicker(duration time.Duration) *time.Ticker {
 }
 
 func TestScheduler_Do(t *testing.T) {
-	t.Run("adding a new job before scheduler starts does not schedule job", func(t *testing.T) { // we should not schedule because we cannot guarantee how long it will take for the scheduler to start
+	t.Run("adding a new job before scheduler starts does not schedule job", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.running = false
 		job, err := s.Every(1).Second().Do(func() {})
