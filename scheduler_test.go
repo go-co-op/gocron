@@ -108,47 +108,6 @@ func TestAtFuture(t *testing.T) {
 	assert.Equal(t, false, shouldBeFalse, "Day job was not expected to run as it was in the future")
 }
 
-func TestDay(t *testing.T) {
-	now := time.Now().UTC()
-
-	// Create new scheduler to have clean test env
-	s := NewScheduler(time.UTC)
-
-	// schedule next run 1 day
-	dayJob, _ := s.Every(1).Day().Do(task)
-	s.scheduleNextRun(dayJob)
-	tomorrow := now.AddDate(0, 0, 1)
-	expectedTime := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, expectedTime, dayJob.nextRun)
-
-	// schedule next run 2 days
-	dayJob, _ = s.Every(2).Days().Do(task)
-	s.scheduleNextRun(dayJob)
-	twoDaysFromNow := now.AddDate(0, 0, 2)
-	expectedTime = time.Date(twoDaysFromNow.Year(), twoDaysFromNow.Month(), twoDaysFromNow.Day(), 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, expectedTime, dayJob.nextRun)
-
-	// Job running longer than next schedule 1day 2 hours
-	dayJob, _ = s.Every(1).Day().Do(task)
-	twoHoursFromNow := now.Add(2 * time.Hour)
-	dayJob.lastRun = time.Date(twoHoursFromNow.Year(), twoHoursFromNow.Month(), twoHoursFromNow.Day(), twoHoursFromNow.Hour(), 0, 0, 0, time.UTC)
-	s.scheduleNextRun(dayJob)
-	expectedTime = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, expectedTime, dayJob.nextRun)
-
-	// At() 2 hours before now
-	twoHoursBefore := now.Add(time.Duration(-2 * time.Hour))
-	startAt := fmt.Sprintf("%02d:%02d", twoHoursBefore.Hour(), twoHoursBefore.Minute())
-	dayJob, _ = s.Every(1).Day().At(startAt).Do(task)
-	s.scheduleNextRun(dayJob)
-
-	expectedTime = time.Date(twoHoursBefore.Year(), twoHoursBefore.Month(),
-		twoHoursBefore.AddDate(0, 0, 1).Day(),
-		twoHoursBefore.Hour(), twoHoursBefore.Minute(), 0, 0, time.UTC)
-
-	assert.Equal(t, expectedTime, dayJob.nextRun)
-}
-
 func schedulerForNextWeekdayEveryNTimes(weekday time.Weekday, n uint64, s *Scheduler) *Scheduler {
 	switch weekday {
 	case time.Monday:
