@@ -1,12 +1,15 @@
 package gocron
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 )
 
 // Scheduler struct stores a list of Jobs and the location of time Scheduler
@@ -19,6 +22,8 @@ type Scheduler struct {
 	stopChan chan struct{} // signal to stop scheduling
 
 	time timeWrapper // wrapper around time.Time
+
+	sem *semaphore.Weighted
 }
 
 // NewScheduler creates a new Scheduler
@@ -30,6 +35,12 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		stopChan: make(chan struct{}),
 		time:     &trueTime{},
 	}
+}
+
+// SetMaxConcurrentJobs limits how many jobs can be running at the same time.
+// This is useful when running resource intensive jobs and a precise start time is not critical.
+func (s *Scheduler) SetMaxConcurrentJobs(n int) {
+	s.sem = semaphore.NewWeighted(int64(n))
 }
 
 // StartBlocking starts all the pending jobs using a second-long ticker and blocks the current thread
@@ -264,6 +275,10 @@ func (s *Scheduler) runAndReschedule(job *Job) error {
 }
 
 func (s *Scheduler) run(job *Job) error {
+	if s.sem != nil {
+		s.sem.Acquire(context.Background(), 1)
+	}
+
 	if job.lock {
 		if locker == nil {
 			return fmt.Errorf("trying to lock %s with nil locker", job.jobFunc)
@@ -275,7 +290,13 @@ func (s *Scheduler) run(job *Job) error {
 	}
 
 	job.lastRun = s.time.Now(s.loc)
-	go job.run()
+
+	go func() {
+		job.run()
+		if s.sem != nil {
+			s.sem.Release(1)
+		}
+	}()
 
 	return nil
 }

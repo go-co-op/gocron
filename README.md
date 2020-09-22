@@ -19,10 +19,11 @@ Examples:
 package main
 
 import (
-	"fmt"
-	"time"
+    "fmt"
+    "time"
+    "runtime"
 
-	"github.com/go-co-op/gocron"
+    "github.com/go-co-op/gocron"
 )
 
 func task() {
@@ -36,6 +37,10 @@ func taskWithParams(a int, b string) {
 func main() {
     // defines a new scheduler that schedules and runs jobs
     s1 := gocron.NewScheduler(time.UTC)
+
+    // we have very intensive jobs with flexible schedules, so limiting the
+    // maximum jobs that can run at a time
+    s1.SetMaxConcurrentJobs(runtime.NumCPU())
 
     s1.Every(3).Seconds().Do(task)
 
