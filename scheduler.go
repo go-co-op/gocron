@@ -270,7 +270,15 @@ func (s *Scheduler) run(job *Job) error {
 		}
 		key := getFunctionKey(job.jobFunc)
 
-		locker.Lock(key)
+		success, err := locker.Lock(key)
+		if err != nil {
+			return err
+		}
+		if !success {
+			job.lastRun = s.time.Now(s.loc)
+			return nil
+		}
+
 		defer locker.Unlock(key)
 	}
 
