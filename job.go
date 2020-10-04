@@ -21,6 +21,13 @@ type Job struct {
 	fparams           map[string][]interface{} // Map for function and  params of function
 	lock              bool                     // lock the Job from running at same time form multiple instances
 	tags              []string                 // allow the user to tag Jobs with certain labels
+	runConfig         runConfig                // configuration for how many times to run the job
+	runCount          int                      // number of time the job ran
+}
+
+type runConfig struct {
+	finiteRuns bool
+	maxRuns    int
 }
 
 // NewJob creates a new Job with the provided interval
@@ -38,6 +45,7 @@ func NewJob(interval uint64) *Job {
 // Run the Job and immediately reschedule it
 func (j *Job) run() {
 	callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	j.runCount++
 }
 
 func (j Job) neverRan() bool {
@@ -92,4 +100,20 @@ func (j *Job) Weekday() (time.Weekday, error) {
 		return time.Sunday, ErrNotScheduledWeekday
 	}
 	return *j.scheduledWeekday, nil
+}
+
+// LimitRunsTo limits the number of executions of this
+// job to n. However, the job will still remain in the
+// scheduler
+func (j *Job) LimitRunsTo(n int) {
+	j.runConfig = runConfig{
+		finiteRuns: true,
+		maxRuns:    n,
+	}
+}
+
+// shouldRun eveluates if this job should run again
+// based on the runConfig
+func (j *Job) shouldRun() bool {
+	return !j.runConfig.finiteRuns || j.runCount < j.runConfig.maxRuns
 }
