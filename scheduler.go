@@ -435,7 +435,7 @@ func (s *Scheduler) StartImmediately() *Scheduler {
 
 // shouldRun returns true if the Job should be run now
 func (s *Scheduler) shouldRun(j *Job) bool {
-	return s.time.Now(s.loc).Unix() >= j.nextRun.Unix()
+	return j.shouldRun() && s.time.Now(s.loc).Unix() >= j.nextRun.Unix()
 }
 
 // setUnit sets the unit type

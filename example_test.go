@@ -88,3 +88,10 @@ func ExampleScheduler_Clear() {
 	// 3
 	// 0
 }
+
+func ExampleJob_LimitRunsTo() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	job.LimitRunsTo(2)
+	s.StartAsync()
+}
