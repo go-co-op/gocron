@@ -3,6 +3,19 @@ package gocron
 import (
 	"fmt"
 	"time"
+
+	"golang.org/x/sync/singleflight"
+)
+
+// Mode is Job mode
+type Mode int8
+
+const (
+	// NoMode disable any mode
+	NoMode Mode = iota
+
+	// SingletonMode switch to single job mode
+	SingletonMode
 )
 
 // Job struct stores the information necessary to run a Job
@@ -23,11 +36,13 @@ type Job struct {
 	tags              []string                 // allow the user to tag Jobs with certain labels
 	runConfig         runConfig                // configuration for how many times to run the job
 	runCount          int                      // number of time the job ran
+	limiter           singleflight.Group
 }
 
 type runConfig struct {
 	finiteRuns bool
 	maxRuns    int
+	mode       Mode
 }
 
 // NewJob creates a new Job with the provided interval
@@ -44,11 +59,19 @@ func NewJob(interval uint64) *Job {
 
 // Run the Job and immediately reschedule it
 func (j *Job) run() {
-	callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
-	j.runCount++
+	switch j.runConfig.mode {
+	case SingletonMode:
+		_, j.err, _ = j.limiter.Do("main", func() (interface{}, error) {
+			j.runCount++
+			return callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+		})
+	default:
+		j.runCount++
+		_, j.err = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	}
 }
 
-func (j Job) neverRan() bool {
+func (j *Job) neverRan() bool {
 	return j.lastRun.IsZero()
 }
 
@@ -109,6 +132,13 @@ func (j *Job) LimitRunsTo(n int) {
 	j.runConfig = runConfig{
 		finiteRuns: true,
 		maxRuns:    n,
+	}
+}
+
+// SingletonMode Sets the mode to block startup if the current job has not finished
+func (j *Job) SingletonMode() {
+	j.runConfig = runConfig{
+		mode: SingletonMode,
 	}
 }
 

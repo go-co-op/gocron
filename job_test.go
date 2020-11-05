@@ -1,6 +1,8 @@
 package gocron
 
 import (
+	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +20,23 @@ func TestTags(t *testing.T) {
 
 	j.Untag("more")
 	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
+}
+
+func TestSingletonMode(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	var trigger int32
+	job, _ := s.Every(1).Second().Do(func() {
+		if atomic.LoadInt32(&trigger) == 1 {
+			t.Fatal("Restart should not occur")
+		}
+		atomic.AddInt32(&trigger, 1)
+		fmt.Println("I am a long task")
+		time.Sleep(3 * time.Second)
+	})
+	job.SingletonMode()
+	s.StartAsync()
+	time.Sleep(2 * time.Second)
+	s.Stop()
 }
 
 func TestGetScheduledTime(t *testing.T) {

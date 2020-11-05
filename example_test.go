@@ -95,3 +95,10 @@ func ExampleJob_LimitRunsTo() {
 	job.LimitRunsTo(2)
 	s.StartAsync()
 }
+
+func ExampleJob_SingletonMode() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	job.SingletonMode()
+	s.StartAsync()
+}

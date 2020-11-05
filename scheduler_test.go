@@ -252,17 +252,17 @@ func TestSwap(t *testing.T) {
 	s.Every(2).Minute().Do(task)
 
 	jb := s.Jobs()
-	var jobsBefore []Job
-	for _, p := range jb {
-		jobsBefore = append(jobsBefore, *p)
+	jobsBefore := make([]*Job, 2)
+	for i, p := range jb {
+		jobsBefore[i] = p
 	}
 
 	s.Swap(1, 0)
 
 	jobsAfter := s.Jobs()
 
-	assert.Equal(t, &jobsBefore[0], jobsAfter[1])
-	assert.Equal(t, &jobsBefore[1], jobsAfter[0])
+	assert.Equal(t, jobsBefore[0], jobsAfter[1])
+	assert.Equal(t, jobsBefore[1], jobsAfter[0])
 }
 
 func TestLess(t *testing.T) {
