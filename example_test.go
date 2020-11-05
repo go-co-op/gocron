@@ -85,6 +85,12 @@ func ExampleJob_ScheduledTime() {
 	fmt.Println(job.ScheduledTime())
 }
 
+func ExampleJob_SingletonMode() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	job.SingletonMode()
+}
+
 func ExampleJob_Tag() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every("1s").Do(task)
@@ -427,6 +433,8 @@ func ExampleScheduler_Second() {
 	_, _ = s.Every(1).Do(task)
 	_, _ = s.Every(1).Second().Do(task)
 	_, _ = s.Every(1).Seconds().Do(task)
+	_, _ = s.Every("1s").Seconds().Do(task)
+	_, _ = s.Every(time.Second).Seconds().Do(task)
 }
 
 func ExampleScheduler_Seconds() {
@@ -437,6 +445,14 @@ func ExampleScheduler_Seconds() {
 	_, _ = s.Every(1).Do(task)
 	_, _ = s.Every(1).Second().Do(task)
 	_, _ = s.Every(1).Seconds().Do(task)
+	_, _ = s.Every("1s").Seconds().Do(task)
+	_, _ = s.Every(time.Second).Seconds().Do(task)
+
+}
+
+func ExampleScheduler_SingletonMode() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Second().SingletonMode().Do(task)
 }
 
 func ExampleScheduler_StartBlocking() {

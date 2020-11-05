@@ -15,26 +15,32 @@ If you want to chat, you can find us at Slack! [<img src="https://img.shields.io
 
 ## Examples
 
-Take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
+```golang
+s := gocron.NewScheduler(time.UTC)
+
+s.Every(5).Seconds().Do(func(){ ... })
+```
+
+For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
 
 ## FAQ
 
-* Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication? 
+* Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
 * A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
 
 * Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
 * A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.
-  
+
 --- 
 Looking to contribute? Try to follow these guidelines:
- * Use issues for everything
- * For a small change, just send a PR!
- * For bigger changes, please open an issue for discussion before sending a PR.
- * PRs should have: tests, documentation and examples (if it makes sense)
- * You can also contribute by:
-    * Reporting issues
-    * Suggesting new features or enhancements
-    * Improving/fixing documentation
+* Use issues for everything
+* For a small change, just send a PR!
+* For bigger changes, please open an issue for discussion before sending a PR.
+* PRs should have: tests, documentation and examples (if it makes sense)
+* You can also contribute by:
+   * Reporting issues
+   * Suggesting new features or enhancements
+   * Improving/fixing documentation
 ---
 
 [Jetbrains](https://www.jetbrains.com/?from=gocron) supports this project with GoLand licenses. We appreciate their support for free and open source software!

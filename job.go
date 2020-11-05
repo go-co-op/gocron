@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // Job struct stores the information necessary to run a Job
@@ -22,7 +24,6 @@ type Job struct {
 	scheduledWeekday  *time.Weekday // Specific day of the week to start on
 	dayOfTheMonth     int           // Specific day of the month to run the job
 	tags              []string      // allow the user to tag Jobs with certain labels
-	runConfig         runConfig     // configuration for how many times to run the job
 	runCount          int           // number of times the job ran
 	timer             *time.Timer
 }
@@ -31,13 +32,27 @@ type jobFunction struct {
 	functions map[string]interface{}   // Map for the function task store
 	params    map[string][]interface{} // Map for function and params of function
 	name      string                   // the Job name to run, func[jobFunc]
+	runConfig runConfig                // configuration for how many times to run the job
+	limiter   *singleflight.Group      // limits inflight runs of job to one
 }
 
 type runConfig struct {
 	finiteRuns         bool
 	maxRuns            int
+	mode               mode
 	removeAfterLastRun bool
 }
+
+// mode is the Job's running mode
+type mode int8
+
+const (
+	// defaultMode disable any mode
+	defaultMode mode = iota
+
+	// singletonMode switch to single job mode
+	singletonMode
+)
 
 // NewJob creates a new Job with the provided interval
 func NewJob(interval int) *Job {
@@ -137,7 +152,7 @@ func (j *Job) Weekday() (time.Weekday, error) {
 
 // LimitRunsTo limits the number of executions of this job to n.
 // The job will remain in the scheduler.
-// Note: If a job is added to a running scheduler and this method is used
+// Note: If a job is added to a running scheduler and this method is then used
 // you may see the job run more than the set limit as job is scheduled immediately
 // by default upon being added to the scheduler. It is recommended to use the
 // LimitRunsTo() func on the scheduler chain when scheduling the job.
@@ -145,10 +160,22 @@ func (j *Job) Weekday() (time.Weekday, error) {
 func (j *Job) LimitRunsTo(n int) {
 	j.Lock()
 	defer j.Unlock()
-	j.runConfig = runConfig{
-		finiteRuns: true,
-		maxRuns:    n,
-	}
+	j.runConfig.finiteRuns = true
+	j.runConfig.maxRuns = n
+}
+
+// SingletonMode prevents a new job from starting if the prior job has not yet
+// completed it's run
+// Note: If a job is added to a running scheduler and this method is then used
+// you may see the job run overrun itself as job is scheduled immediately
+// by default upon being added to the scheduler. It is recommended to use the
+// SingletonMode() func on the scheduler chain when scheduling the job.
+func (j *Job) SingletonMode() {
+	j.Lock()
+	defer j.Unlock()
+	j.runConfig.mode = singletonMode
+	j.jobFunction.limiter = &singleflight.Group{}
+
 }
 
 // RemoveAfterLastRun sets the job to be removed after it's last run (when limited)

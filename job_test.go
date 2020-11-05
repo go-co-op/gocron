@@ -88,8 +88,10 @@ func TestJob_shouldRunAgain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			j := &Job{
-				runConfig: tt.runConfig,
-				runCount:  tt.runCount,
+				jobFunction: jobFunction{
+					runConfig: tt.runConfig,
+				},
+				runCount: tt.runCount,
 			}
 			if got := j.shouldRun(); got != tt.want {
 				t.Errorf("Job.shouldRunAgain() = %v, want %v", got, tt.want)
