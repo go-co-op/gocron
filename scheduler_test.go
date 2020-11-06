@@ -252,10 +252,7 @@ func TestSwap(t *testing.T) {
 	s.Every(2).Minute().Do(task)
 
 	jb := s.Jobs()
-	jobsBefore := make([]*Job, 2)
-	for i, p := range jb {
-		jobsBefore[i] = p
-	}
+	jobsBefore := append([]*Job{}, jb...)
 
 	s.Swap(1, 0)
 
