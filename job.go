@@ -52,7 +52,7 @@ func (j *Job) run() {
 	j.runCount++
 }
 
-func (j Job) neverRan() bool {
+func (j *Job) neverRan() bool {
 	return j.lastRun.IsZero()
 }
 
