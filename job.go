@@ -2,11 +2,13 @@ package gocron
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
 // Job struct stores the information necessary to run a Job
 type Job struct {
+	sync.RWMutex
 	interval          uint64                   // pause interval * unit between runs
 	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	startsImmediately bool                     // if the Job should run upon scheduler start
@@ -44,6 +46,8 @@ func NewJob(interval uint64) *Job {
 
 // Run the Job and immediately reschedule it
 func (j *Job) run() {
+	j.Lock()
+	defer j.Unlock()
 	callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 	j.runCount++
 }

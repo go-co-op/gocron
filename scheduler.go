@@ -88,6 +88,8 @@ func (s *Scheduler) ChangeLocation(newLocation *time.Location) {
 
 // scheduleNextRun Compute the instant when this Job should run next
 func (s *Scheduler) scheduleNextRun(j *Job) {
+	j.Lock()
+	defer j.Unlock()
 	now := s.time.Now(s.loc)
 
 	if j.startsImmediately {
