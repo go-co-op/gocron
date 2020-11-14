@@ -1,7 +1,6 @@
 package gocron
 
 import (
-	"fmt"
 	"math"
 	"reflect"
 	"sort"
@@ -266,16 +265,6 @@ func (s *Scheduler) runAndReschedule(job *Job) error {
 }
 
 func (s *Scheduler) run(job *Job) error {
-	if job.lock {
-		if locker == nil {
-			return fmt.Errorf("trying to lock %s with nil locker", job.jobFunc)
-		}
-		key := getFunctionKey(job.jobFunc)
-
-		locker.Lock(key)
-		defer locker.Unlock(key)
-	}
-
 	job.lastRun = s.time.Now(s.loc)
 	go job.run()
 
@@ -564,12 +553,6 @@ func (s *Scheduler) Sunday() *Scheduler {
 
 func (s *Scheduler) getCurrentJob() *Job {
 	return s.jobs[len(s.jobs)-1]
-}
-
-// Lock prevents Job to run from multiple instances of gocron
-func (s *Scheduler) Lock() *Scheduler {
-	s.getCurrentJob().lock = true
-	return s
 }
 
 func (s *Scheduler) scheduleAllJobs() {

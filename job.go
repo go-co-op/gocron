@@ -21,7 +21,6 @@ type Job struct {
 	dayOfTheMonth     int                      // Specific day of the month to run the job
 	funcs             map[string]interface{}   // Map for the function task store
 	fparams           map[string][]interface{} // Map for function and  params of function
-	lock              bool                     // lock the Job from running at same time form multiple instances
 	tags              []string                 // allow the user to tag Jobs with certain labels
 	runConfig         runConfig                // configuration for how many times to run the job
 	runCount          int                      // number of time the job ran
