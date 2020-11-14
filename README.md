@@ -13,7 +13,7 @@ See also these two great articles:
 
 If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
-Examples:
+# Examples:
 
 ```go
 package main
@@ -116,9 +116,10 @@ func main() {
     // this line is never reached
 }
 ```
-
-and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon (help is wanted! If you want to contribute, pull requests are welcome).
-
+### FAQ
+ * Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication? 
+ * A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+--- 
 Looking to contribute? Try to follow these guidelines:
  * Use issues for everything
  * For a small change, just send a PR!
