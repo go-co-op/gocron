@@ -8,6 +8,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type fakeTime struct {
+	onNow func(location *time.Location) time.Time
+}
+
+func (f fakeTime) Now(loc *time.Location) time.Time {
+	return f.onNow(loc)
+}
+
+func (f fakeTime) Unix(i int64, i2 int64) time.Time {
+	panic("implement me")
+}
+
+func (f fakeTime) Sleep(duration time.Duration) {
+	panic("implement me")
+}
+
+func (f fakeTime) NewTicker(duration time.Duration) *time.Ticker {
+	panic("implement me")
+}
+
 func task() {
 	fmt.Println("I am a running job.")
 }
@@ -33,7 +53,7 @@ func TestExecutionSeconds(t *testing.T) {
 	numberOfIterations := 2
 
 	sched.Every(2).Seconds().Do(func() {
-		executionTimes = append(executionTimes, time.Now().Unix())
+		executionTimes = append(executionTimes, time.Now().UTC().Unix())
 		if len(executionTimes) >= numberOfIterations {
 			jobDone <- true
 		}
@@ -100,7 +120,7 @@ func TestAtFuture(t *testing.T) {
 	nextRun := dayJob.ScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 
-	s.RunPending()
+	s.RunAll()
 
 	// Check next run's scheduled time
 	nextRun = dayJob.ScheduledTime()
@@ -362,233 +382,390 @@ func TestScheduler_StartAt(t *testing.T) {
 	assert.Equal(t, now.Add(time.Second*3).Second(), nextRun.Second())
 }
 
-func TestScheduler_FirstSchedule(t *testing.T) {
+func TestScheduler_CalculateNextRun(t *testing.T) {
 	day := time.Hour * 24
-	janFirst2020 := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
-	monday := time.Date(2020, time.January, 6, 0, 0, 0, 0, time.UTC)
-	tuesday := monday.AddDate(0, 0, 1)
-	wednesday := monday.AddDate(0, 0, 2)
+	januaryFirst2020At := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
+	}
+	mondayAt := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 6, hour, minute, second, 0, time.UTC)
+	}
 
-	fakeTime := fakeTime{}
-	sched := NewScheduler(time.UTC)
-	sched.time = &fakeTime
 	var tests = []struct {
-		name             string
-		job              *Job
-		startRunningTime time.Time
-		wantNextSchedule time.Time
+		name                 string
+		job                  Job
+		wantTimeUntilNextRun time.Duration
 	}{
 		// SECONDS
 		{
-			name:             "every second test",
-			job:              getJob(sched.Every(1).Second().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(time.Second),
+			name: "every second test",
+			job: Job{
+				interval: 1,
+				unit:     seconds,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: getSeconds(1),
 		},
 		{
-			name:             "every 62 seconds test",
-			job:              getJob(sched.Every(62).Seconds().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(62 * time.Second),
+			name: "every 62 seconds test",
+			job: Job{
+				interval: 62,
+				unit:     seconds,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: getSeconds(62),
 		},
 		// MINUTES
 		{
-			name:             "every minute test",
-			job:              getJob(sched.Every(1).Minute().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(1 * time.Minute),
+			name: "every minute test",
+			job: Job{
+				interval: 1,
+				unit:     minutes,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getMinutes(1),
 		},
 		{
-			name:             "every 62 minutes test",
-			job:              getJob(sched.Every(62).Minutes().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(62 * time.Minute),
+			name: "every 62 minutes test",
+			job: Job{
+				interval: 62,
+				unit:     minutes,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getMinutes(62),
 		},
 		// HOURS
 		{
-			name:             "every hour test",
-			job:              getJob(sched.Every(1).Hour().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(1 * time.Hour),
+			name: "every hour test",
+			job: Job{
+				interval: 1,
+				unit:     hours,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getHours(1),
 		},
 		{
-			name:             "every 25 hours test",
-			job:              getJob(sched.Every(25).Hours().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(25 * time.Hour),
+			name: "every 25 hours test",
+			job: Job{
+				interval: 25,
+				unit:     hours,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getHours(25),
 		},
 		// DAYS
 		{
-			name:             "every day at midnight",
-			job:              getJob(sched.Every(1).Day().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(1 * day),
+			name: "every day at midnight",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time",
-			job:              getJob(sched.Every(1).Day().At("09:30").Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 1, 9, 30, 0, 0, time.UTC),
+			name: "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getHours(9) + _getMinutes(30),
 		},
 		{
-			name:             "every day at 09:30AM with scheduler starting after 09:30AM should run tomorrow at time",
-			job:              getJob(sched.Every(1).Day().At("09:30").Do),
-			startRunningTime: janFirst2020.Add(10 * time.Hour),
-			wantNextSchedule: time.Date(2020, time.January, 2, 9, 30, 0, 0, time.UTC),
+			name: "every day at 09:30AM which just ran should run tomorrow at 09:30AM",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(9, 30, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "every 31 days at midnight should run 31 days later",
-			job:              getJob(sched.Every(31).Days().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC),
-		},
-		// WEEKS
-		{
-			name:             "every week should run in 7 days",
-			job:              getJob(sched.Every(1).Week().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 8, 0, 0, 0, 0, time.UTC),
+			name: "every 31 days at midnight should run 31 days later",
+			job: Job{
+				interval: 31,
+				unit:     days,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31 * day,
 		},
 		{
-			name:             "every week at 09:30AM should run in 7 days at 09:30AM",
-			job:              getJob(sched.Every(1).Week().At("09:30").Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 8, 9, 30, 0, 0, time.UTC),
+			name: "daily job just ran at 8:30AM and should be scheduled for next day's 8:30AM",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(8, 30, 0),
+			},
+			wantTimeUntilNextRun: 24 * time.Hour,
 		},
 		{
-			name:             "every two weeks at 09:30AM should run in 14 days at 09:30AM",
-			job:              getJob(sched.Every(2).Weeks().At("09:30").Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 15, 9, 30, 0, 0, time.UTC),
+			name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(5, 30, 0),
+			},
+			wantTimeUntilNextRun: 3 * time.Hour,
 		},
 		{
-			name:             "every 31 weeks at midnight should run in 217 days (2020 was a leap year)",
-			job:              getJob(sched.Every(31).Weeks().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.August, 5, 0, 0, 0, 0, time.UTC),
+			name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM",
+			job: Job{
+				interval: 2,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(5, 30, 0),
+			},
+			wantTimeUntilNextRun: (2 * day) + 3*time.Hour,
+		},
+		{
+			name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM",
+			job: Job{
+				interval: 2,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(8, 30, 0),
+			},
+			wantTimeUntilNextRun: 2 * day,
+		},
+		//// WEEKS
+		{
+			name: "every week should run in 7 days",
+			job: Job{
+				interval: 1,
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 7 * day,
+		},
+		{
+			name: "every week with .At time rule should run respect .At time rule",
+			job: Job{
+				interval: 1,
+				atTime:   _getHours(9) + _getMinutes(30),
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(9, 30, 0),
+			},
+			wantTimeUntilNextRun: 7 * day,
+		},
+		{
+			name: "every two weeks at 09:30AM should run in 14 days at 09:30AM",
+			job: Job{
+				interval: 2,
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 14 * day,
+		},
+		{
+			name: "every 31 weeks ran at jan 1st at midnight should run at August 5, 2020",
+			job: Job{
+				interval: 31,
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31 * 7 * day,
 		},
 		// MONTHS
 		{
-			name:             "every month at first day starting at first day should run at same day",
-			job:              getJob(sched.Every(1).Month(1).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month in a 31 days month should be scheduled for 31 days ahead",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31 * day,
 		},
 		{
-			name:             "every month at first day at time, but started late, should run next month",
-			job:              getJob(sched.Every(1).Month(1).At("09:30").Do),
-			startRunningTime: janFirst2020.Add(10 * time.Hour),
-			wantNextSchedule: time.Date(2020, time.February, 1, 9, 30, 0, 0, time.UTC),
+			name: "every month in a 30 days month should be scheduled for 30 days ahead",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  time.Date(2020, time.April, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantTimeUntilNextRun: 30 * day,
 		},
 		{
-			name:             "every month at day 2, and started in day 1, day should run day 2 same month",
-			job:              getJob(sched.Every(1).Month(2).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
+			name: "every month at february on leap year should count 29 days",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantTimeUntilNextRun: 29 * day,
 		},
 		{
-			name:             "every month at day 1, but started on the day 8, should run next month at day 1",
-			job:              getJob(sched.Every(1).Month(1).Do),
-			startRunningTime: time.Date(2020, time.January, 8, 0, 0, 0, 0, time.UTC),
-			wantNextSchedule: time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month at february on non leap year should count 28 days",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  time.Date(2019, time.February, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantTimeUntilNextRun: 28 * day,
 		},
 		{
-			name:             "every 2 months at day 1, starting at day 1, should run in 2 months",
-			job:              getJob(sched.Every(2).Months(1).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month at first day at time should run next month + at time",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(9, 30, 0),
+			},
+			wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30),
 		},
 		{
-			name:             "every 2 months at day 2, starting at day 1, should run in 2 months",
-			job:              getJob(sched.Every(2).Months(2).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.March, 2, 0, 0, 0, 0, time.UTC),
+			name: "every month at day should consider at days",
+			job: Job{
+				interval:      1,
+				unit:          months,
+				dayOfTheMonth: 2,
+				lastRun:       januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "every 2 months at day 1, starting at day 2, should run 2 months later at day 1",
-			job:              getJob(sched.Every(2).Months(1).Do),
-			startRunningTime: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-			wantNextSchedule: time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month on the first day, but started on january 8th, should run February 1st",
+			job: Job{
+				interval:      1,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0).AddDate(0, 0, 7),
+			},
+			wantTimeUntilNextRun: 24 * day,
 		},
 		{
-			name:             "every 13 months at day 1, starting at day 2 run in 13 months",
-			job:              getJob(sched.Every(13).Months(1).Do),
-			startRunningTime: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-			wantNextSchedule: time.Date(2021, time.February, 1, 0, 0, 0, 0, time.UTC),
-		},
-		// WEEKDAYS
-		{
-			name:             "every tuesday starting on a monday should run this tuesday",
-			job:              getJob(sched.Every(1).Tuesday().Do),
-			startRunningTime: monday,
-			wantNextSchedule: tuesday,
+			name: "every 2 months at day 1, starting at day 1, should run in 2 months",
+			job: Job{
+				interval:      2,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31*day + 29*day, // 2020 january and february
 		},
 		{
-			name:             "every tuesday starting on tuesday a should run on same tuesday",
-			job:              getJob(sched.Every(1).Tuesday().Do),
-			startRunningTime: tuesday,
-			wantNextSchedule: tuesday,
+			name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day",
+			job: Job{
+				interval:      2,
+				unit:          months,
+				dayOfTheMonth: 2,
+				lastRun:       januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31*day + 29*day + 1*day, // 2020 january and february
 		},
 		{
-			name:             "every 2 tuesdays starting on a tuesday should run next tuesday",
-			job:              getJob(sched.Every(2).Tuesday().Do),
-			startRunningTime: tuesday,
-			wantNextSchedule: tuesday.AddDate(0, 0, 7),
+			name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day",
+			job: Job{
+				interval:      2,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: 30*day + 29*day, // 2020 january and february
 		},
 		{
-			name:             "every tuesday starting on a wednesday should run next tuesday",
-			job:              getJob(sched.Every(1).Tuesday().Do),
-			startRunningTime: wednesday,
-			wantNextSchedule: tuesday.AddDate(0, 0, 7),
+			name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day",
+			job: Job{
+				interval:      13,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0)),
+		},
+		//// WEEKDAYS
+		{
+			name: "every weekday starting on one day before it should run this weekday",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "starting on a monday, every monday at time to happen should run at same day at time",
-			job:              getJob(sched.Every(1).Monday().At("09:00").Do),
-			startRunningTime: monday,
-			wantNextSchedule: monday.Add(9 * time.Hour),
+			name: "every weekday starting on same weekday should run on same immediately",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: 0,
 		},
 		{
-			name:             "starting on a monday, every monday at time that already passed should run at next week at time",
-			job:              getJob(sched.Every(1).Monday().At("09:00").Do),
-			startRunningTime: monday.Add(10 * time.Hour),
-			wantNextSchedule: monday.AddDate(0, 0, 7).Add(9 * time.Hour),
+			name: "every 2 weekdays counting this week's weekday should run next weekday",
+			job: Job{
+				interval:         2,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 8 * day,
+		},
+		{
+			name: "every weekday starting on one day after should count days remaning",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0).AddDate(0, 0, 2),
+			},
+			wantTimeUntilNextRun: 6 * day,
+		},
+		{
+			name: "every weekday starting before jobs .At() time should run at same day at time",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				atTime:           _getHours(9) + _getMinutes(30),
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: _getHours(9) + _getMinutes(30),
+		},
+		{
+			name: "every weekday starting at same day at time that already passed should run at next week at time",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				atTime:           _getHours(9) + _getMinutes(30),
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(10, 30, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0),
 		},
 	}
 
-	for i, tt := range tests {
-		fakeTime.onNow = func(location *time.Location) time.Time { // scheduler started
-			return tests[i].startRunningTime
-		}
-
-		job := tt.job
-		sched.scheduleNextRun(job)
-		assert.Equal(t, tt.wantNextSchedule, job.nextRun, tt.name)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sched := NewScheduler(time.UTC)
+			got := sched.durationToNextRun(tt.job)
+			assert.Equalf(t, tt.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tt.wantTimeUntilNextRun.String(), got.String()))
+		})
 	}
 }
 
-func getJob(fn func(interface{}, ...interface{}) (*Job, error)) *Job {
-	j, _ := fn(func() {})
-	return j
+func _tuesdayWeekday() *time.Weekday {
+	tuesday := time.Tuesday
+	return &tuesday
 }
 
-type fakeTime struct {
-	onNow func(location *time.Location) time.Time
+func getSeconds(i int) time.Duration {
+	return time.Duration(i) * time.Second
 }
 
-func (f fakeTime) Now(loc *time.Location) time.Time {
-	return f.onNow(loc)
+func _getHours(i int) time.Duration {
+	return time.Duration(i) * time.Hour
 }
 
-func (f fakeTime) Unix(i int64, i2 int64) time.Time {
-	panic("implement me")
-}
-
-func (f fakeTime) Sleep(duration time.Duration) {
-	panic("implement me")
-}
-
-func (f fakeTime) NewTicker(duration time.Duration) *time.Ticker {
-	panic("implement me")
+func _getMinutes(i int) time.Duration {
+	return time.Duration(i) * time.Minute
 }
 
 func TestScheduler_Do(t *testing.T) {

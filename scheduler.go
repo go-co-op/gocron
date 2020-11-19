@@ -14,7 +14,7 @@ type Scheduler struct {
 	jobs []*Job
 	loc  *time.Location
 
-	running  bool
+	running  bool          // represents if the scheduler is running at the moment or not
 	stopChan chan struct{} // signal to stop scheduling
 
 	time timeWrapper // wrapper around time.Time
@@ -86,124 +86,142 @@ func (s *Scheduler) ChangeLocation(newLocation *time.Location) {
 }
 
 // scheduleNextRun Compute the instant when this Job should run next
-func (s *Scheduler) scheduleNextRun(j *Job) {
-	j.Lock()
-	defer j.Unlock()
+func (s *Scheduler) scheduleNextRun(job *Job) {
+	job.Lock()
+	defer job.Unlock()
 	now := s.time.Now(s.loc)
 
-	if j.startsImmediately {
-		j.nextRun = now
-		j.startsImmediately = false
+	if job.startsImmediately {
+		job.nextRun = now
+		job.startsImmediately = false
 		return
 	}
 
-	// delta represent the time slice used to calculate the next run
-	// it can be the last time ran by a job, or time.Now() if the job never ran
-	var delta time.Time
-	if j.neverRan() {
-		if !j.nextRun.IsZero() { // scheduled for future run, wait to run at least once
-			return
-		}
-		delta = now
-	} else {
-		delta = j.lastRun
+	if job.neverRan() && !job.nextRun.IsZero() {
+		return // scheduled for future run and should skip scheduling
 	}
+	job.lastRun = now
 
-	switch j.unit {
-	case seconds, minutes, hours:
-		j.nextRun = s.rescheduleDuration(j, delta)
-	case days:
-		j.nextRun = s.rescheduleDay(j, delta)
-	case weeks:
-		j.nextRun = s.rescheduleWeek(j, delta)
-	case months:
-		j.nextRun = s.rescheduleMonth(j, delta)
-	}
+	durationToNextRun := s.durationToNextRun(*job)
+	job.nextRun = job.lastRun.Add(durationToNextRun)
 }
 
-func (s *Scheduler) rescheduleMonth(j *Job, delta time.Time) time.Time {
-	if j.neverRan() { // calculate days to j.dayOfTheMonth
-		jobDay := time.Date(delta.Year(), delta.Month(), j.dayOfTheMonth, 0, 0, 0, 0, s.loc).Add(j.atTime)
-		daysDifference := int(math.Abs(delta.Sub(jobDay).Hours()) / 24)
-		nextRun := s.roundToMidnight(delta)
-		if jobDay.Before(delta) { // shouldn't run this month; schedule for next interval minus day difference
+func (s *Scheduler) durationToNextRun(job Job) time.Duration {
+	lastRun := job.lastRun
+	var duration time.Duration
+	switch job.unit {
+	case seconds, minutes, hours:
+		duration = s.calculateDuration(job)
+	case days:
+		duration = s.calculateDays(job, lastRun)
+	case weeks:
+		duration = s.calculateWeeks(job, lastRun)
+	case months:
+		duration = s.calculateMonths(job, lastRun)
+	}
+	return duration
+}
 
-			nextRun = nextRun.AddDate(0, int(j.interval), -daysDifference)
+func (s Scheduler) getJobLastRun(job Job) time.Time {
+	if job.neverRan() {
+		return s.time.Now(s.loc)
+	}
+	return job.lastRun
+}
+
+func (s *Scheduler) calculateMonths(job Job, lastRun time.Time) time.Duration {
+	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
+
+	if job.dayOfTheMonth > 0 { // calculate days to j.dayOfTheMonth
+		jobDay := time.Date(lastRun.Year(), lastRun.Month(), job.dayOfTheMonth, 0, 0, 0, 0, s.loc).Add(job.atTime)
+		daysDifference := int(math.Abs(lastRun.Sub(jobDay).Hours()) / 24)
+		nextRun := lastRunRoundedMidnight
+		if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
+			nextRun = nextRun.AddDate(0, int(job.interval), -daysDifference)
 		} else {
-			if j.interval == 1 { // every month counts current month
-				nextRun = nextRun.AddDate(0, int(j.interval)-1, daysDifference)
+			if job.interval == 1 { // every month counts current month
+				nextRun = nextRun.AddDate(0, int(job.interval)-1, daysDifference)
 			} else { // should run next month interval
-				nextRun = nextRun.AddDate(0, int(j.interval), daysDifference)
+				nextRun = nextRun.AddDate(0, int(job.interval), daysDifference)
 			}
 		}
-		return nextRun.Add(j.atTime)
+		return s.until(lastRunRoundedMidnight, nextRun.Add(job.atTime))
 	}
-	return s.roundToMidnight(delta).AddDate(0, int(j.interval), 0).Add(j.atTime)
+	nextRun := lastRunRoundedMidnight.AddDate(0, int(job.interval), 0)
+	return s.until(lastRunRoundedMidnight, nextRun.Add(job.atTime))
 }
 
-func (s *Scheduler) rescheduleWeek(j *Job, delta time.Time) time.Time {
-	var days int
-	if j.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
-		days = s.calculateWeekdayDifference(delta, j)
-	} else {
-		days = int(j.interval) * 7
+func (s *Scheduler) calculateWeeks(job Job, lastRun time.Time) time.Duration {
+	totalDaysDifference := int(job.interval) * 7
+	if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
+		daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), *job.scheduledWeekday)
+		totalDaysDifference = s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	}
-	delta = s.roundToMidnight(delta)
-	return delta.AddDate(0, 0, days).Add(j.atTime)
+	nextRun := s.roundToMidnight(lastRun).AddDate(0, 0, totalDaysDifference).Add(job.atTime)
+	return s.until(lastRun, nextRun)
 }
 
-func (s *Scheduler) rescheduleDay(j *Job, delta time.Time) time.Time {
-	if j.interval == 1 {
-		atTime := time.Date(delta.Year(), delta.Month(), delta.Day(), 0, 0, 0, 0, s.loc).Add(j.atTime)
-		if delta.Before(atTime) { // should run today
-			return s.roundToMidnight(delta).Add(j.atTime)
+func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekday int, job Job) int {
+	if job.interval > 1 { // every N weeks counts rest of this week and full N-1 weeks
+		return daysToWeekday + int(job.interval-1)*7
+	}
+
+	if daysToWeekday == 0 { // today, at future time or already passed
+		lastRunAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.atTime)
+		if lastRun.Before(lastRunAtTime) || lastRun.Equal(lastRunAtTime) {
+			return 0
+		}
+		return 7
+	}
+
+	return daysToWeekday
+}
+
+func (s *Scheduler) calculateDays(job Job, lastRun time.Time) time.Duration {
+	roundedLastRun := s.roundToMidnight(lastRun)
+
+	if job.interval == 1 {
+		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.atTime)
+		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
+			return s.until(lastRun, roundedLastRun.Add(job.atTime))
 		}
 	}
-	return s.roundToMidnight(delta).AddDate(0, 0, int(j.interval)).Add(j.atTime)
+
+	nextRunAtTime := roundedLastRun.AddDate(0, 0, int(job.interval)).Add(job.atTime).In(s.loc)
+	return s.until(lastRun, nextRunAtTime)
 }
 
-func (s *Scheduler) rescheduleDuration(j *Job, delta time.Time) time.Time {
-	if j.neverRan() && j.atTime != 0 { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
-		atTime := time.Date(delta.Year(), delta.Month(), delta.Day(), 0, 0, 0, 0, s.loc).Add(j.atTime)
-		if delta.Before(atTime) || delta.Equal(atTime) {
-			return s.roundToMidnight(delta).Add(j.atTime)
+func (s Scheduler) until(from time.Time, until time.Time) time.Duration {
+	return until.Sub(from)
+}
+
+func shouldRunToday(lastRun time.Time, atTime time.Time) bool {
+	return lastRun.Before(atTime)
+}
+
+func (s *Scheduler) calculateDuration(job Job) time.Duration {
+	lastRun := job.lastRun
+	if job.neverRan() && shouldRunAtSpecificTime(job) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
+		atTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.atTime)
+		if lastRun.Before(atTime) || lastRun.Equal(atTime) {
+			// return duration
+			return time.Until(s.roundToMidnight(lastRun).Add(job.atTime))
 		}
 	}
 
-	var periodDuration time.Duration
-	switch j.unit {
+	interval := job.interval
+	switch job.unit {
 	case seconds:
-		periodDuration = time.Duration(j.interval) * time.Second
+		return time.Duration(interval) * time.Second
 	case minutes:
-		periodDuration = time.Duration(j.interval) * time.Minute
-	case hours:
-		periodDuration = time.Duration(j.interval) * time.Hour
+		return time.Duration(interval) * time.Minute
+	default:
+		return time.Duration(interval) * time.Hour
 	}
-	return delta.Add(periodDuration)
 }
 
-func (s *Scheduler) calculateWeekdayDifference(delta time.Time, j *Job) int {
-	daysToWeekday := remainingDaysToWeekday(delta.Weekday(), *j.scheduledWeekday)
-
-	if j.interval > 1 {
-		return daysToWeekday + int(j.interval-1)*7 // minus a week since to compensate daysToWeekday
-	}
-
-	if daysToWeekday > 0 { // within the next following days, but not today
-		return daysToWeekday
-	}
-
-	// following paths are on same day
-	if j.atTime.Seconds() == 0 && j.neverRan() { // .At() not set, run today
-		return 0
-	}
-
-	atJobTime := time.Date(delta.Year(), delta.Month(), delta.Day(), 0, 0, 0, 0, s.loc).Add(j.atTime)
-	if delta.Before(atJobTime) || delta.Equal(atJobTime) { // .At() set and should run today
-		return 0
-	}
-
-	return 7
+func shouldRunAtSpecificTime(job Job) bool {
+	return job.atTime != 0
 }
 
 func remainingDaysToWeekday(from time.Weekday, to time.Weekday) int {
@@ -265,9 +283,7 @@ func (s *Scheduler) runAndReschedule(job *Job) error {
 }
 
 func (s *Scheduler) run(job *Job) error {
-	job.lastRun = s.time.Now(s.loc)
 	go job.run()
-
 	return nil
 }
 
