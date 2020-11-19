@@ -115,12 +115,10 @@ func (s *Scheduler) durationToNextRun(job Job) time.Duration {
 	case days:
 		duration = s.calculateDays(job, lastRun)
 	case weeks:
-		{
-			if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
-				duration = s.calculateWeekday(job, lastRun)
-			} else {
-				duration = s.calculateWeeks(job, lastRun)
-			}
+		if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
+			duration = s.calculateWeekday(job, lastRun)
+		} else {
+			duration = s.calculateWeeks(job, lastRun)
 		}
 	case months:
 		duration = s.calculateMonths(job, lastRun)
