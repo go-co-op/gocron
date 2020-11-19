@@ -120,7 +120,7 @@ func TestAtFuture(t *testing.T) {
 	nextRun := dayJob.ScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 
-	s.RunAll()
+	s.RunPending()
 
 	// Check next run's scheduled time
 	nextRun = dayJob.ScheduledTime()
@@ -404,7 +404,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 				unit:     seconds,
 				lastRun:  januaryFirst2020At(0, 0, 0),
 			},
-			wantTimeUntilNextRun: getSeconds(1),
+			wantTimeUntilNextRun: _getSeconds(1),
 		},
 		{
 			name: "every 62 seconds test",
@@ -413,7 +413,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 				unit:     seconds,
 				lastRun:  januaryFirst2020At(0, 0, 0),
 			},
-			wantTimeUntilNextRun: getSeconds(62),
+			wantTimeUntilNextRun: _getSeconds(62),
 		},
 		// MINUTES
 		{
@@ -628,6 +628,16 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 			wantTimeUntilNextRun: 1 * day,
 		},
 		{
+			name: "every month at day should consider at hours",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30),
+		},
+		{
 			name: "every month on the first day, but started on january 8th, should run February 1st",
 			job: Job{
 				interval:      1,
@@ -751,19 +761,23 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 	}
 }
 
+// helper test method
 func _tuesdayWeekday() *time.Weekday {
 	tuesday := time.Tuesday
 	return &tuesday
 }
 
-func getSeconds(i int) time.Duration {
+// helper test method
+func _getSeconds(i int) time.Duration {
 	return time.Duration(i) * time.Second
 }
 
+// helper test method
 func _getHours(i int) time.Duration {
 	return time.Duration(i) * time.Hour
 }
 
+// helper test method
 func _getMinutes(i int) time.Duration {
 	return time.Duration(i) * time.Minute
 }
