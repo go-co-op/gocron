@@ -752,11 +752,11 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for i := range tests {
+		t.Run(tests[i].name, func(t *testing.T) {
 			sched := NewScheduler(time.UTC)
-			got := sched.durationToNextRun(tt.job)
-			assert.Equalf(t, tt.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tt.wantTimeUntilNextRun.String(), got.String()))
+			got := sched.durationToNextRun(&tests[i].job)
+			assert.Equalf(t, tests[i].wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tests[i].wantTimeUntilNextRun.String(), got.String()))
 		})
 	}
 }

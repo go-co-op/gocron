@@ -102,11 +102,11 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}
 	job.lastRun = now
 
-	durationToNextRun := s.durationToNextRun(*job)
+	durationToNextRun := s.durationToNextRun(job)
 	job.nextRun = job.lastRun.Add(durationToNextRun)
 }
 
-func (s *Scheduler) durationToNextRun(job Job) time.Duration {
+func (s *Scheduler) durationToNextRun(job *Job) time.Duration {
 	lastRun := job.lastRun
 	var duration time.Duration
 	switch job.unit {
@@ -126,14 +126,14 @@ func (s *Scheduler) durationToNextRun(job Job) time.Duration {
 	return duration
 }
 
-func (s Scheduler) getJobLastRun(job Job) time.Time {
+func (s Scheduler) getJobLastRun(job *Job) time.Time {
 	if job.neverRan() {
 		return s.time.Now(s.loc)
 	}
 	return job.lastRun
 }
 
-func (s *Scheduler) calculateMonths(job Job, lastRun time.Time) time.Duration {
+func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
 	if job.dayOfTheMonth > 0 { // calculate days to j.dayOfTheMonth
@@ -155,20 +155,20 @@ func (s *Scheduler) calculateMonths(job Job, lastRun time.Time) time.Duration {
 	return s.until(lastRunRoundedMidnight, nextRun)
 }
 
-func (s *Scheduler) calculateWeekday(job Job, lastRun time.Time) time.Duration {
+func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) time.Duration {
 	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), *job.scheduledWeekday)
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	nextRun := s.roundToMidnight(lastRun).Add(job.atTime).AddDate(0, 0, totalDaysDifference)
 	return s.until(lastRun, nextRun)
 }
 
-func (s *Scheduler) calculateWeeks(job Job, lastRun time.Time) time.Duration {
+func (s *Scheduler) calculateWeeks(job *Job, lastRun time.Time) time.Duration {
 	totalDaysDifference := int(job.interval) * 7
 	nextRun := s.roundToMidnight(lastRun).Add(job.atTime).AddDate(0, 0, totalDaysDifference)
 	return s.until(lastRun, nextRun)
 }
 
-func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekday int, job Job) int {
+func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekday int, job *Job) int {
 	if job.interval > 1 { // every N weeks counts rest of this week and full N-1 weeks
 		return daysToWeekday + int(job.interval-1)*7
 	}
@@ -184,7 +184,7 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 	return daysToWeekday
 }
 
-func (s *Scheduler) calculateDays(job Job, lastRun time.Time) time.Duration {
+func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) time.Duration {
 	if job.interval == 1 {
 		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.atTime)
 		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
@@ -204,7 +204,7 @@ func shouldRunToday(lastRun time.Time, atTime time.Time) bool {
 	return lastRun.Before(atTime)
 }
 
-func (s *Scheduler) calculateDuration(job Job) time.Duration {
+func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	lastRun := job.lastRun
 	if job.neverRan() && shouldRunAtSpecificTime(job) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
 		atTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.atTime)
@@ -224,7 +224,7 @@ func (s *Scheduler) calculateDuration(job Job) time.Duration {
 	}
 }
 
-func shouldRunAtSpecificTime(job Job) bool {
+func shouldRunAtSpecificTime(job *Job) bool {
 	return job.atTime != 0
 }
 
