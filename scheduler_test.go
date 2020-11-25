@@ -49,12 +49,19 @@ func TestExecutionSecond(t *testing.T) {
 func TestExecutionSeconds(t *testing.T) {
 	sched := NewScheduler(time.UTC)
 	jobDone := make(chan bool)
-	var executionTimes []int64
-	numberOfIterations := 2
 
-	sched.Every(2).Seconds().Do(func() {
-		executionTimes = append(executionTimes, time.Now().UTC().Unix())
-		if len(executionTimes) >= numberOfIterations {
+	var (
+		executions         []int64
+		interval           uint64 = 2
+		expectedExecutions        = 3
+	)
+
+	runTime := time.Duration(6 * time.Second)
+	startTime := time.Now()
+
+	sched.Every(interval).Seconds().Do(func() {
+		executions = append(executions, time.Now().UTC().Unix())
+		if time.Now().After(startTime.Add(runTime)) {
 			jobDone <- true
 		}
 	})
@@ -63,11 +70,11 @@ func TestExecutionSeconds(t *testing.T) {
 	<-jobDone // Wait job done
 	close(stop)
 
-	assert.Equal(t, numberOfIterations, len(executionTimes), "did not run expected number of times")
+	assert.Equal(t, expectedExecutions, len(executions), "did not run expected number of times")
 
-	for i := 1; i < numberOfIterations; i++ {
-		durationBetweenExecutions := executionTimes[i] - executionTimes[i-1]
-		assert.Equal(t, int64(2), durationBetweenExecutions, "Duration between tasks does not correspond to expectations")
+	for i := 1; i < expectedExecutions; i++ {
+		durationBetweenExecutions := executions[i] - executions[i-1]
+		assert.Equal(t, int64(interval), durationBetweenExecutions, "duration between tasks does not correspond to expectations")
 	}
 }
 

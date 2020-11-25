@@ -1,11 +1,12 @@
 package gocron
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestFormatTime(t *testing.T) {
+func TestParseTime(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     string

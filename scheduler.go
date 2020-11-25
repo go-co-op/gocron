@@ -287,6 +287,7 @@ func (s *Scheduler) runAndReschedule(job *Job) error {
 }
 
 func (s *Scheduler) run(job *Job) error {
+	job.lastRun = s.time.Now(s.loc)
 	go job.run()
 	return nil
 }
