@@ -11,21 +11,20 @@ type jobInterval uint64
 // Job struct stores the information necessary to run a Job
 type Job struct {
 	sync.RWMutex
-	interval          jobInterval              // pause interval * unit between runs
-	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
-	startsImmediately bool                     // if the Job should run upon scheduler start
-	jobFunc           string                   // the Job jobFunc to run, func[jobFunc]
-	atTime            time.Duration            // optional time at which this Job runs
-	err               error                    // error related to Job
-	lastRun           time.Time                // datetime of last run
-	nextRun           time.Time                // datetime of next run
-	scheduledWeekday  *time.Weekday            // Specific day of the week to start on
-	dayOfTheMonth     int                      // Specific day of the month to run the job
-	funcs             map[string]interface{}   // Map for the function task store
-	fparams           map[string][]interface{} // Map for function and  params of function
-	tags              []string                 // allow the user to tag Jobs with certain labels
-	runConfig         runConfig                // configuration for how many times to run the job
-	runCount          int                      // number of time the job ran
+	interval         jobInterval              // pause interval * unit between runs
+	unit             timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
+	jobFunc          string                   // the Job jobFunc to run, func[jobFunc]
+	atTime           time.Duration            // optional time at which this Job runs
+	err              error                    // error related to Job
+	lastRun          time.Time                // datetime of last run
+	nextRun          time.Time                // datetime of next run
+	scheduledWeekday *time.Weekday            // Specific day of the week to start on
+	dayOfTheMonth    int                      // Specific day of the month to run the job
+	funcs            map[string]interface{}   // Map for the function task store
+	fparams          map[string][]interface{} // Map for function and  params of function
+	tags             []string                 // allow the user to tag Jobs with certain labels
+	runConfig        runConfig                // configuration for how many times to run the job
+	runCount         int                      // number of time the job ran
 }
 
 type runConfig struct {

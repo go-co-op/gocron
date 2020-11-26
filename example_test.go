@@ -20,13 +20,7 @@ func ExampleScheduler_StartBlocking() {
 func ExampleScheduler_StartAsync() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
-	<-s.StartAsync()
-}
-
-func ExampleScheduler_StartImmediately() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Hour().StartImmediately().Do(task)
-	s.StartBlocking()
+	s.StartAsync()
 }
 
 func ExampleScheduler_StartAt() {

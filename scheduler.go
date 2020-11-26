@@ -91,15 +91,17 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	defer job.Unlock()
 	now := s.time.Now(s.loc)
 
-	if job.startsImmediately {
-		job.nextRun = now
-		job.startsImmediately = false
-		return
+	if job.neverRan() {
+		if !job.nextRun.IsZero() {
+			return // scheduled for future run and should skip scheduling
+		}
+		// default is for jobs to start immediately unless scheduled at a specific time or day
+		if job.atTime == 0 && job.scheduledWeekday == nil && job.dayOfTheMonth == 0 {
+			job.nextRun = now
+			return
+		}
 	}
 
-	if job.neverRan() && !job.nextRun.IsZero() {
-		return // scheduled for future run and should skip scheduling
-	}
 	job.lastRun = now
 
 	durationToNextRun := s.durationToNextRun(job)
@@ -435,13 +437,6 @@ func (s *Scheduler) SetTag(t []string) *Scheduler {
 // StartAt schedules the next run of the Job
 func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 	s.getCurrentJob().nextRun = t
-	return s
-}
-
-// StartImmediately sets the Jobs next run as soon as the scheduler starts
-func (s *Scheduler) StartImmediately() *Scheduler {
-	job := s.getCurrentJob()
-	job.startsImmediately = true
 	return s
 }
 
