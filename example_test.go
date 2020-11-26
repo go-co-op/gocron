@@ -96,3 +96,39 @@ func ExampleJob_LimitRunsTo() {
 	job.LimitRunsTo(2)
 	s.StartAsync()
 }
+
+func ExampleJob_LastRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Last run", job.LastRun())
+			time.Sleep(time.Second)
+		}
+	}()
+	<-s.StartAsync()
+}
+
+func ExampleJob_NextRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Next run", job.NextRun())
+			time.Sleep(time.Second)
+		}
+	}()
+	<-s.StartAsync()
+}
+
+func ExampleJob_RunCount() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Run count", job.RunCount())
+			time.Sleep(time.Second)
+		}
+	}()
+	<-s.StartAsync()
+}
