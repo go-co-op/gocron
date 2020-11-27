@@ -96,7 +96,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 			return // scheduled for future run and should skip scheduling
 		}
 		// default is for jobs to start immediately unless scheduled at a specific time or day
-		if job.atTime == 0 && job.scheduledWeekday == nil && job.dayOfTheMonth == 0 {
+		if job.startsImmediately {
 			job.nextRun = now
 			return
 		}
@@ -424,6 +424,7 @@ func (s *Scheduler) At(t string) *Scheduler {
 	}
 	// save atTime start as duration from midnight
 	j.atTime = time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second
+	j.startsImmediately = false
 	return s
 }
 
@@ -436,7 +437,17 @@ func (s *Scheduler) SetTag(t []string) *Scheduler {
 
 // StartAt schedules the next run of the Job
 func (s *Scheduler) StartAt(t time.Time) *Scheduler {
-	s.getCurrentJob().nextRun = t
+	job := s.getCurrentJob()
+	job.nextRun = t
+	job.startsImmediately = false
+	return s
+}
+
+// Deprecated: Jobs start immediately by default unless a specific start day or time is set
+// StartImmediately sets the Jobs next run as soon as the scheduler starts
+func (s *Scheduler) StartImmediately() *Scheduler {
+	job := s.getCurrentJob()
+	job.startsImmediately = true
 	return s
 }
 
@@ -515,7 +526,9 @@ func (s *Scheduler) Month(dayOfTheMonth int) *Scheduler {
 
 // Months sets the unit with months
 func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
-	s.getCurrentJob().dayOfTheMonth = dayOfTheMonth
+	job := s.getCurrentJob()
+	job.dayOfTheMonth = dayOfTheMonth
+	job.startsImmediately = false
 	s.setUnit(months)
 	return s
 }
@@ -527,7 +540,9 @@ func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
 
 // Weekday sets the start with a specific weekday weekday
 func (s *Scheduler) Weekday(startDay time.Weekday) *Scheduler {
-	s.getCurrentJob().scheduledWeekday = &startDay
+	job := s.getCurrentJob()
+	job.scheduledWeekday = &startDay
+	job.startsImmediately = false
 	s.setUnit(weeks)
 	return s
 }

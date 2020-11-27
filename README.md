@@ -94,7 +94,8 @@ func main() {
     // Delay start of job
     s2.Every(1).Hour().StartAt(time.Now().Add(time.Duration(1 * time.Hour)).Do(task)
 
-    // use .StartImmediately() to run job upon scheduler start
+    // Deprecated: Jobs start immediately by default
+    // use StartImmediately() to run job upon scheduler start
     s2.Every(1).Hour().StartImmediately().Do(task)
 
     // NextRun gets the next running time

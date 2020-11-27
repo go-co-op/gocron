@@ -95,6 +95,20 @@ func TestScheduledWithTag(t *testing.T) {
 	}
 }
 
+func TestStartImmediately(t *testing.T) {
+	sched := NewScheduler(time.UTC)
+	now := time.Now().UTC()
+
+	job, _ := sched.Every(1).Hour().StartImmediately().Do(task)
+	sched.scheduleAllJobs()
+	next := job.ScheduledTime()
+
+	nextRounded := time.Date(next.Year(), next.Month(), next.Day(), next.Hour(), next.Minute(), next.Second(), 0, time.UTC)
+	expected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC)
+
+	assert.Exactly(t, expected, nextRounded)
+}
+
 func TestAtFuture(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	now := time.Now().UTC()

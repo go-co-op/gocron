@@ -23,6 +23,13 @@ func ExampleScheduler_StartAsync() {
 	s.StartAsync()
 }
 
+// Deprecated: All jobs start immediately by default unless set to a specific date or time
+func ExampleScheduler_StartImmediately() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Hour().StartImmediately().Do(task)
+	s.StartBlocking()
+}
+
 func ExampleScheduler_StartAt() {
 	s := gocron.NewScheduler(time.UTC)
 	specificTime := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)
