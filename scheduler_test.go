@@ -53,7 +53,7 @@ func TestExecutionSeconds(t *testing.T) {
 	var (
 		executions         []int64
 		interval           uint64 = 2
-		expectedExecutions        = 3
+		expectedExecutions        = 4
 	)
 
 	runTime := time.Duration(6 * time.Second)
@@ -135,22 +135,50 @@ func TestAtFuture(t *testing.T) {
 	assert.Equal(t, false, shouldBeFalse, "Day job was not expected to run as it was in the future")
 }
 
-func schedulerForNextWeekdayEveryNTimes(weekday time.Weekday, n uint64, s *Scheduler) *Scheduler {
+func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n uint64, s *Scheduler) *Scheduler {
 	switch weekday {
 	case time.Monday:
-		s = s.Every(n).Tuesday()
+		if next {
+			s = s.Every(n).Tuesday()
+		} else {
+			s = s.Every(n).Sunday()
+		}
 	case time.Tuesday:
-		s = s.Every(n).Wednesday()
+		if next {
+			s = s.Every(n).Wednesday()
+		} else {
+			s = s.Every(n).Monday()
+		}
 	case time.Wednesday:
-		s = s.Every(n).Thursday()
+		if next {
+			s = s.Every(n).Thursday()
+		} else {
+			s = s.Every(n).Tuesday()
+		}
 	case time.Thursday:
-		s = s.Every(n).Friday()
+		if next {
+			s = s.Every(n).Friday()
+		} else {
+			s = s.Every(n).Wednesday()
+		}
 	case time.Friday:
-		s = s.Every(n).Saturday()
+		if next {
+			s = s.Every(n).Saturday()
+		} else {
+			s = s.Every(n).Thursday()
+		}
 	case time.Saturday:
-		s = s.Every(n).Sunday()
+		if next {
+			s = s.Every(n).Sunday()
+		} else {
+			s = s.Every(n).Friday()
+		}
 	case time.Sunday:
-		s = s.Every(n).Monday()
+		if next {
+			s = s.Every(n).Monday()
+		} else {
+			s = s.Every(n).Saturday()
+		}
 	}
 	return s
 }
@@ -159,23 +187,7 @@ func TestWeekdayBeforeToday(t *testing.T) {
 	now := time.Now().In(time.UTC)
 	s := NewScheduler(time.UTC)
 
-	// Schedule job at day before
-	switch now.Weekday() {
-	case time.Monday:
-		s = s.Every(1).Sunday()
-	case time.Tuesday:
-		s = s.Every(1).Monday()
-	case time.Wednesday:
-		s = s.Every(1).Tuesday()
-	case time.Thursday:
-		s = s.Every(1).Wednesday()
-	case time.Friday:
-		s = s.Every(1).Thursday()
-	case time.Saturday:
-		s = s.Every(1).Friday()
-	case time.Sunday:
-		s = s.Every(1).Saturday()
-	}
+	s = schedulerForNextOrPreviousWeekdayEveryNTimes(now.Weekday(), false, 1, s)
 	weekJob, _ := s.Do(task)
 	s.scheduleNextRun(weekJob)
 	sixDaysFromNow := now.AddDate(0, 0, 6)
@@ -188,7 +200,7 @@ func TestWeekdayAt(t *testing.T) {
 	t.Run("asserts weekday scheduling starts at the current week", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		now := time.Now().UTC()
-		s = schedulerForNextWeekdayEveryNTimes(now.Weekday(), 1, s)
+		s = schedulerForNextOrPreviousWeekdayEveryNTimes(now.Weekday(), true, 1, s)
 		weekdayJob, _ := s.Do(task)
 
 		s.scheduleNextRun(weekdayJob)
@@ -386,7 +398,7 @@ func TestScheduler_StartAt(t *testing.T) {
 	job, _ = scheduler.Every(3).Seconds().Do(func() {})
 	scheduler.scheduleNextRun(job)
 	_, nextRun = scheduler.NextRun()
-	assert.Equal(t, now.Add(time.Second*3).Second(), nextRun.Second())
+	assert.Equal(t, now.Second(), nextRun.Second())
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {

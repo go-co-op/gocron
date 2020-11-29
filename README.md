@@ -13,7 +13,7 @@ See also these two great articles:
 
 If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
-# Examples:
+## Examples:
 
 ```go
 package main
@@ -71,7 +71,6 @@ func main() {
     tag1 := []string{"tag1"}
     tag2 := []string{"tag2"}
 
-
     s2.Every(1).Week().SetTag(tag1).Do(task)
     s2.Every(1).Week().SetTag(tag2).Do(task)
 
@@ -89,13 +88,15 @@ func main() {
     s2.Every(1).Wednesday().At("1:01").Do(task)
 
     // Begin job at a specific date/time. 
-    // Attention: scheduler timezone has precedence over job's timezone!
     t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)
     s2.Every(1).Hour().StartAt(t).Do(task)
 
-    // use .StartImmediately() to run job upon scheduler start
-    s2.Every(1).Hour().StartImmediately().Do(task)
+    // Delay start of job
+    s2.Every(1).Hour().StartAt(time.Now().Add(time.Duration(1 * time.Hour)).Do(task)
 
+    // Deprecated: Jobs start immediately by default
+    // use StartImmediately() to run job upon scheduler start
+    s2.Every(1).Hour().StartImmediately().Do(task)
 
     // NextRun gets the next running time
     _, time := s2.NextRun()

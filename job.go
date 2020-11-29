@@ -36,12 +36,13 @@ type runConfig struct {
 // NewJob creates a new Job with the provided interval
 func NewJob(interval uint64) *Job {
 	return &Job{
-		interval: jobInterval(interval),
-		lastRun:  time.Time{},
-		nextRun:  time.Time{},
-		funcs:    make(map[string]interface{}),
-		fparams:  make(map[string][]interface{}),
-		tags:     []string{},
+		interval:          jobInterval(interval),
+		lastRun:           time.Time{},
+		nextRun:           time.Time{},
+		funcs:             make(map[string]interface{}),
+		fparams:           make(map[string][]interface{}),
+		tags:              []string{},
+		startsImmediately: true,
 	}
 }
 

@@ -20,9 +20,10 @@ func ExampleScheduler_StartBlocking() {
 func ExampleScheduler_StartAsync() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
-	<-s.StartAsync()
+	s.StartAsync()
 }
 
+// Deprecated: All jobs start immediately by default unless set to a specific date or time
 func ExampleScheduler_StartImmediately() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Hour().StartImmediately().Do(task)
