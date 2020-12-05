@@ -22,10 +22,10 @@ type Job struct {
 	scheduledWeekday  *time.Weekday            // Specific day of the week to start on
 	dayOfTheMonth     int                      // Specific day of the month to run the job
 	funcs             map[string]interface{}   // Map for the function task store
-	fparams           map[string][]interface{} // Map for function and  params of function
+	fparams           map[string][]interface{} // Map for function and params of function
 	tags              []string                 // allow the user to tag Jobs with certain labels
 	runConfig         runConfig                // configuration for how many times to run the job
-	runCount          int                      // number of time the job ran
+	runCount          int                      // number of times the job ran
 }
 
 type runConfig struct {
@@ -122,4 +122,28 @@ func (j *Job) LimitRunsTo(n int) {
 // based on the runConfig
 func (j *Job) shouldRun() bool {
 	return !j.runConfig.finiteRuns || j.runCount < j.runConfig.maxRuns
+}
+
+// LastRun returns the time the job was run last
+func (j *Job) LastRun() time.Time {
+	j.Lock()
+	defer j.Unlock()
+	lastRun := j.lastRun
+	return lastRun
+}
+
+// NextRun returns the time the job will run next
+func (j *Job) NextRun() time.Time {
+	j.Lock()
+	defer j.Unlock()
+	nextRun := j.nextRun
+	return nextRun
+}
+
+// RunCount returns the number of time the job ran so far
+func (j *Job) RunCount() int {
+	j.Lock()
+	defer j.Unlock()
+	runCount := j.runCount
+	return runCount
 }

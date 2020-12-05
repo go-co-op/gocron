@@ -107,3 +107,21 @@ func TestJob_LimitRunsTo(t *testing.T) {
 	j.run()
 	assert.Equal(t, j.shouldRun(), false, "Not expecting it to run again")
 }
+
+func TestJob_CommonExports(t *testing.T) {
+	s := NewScheduler(time.Local)
+	j, _ := s.Every(1).Second().Do(func() {})
+	assert.Equal(t, 0, j.RunCount())
+	assert.True(t, j.LastRun().IsZero())
+	assert.True(t, j.NextRun().IsZero())
+
+	s.StartAsync()
+	assert.False(t, j.NextRun().IsZero())
+
+	j.runCount = 5
+	assert.Equal(t, 5, j.RunCount())
+
+	lastRun := time.Now()
+	j.lastRun = lastRun
+	assert.Equal(t, lastRun, j.LastRun())
+}
