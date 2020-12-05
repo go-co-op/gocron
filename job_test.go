@@ -121,6 +121,7 @@ func TestJob_CommonExports(t *testing.T) {
 	j.runCount = 5
 	assert.Equal(t, 5, j.RunCount())
 
-	j.run()
-	assert.False(t, j.LastRun().IsZero())
+	lastRun := time.Now()
+	j.lastRun = lastRun
+	assert.Equal(t, lastRun, j.LastRun())
 }

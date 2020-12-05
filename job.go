@@ -126,15 +126,24 @@ func (j *Job) shouldRun() bool {
 
 // LastRun returns the time the job was run last
 func (j *Job) LastRun() time.Time {
-	return j.lastRun
+	j.Lock()
+	defer j.Unlock()
+	lastRun := j.lastRun
+	return lastRun
 }
 
 // NextRun returns the time the job will run next
 func (j *Job) NextRun() time.Time {
-	return j.nextRun
+	j.Lock()
+	defer j.Unlock()
+	nextRun := j.nextRun
+	return nextRun
 }
 
 // RunCount returns the number of time the job ran so far
 func (j *Job) RunCount() int {
-	return j.runCount
+	j.Lock()
+	defer j.Unlock()
+	runCount := j.runCount
+	return runCount
 }
