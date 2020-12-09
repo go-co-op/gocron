@@ -251,7 +251,7 @@ func (s *Scheduler) runnableJobs() []*Job {
 		if s.shouldRun(job) {
 			runnableJobs = append(runnableJobs, job)
 		} else {
-			break
+			continue
 		}
 	}
 	return runnableJobs

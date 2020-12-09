@@ -58,7 +58,7 @@ func (j *Job) neverRan() bool {
 	return j.lastRun.IsZero()
 }
 
-// Err returns an error if one ocurred while creating the Job
+// Err returns an error if one occurred while creating the Job
 func (j *Job) Err() error {
 	return j.err
 }
@@ -74,7 +74,7 @@ func (j *Job) Tag(t string, others ...string) {
 
 // Untag removes a tag from a Job
 func (j *Job) Untag(t string) {
-	newTags := []string{}
+	var newTags []string
 	for _, tag := range j.tags {
 		if t != tag {
 			newTags = append(newTags, tag)
@@ -118,7 +118,7 @@ func (j *Job) LimitRunsTo(n int) {
 	}
 }
 
-// shouldRun eveluates if this job should run again
+// shouldRun evaluates if this job should run again
 // based on the runConfig
 func (j *Job) shouldRun() bool {
 	return !j.runConfig.finiteRuns || j.runCount < j.runConfig.maxRuns

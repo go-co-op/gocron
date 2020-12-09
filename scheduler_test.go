@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -817,4 +819,30 @@ func TestScheduler_Do(t *testing.T) {
 		assert.Equal(t, nil, err)
 		assert.False(t, job.nextRun.IsZero())
 	})
+}
+
+func TestRunJobsWithLimit(t *testing.T) {
+	f := func(in *int) {
+		*in = *in + 1
+	}
+
+	s := NewScheduler(time.UTC)
+	s.StartAsync()
+
+	var j1Counter int
+	j1, err := s.Every(1).StartAt(time.Now().UTC().Add(1*time.Second)).Do(f, &j1Counter)
+	require.NoError(t, err)
+
+	j1.LimitRunsTo(1)
+
+	var j2Counter int
+	j2, err := s.Every(1).StartAt(time.Now().UTC().Add(2*time.Second)).Do(f, &j2Counter)
+	require.NoError(t, err)
+
+	j2.LimitRunsTo(1)
+
+	time.Sleep(3 * time.Second)
+
+	assert.Exactly(t, 1, j1Counter)
+	assert.Exactly(t, 1, j2Counter)
 }
