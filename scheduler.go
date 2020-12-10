@@ -250,8 +250,6 @@ func (s *Scheduler) runnableJobs() []*Job {
 	for _, job := range s.jobs {
 		if s.shouldRun(job) {
 			runnableJobs = append(runnableJobs, job)
-		} else {
-			continue
 		}
 	}
 	return runnableJobs
