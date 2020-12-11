@@ -135,6 +135,13 @@ func TestAtFuture(t *testing.T) {
 	nextRun = dayJob.ScheduledTime()
 	assert.Equal(t, expectedStartTime, nextRun)
 	assert.Equal(t, false, shouldBeFalse, "Day job was not expected to run as it was in the future")
+	s.RemoveByReference(dayJob)
+
+	// error due to bad time format
+	badTime := "0:0"
+	s.Every(1).Day().At(badTime).Do(func() {})
+	assert.Zero(t, len(s.jobs), "The job should be deleted if the time format is wrong")
+
 }
 
 func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n uint64, s *Scheduler) *Scheduler {
@@ -847,18 +854,30 @@ func TestRunJobsWithLimit(t *testing.T) {
 	assert.Exactly(t, 1, j2Counter)
 }
 
-func TestErrorDuringJobCreation(t *testing.T) {
-	// error due to bad time format
-	badTime := "0:0"
-	s := NewScheduler(time.Local)
-	s.Every(1).Day().At(badTime).Do(func() {})
-	assert.Zero(t, len(s.jobs), "The job should be deleted if the time format is wrong")
-
-	// error due to the arg passed to Do() not being a function
-	s.Every(1).Second().Do(1)
-	assert.Zero(t, len(s.jobs), "The job should be deleted if the arg passed to Do() is not a function")
-
-	// positive case
-	s.Every(1).Day().Do(func() {})
-	assert.Equal(t, 1, len(s.jobs))
+func TestDo(t *testing.T) {
+	var tests = []struct {
+		name     string
+		evalFunc func(*Scheduler)
+	}{
+		{
+			name: "error due to the arg passed to Do() not being a function",
+			evalFunc: func(s *Scheduler) {
+				s.Every(1).Second().Do(1)
+				assert.Zero(t, len(s.jobs), "The job should be deleted if the arg passed to Do() is not a function")
+			},
+		},
+		{
+			name: "positive case",
+			evalFunc: func(s *Scheduler) {
+				s.Every(1).Day().Do(func() {})
+				assert.Equal(t, 1, len(s.jobs))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScheduler(time.Local)
+			tt.evalFunc(s)
+		})
+	}
 }
