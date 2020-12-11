@@ -846,3 +846,19 @@ func TestRunJobsWithLimit(t *testing.T) {
 	assert.Exactly(t, 1, j1Counter)
 	assert.Exactly(t, 1, j2Counter)
 }
+
+func TestErrorDuringJobCreation(t *testing.T) {
+	// error due to bad time format
+	badTime := "0:0"
+	s := NewScheduler(time.Local)
+	s.Every(1).Day().At(badTime).Do(func() {})
+	assert.Zero(t, len(s.jobs), "The job should be deleted if the time format is wrong")
+
+	// error due to the arg passed to Do() not being a function
+	s.Every(1).Second().Do(1)
+	assert.Zero(t, len(s.jobs), "The job should be deleted if the arg passed to Do() is not a function")
+
+	// positive case
+	s.Every(1).Day().Do(func() {})
+	assert.Equal(t, 1, len(s.jobs))
+}
