@@ -391,11 +391,16 @@ func (s *Scheduler) stopScheduler() {
 func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
 	j := s.getCurrentJob()
 	if j.err != nil {
+		// delete the job from the scheduler as this job
+		// cannot be executed
+		s.RemoveByReference(j)
 		return nil, j.err
 	}
 
 	typ := reflect.TypeOf(jobFun)
 	if typ.Kind() != reflect.Func {
+		// delete the job for the same reason as above
+		s.RemoveByReference(j)
 		return nil, ErrNotAFunction
 	}
 
