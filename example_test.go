@@ -132,3 +132,11 @@ func ExampleJob_RunCount() {
 	}()
 	<-s.StartAsync()
 }
+
+func ExampleJob_RemoveAfterLastRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	job.LimitRunsTo(1)
+	job.RemoveAfterLastRun()
+	s.StartAsync()
+}

@@ -31,6 +31,7 @@ type Job struct {
 type runConfig struct {
 	finiteRuns bool
 	maxRuns    int
+	removeAfterLastRun   bool
 }
 
 // NewJob creates a new Job with the provided interval
@@ -146,4 +147,11 @@ func (j *Job) RunCount() int {
 	defer j.Unlock()
 	runCount := j.runCount
 	return runCount
+}
+// RemoveAfterLastRun update the job in order to remove the job after its last exec
+func (j *Job) RemoveAfterLastRun() *Job {
+	j.Lock()
+	defer j.Unlock()
+	j.runConfig.removeAfterLastRun = true
+	return j
 }

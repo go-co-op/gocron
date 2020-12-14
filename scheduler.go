@@ -456,6 +456,12 @@ func (s *Scheduler) StartImmediately() *Scheduler {
 
 // shouldRun returns true if the Job should be run now
 func (s *Scheduler) shouldRun(j *Job) bool {
+
+	// option remove the job's in the scheduler after its last execution
+	if j.runConfig.removeAfterLastRun && (j.runConfig.maxRuns - j.runCount) == 1 {
+		s.RemoveByReference(j)
+	}
+
 	return j.shouldRun() && s.time.Now(s.loc).Unix() >= j.nextRun.Unix()
 }
 
