@@ -76,6 +76,11 @@ func main() {
 
     // Removing Job Based on Tag
     s2.RemoveJobByTag("tag1")
+    
+    // Remove a Job after its last execution
+    j, _ := s2.Every(1).StartAt(time.Now().Add(30*time.Second)).Do(task)
+    j.LimitRunsTo(1)
+    j.RemoveAfterLastRun()
 
     // Do jobs on specific weekday
     s2.Every(1).Monday().Do(task)

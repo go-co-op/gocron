@@ -881,3 +881,18 @@ func TestDo(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoveAfterExec(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	s.StartAsync()
+
+	job, err := s.Every(1).StartAt(time.Now().Add(1*time.Second)).Do(task, s)
+	require.NoError(t, err)
+
+	job.LimitRunsTo(1)
+	job.RemoveAfterLastRun()
+
+	time.Sleep(2 * time.Second)
+
+	assert.Zero(t, len(s.Jobs()))
+}
