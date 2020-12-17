@@ -30,7 +30,11 @@ This allows us to discuss the changes and make sure they are a good fit for the 
 
 Please always make sure a pull request has been:
 
-- Unit tests added/updated and tested with `make test`
+- Unit tested with `make test`
 - Linted with `make lint`
 - Vetted with `make vet`
 - Formatted with `make fmt` or validated with `make check-fmt`
+
+## Writing Tests
+
+Tests should follow the [table driven test pattern](https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go). See other tests in the code base for additional examples.
