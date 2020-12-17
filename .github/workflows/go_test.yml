@@ -23,7 +23,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v1
       - name: fmt
-        run: gofmt -w .
+        run: make check-fmt
       - name: lint
         run: |
           go get golang.org/x/lint/golint
@@ -31,4 +31,4 @@ jobs:
       - name: vet
         run: go vet ./...
       - name: test
-        run: go test ./...
+        run: go test -race -count=1 ./...
