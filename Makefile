@@ -30,4 +30,4 @@ vet:
 	@go vet $(GO_FLAGS) $(GO_PKGS)
 
 test:
-	@go test -race $(GO_FLAGS) -count=1 $(GO_PKGS)
+	@go test -race -v $(GO_FLAGS) -count=1 $(GO_PKGS)
