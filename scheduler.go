@@ -446,14 +446,6 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 	return s
 }
 
-// StartImmediately sets the Jobs next run as soon as the scheduler starts
-// Deprecated: Jobs start immediately by default unless a specific start day or time is set
-func (s *Scheduler) StartImmediately() *Scheduler {
-	job := s.getCurrentJob()
-	job.startsImmediately = true
-	return s
-}
-
 // shouldRun returns true if the Job should be run now
 func (s *Scheduler) shouldRun(j *Job) bool {
 
