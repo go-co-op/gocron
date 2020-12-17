@@ -23,12 +23,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v1
       - name: fmt
-        run: gofmt -w .
+        run: make check-fmt
       - name: lint
         run: |
           go get golang.org/x/lint/golint
           $(go list -f {{.Target}} golang.org/x/lint/golint) -set_exit_status ./...
       - name: vet
-        run: go vet ./...
+        run: make vet
       - name: test
-        run: go test ./...
+        run: make test
