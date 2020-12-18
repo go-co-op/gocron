@@ -13,7 +13,7 @@ See also these two great articles:
 
 If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
-Examples:
+## Examples:
 
 ```go
 package main
@@ -71,12 +71,16 @@ func main() {
     tag1 := []string{"tag1"}
     tag2 := []string{"tag2"}
 
-
     s2.Every(1).Week().SetTag(tag1).Do(task)
     s2.Every(1).Week().SetTag(tag2).Do(task)
 
     // Removing Job Based on Tag
     s2.RemoveJobByTag("tag1")
+    
+    // Remove a Job after its last execution
+    j, _ := s2.Every(1).StartAt(time.Now().Add(30*time.Second)).Do(task)
+    j.LimitRunsTo(1)
+    j.RemoveAfterLastRun()
 
     // Do jobs on specific weekday
     s2.Every(1).Monday().Do(task)
@@ -89,13 +93,11 @@ func main() {
     s2.Every(1).Wednesday().At("1:01").Do(task)
 
     // Begin job at a specific date/time. 
-    // Attention: scheduler timezone has precedence over job's timezone!
     t := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)
     s2.Every(1).Hour().StartAt(t).Do(task)
 
-    // use .StartImmediately() to run job upon scheduler start
-    s2.Every(1).Hour().StartImmediately().Do(task)
-
+    // Delay start of job
+    s2.Every(1).Hour().StartAt(time.Now().Add(time.Duration(1 * time.Hour)).Do(task)
 
     // NextRun gets the next running time
     _, time := s2.NextRun()
@@ -116,17 +118,10 @@ func main() {
     // this line is never reached
 }
 ```
-
-and full test cases and [document](http://godoc.org/github.com/jasonlvhit/gocron) will be coming soon (help is wanted! If you want to contribute, pull requests are welcome).
-
-If you need to prevent a job from running at the same time from multiple cron instances (like running a cron app from multiple servers),
-you can provide a [Locker implementation](example/lock.go) and lock the required jobs.
-
-```go
-gocron.SetLocker(lockerImplementation)
-gocron.Every(1).Hour().Lock().Do(task)
-```
-
+### FAQ
+ * Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication? 
+ * A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+--- 
 Looking to contribute? Try to follow these guidelines:
  * Use issues for everything
  * For a small change, just send a PR!

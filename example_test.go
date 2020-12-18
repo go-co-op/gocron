@@ -11,6 +11,27 @@ var task = func() {
 	fmt.Println("I am a task")
 }
 
+func ExampleScheduler_Location() {
+	s := gocron.NewScheduler(time.UTC)
+	fmt.Println(s.Location())
+	// Output: UTC
+}
+
+func ExampleScheduler_ChangeLocation() {
+	s := gocron.NewScheduler(time.UTC)
+	fmt.Println(s.Location())
+
+	location, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		panic(err)
+	}
+	s.ChangeLocation(location)
+	fmt.Println(s.Location())
+	// Output:
+	// UTC
+	// America/Los_Angeles
+}
+
 func ExampleScheduler_StartBlocking() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
@@ -20,13 +41,7 @@ func ExampleScheduler_StartBlocking() {
 func ExampleScheduler_StartAsync() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
-	<-s.StartAsync()
-}
-
-func ExampleScheduler_StartImmediately() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Hour().StartImmediately().Do(task)
-	s.StartBlocking()
+	s.StartAsync()
 }
 
 func ExampleScheduler_StartAt() {
@@ -47,13 +62,6 @@ func ExampleScheduler_At() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Day().At("10:30").Do(task)
 	_, _ = s.Every(1).Monday().At("10:30:01").Do(task)
-}
-
-func ExampleJob_ScheduledTime() {
-	s := gocron.NewScheduler(time.UTC)
-	job, _ := s.Every(1).Day().At("10:30").Do(task)
-	fmt.Println(job.ScheduledAtTime())
-	// Output: 10:30
 }
 
 func ExampleScheduler_RemoveJobByTag() {
@@ -89,16 +97,67 @@ func ExampleScheduler_Clear() {
 	// 0
 }
 
+func ExampleJob_ScheduledTime() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Day().At("10:30").Do(task)
+	fmt.Println(job.ScheduledAtTime())
+	// Output: 10:30
+}
+
 func ExampleJob_LimitRunsTo() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
 	job.LimitRunsTo(2)
-	s.StartAsync()
+	<-s.StartAsync()
 }
 
 func ExampleJob_SingletonMode() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
 	job.SingletonMode()
-	s.StartAsync()
+  <-s.StartAsync()
+}
+
+func ExampleJob_LastRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Last run", job.LastRun())
+			time.Sleep(time.Second)
+		}
+	}()
+	<-s.StartAsync()
+}
+
+func ExampleJob_NextRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Next run", job.NextRun())
+			time.Sleep(time.Second)
+		}
+	}()
+	<-s.StartAsync()
+}
+
+func ExampleJob_RunCount() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Run count", job.RunCount())
+			time.Sleep(time.Second)
+		}
+	}()
+	<-s.StartAsync()
+}
+
+func ExampleJob_RemoveAfterLastRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	job.LimitRunsTo(1)
+	job.RemoveAfterLastRun()
+	<-s.StartAsync()
 }
