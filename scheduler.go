@@ -15,7 +15,8 @@ type Scheduler struct {
 	jobsMutex sync.RWMutex
 	jobs      []*Job
 
-	loc *time.Location
+	locationMutex sync.RWMutex
+	location      *time.Location
 
 	runningMutex sync.RWMutex
 	running      bool          // represents if the scheduler is running at the moment or not
@@ -28,7 +29,7 @@ type Scheduler struct {
 func NewScheduler(loc *time.Location) *Scheduler {
 	return &Scheduler{
 		jobs:     make([]*Job, 0),
-		loc:      loc,
+		location: loc,
 		running:  false,
 		stopChan: make(chan struct{}),
 		time:     &trueTime{},
@@ -111,12 +112,21 @@ func (s *Scheduler) Less(i, j int) bool {
 
 // ChangeLocation changes the default time location
 func (s *Scheduler) ChangeLocation(newLocation *time.Location) {
-	s.loc = newLocation
+	s.locationMutex.Lock()
+	defer s.locationMutex.Unlock()
+	s.location = newLocation
+}
+
+// Location provides the current location set on the scheduler
+func (s *Scheduler) Location() *time.Location {
+	s.locationMutex.RLock()
+	defer s.locationMutex.RUnlock()
+	return s.location
 }
 
 // scheduleNextRun Compute the instant when this Job should run next
 func (s *Scheduler) scheduleNextRun(job *Job) {
-	now := s.time.Now(s.loc)
+	now := s.time.Now(s.Location())
 
 	if job.neverRan() {
 		if !job.NextRun().IsZero() {
@@ -157,7 +167,7 @@ func (s *Scheduler) durationToNextRun(job *Job) time.Duration {
 
 func (s *Scheduler) getJobLastRun(job *Job) time.Time {
 	if job.neverRan() {
-		return s.time.Now(s.loc)
+		return s.time.Now(s.Location())
 	}
 	return job.LastRun()
 }
@@ -166,7 +176,7 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
 	if job.dayOfTheMonth > 0 { // calculate days to j.dayOfTheMonth
-		jobDay := time.Date(lastRun.Year(), lastRun.Month(), job.dayOfTheMonth, 0, 0, 0, 0, s.loc).Add(job.getAtTime())
+		jobDay := time.Date(lastRun.Year(), lastRun.Month(), job.dayOfTheMonth, 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 		daysDifference := int(math.Abs(lastRun.Sub(jobDay).Hours()) / 24)
 		nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime())
 		if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
@@ -203,7 +213,7 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 	}
 
 	if daysToWeekday == 0 { // today, at future time or already passed
-		lastRunAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.getAtTime())
+		lastRunAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 		if lastRun.Before(lastRunAtTime) || lastRun.Equal(lastRunAtTime) {
 			return 0
 		}
@@ -215,13 +225,13 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) time.Duration {
 	if job.interval == 1 {
-		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.getAtTime())
+		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
 			return s.until(lastRun, s.roundToMidnight(lastRun).Add(job.getAtTime()))
 		}
 	}
 
-	nextRunAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, int(job.interval)).In(s.loc)
+	nextRunAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, int(job.interval)).In(s.Location())
 	return s.until(lastRun, nextRunAtTime)
 }
 
@@ -236,7 +246,7 @@ func shouldRunToday(lastRun time.Time, atTime time.Time) bool {
 func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	lastRun := job.LastRun()
 	if job.neverRan() && shouldRunAtSpecificTime(job) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
-		atTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.loc).Add(job.getAtTime())
+		atTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 		if lastRun.Before(atTime) || lastRun.Equal(atTime) {
 			return time.Until(s.roundToMidnight(lastRun).Add(job.getAtTime()))
 		}
@@ -267,7 +277,7 @@ func remainingDaysToWeekday(from time.Weekday, to time.Weekday) int {
 
 // roundToMidnight truncates time to midnight
 func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.loc)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.Location())
 }
 
 // Get the current runnable Jobs, which shouldRun is True
@@ -285,7 +295,7 @@ func (s *Scheduler) runnableJobs() []*Job {
 // NextRun datetime when the next Job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.Jobs()) <= 0 {
-		return nil, s.time.Now(s.loc)
+		return nil, s.time.Now(s.Location())
 	}
 
 	sort.Sort(s)
@@ -316,7 +326,7 @@ func (s *Scheduler) runAndReschedule(job *Job) error {
 }
 
 func (s *Scheduler) run(job *Job) error {
-	job.setLastRun(s.time.Now(s.loc))
+	job.setLastRun(s.time.Now(s.Location()))
 	go job.run()
 	return nil
 }
@@ -483,7 +493,7 @@ func (s *Scheduler) shouldRun(j *Job) bool {
 		s.RemoveByReference(j)
 	}
 
-	return j.shouldRun() && s.time.Now(s.loc).Unix() >= j.NextRun().Unix()
+	return j.shouldRun() && s.time.Now(s.Location()).Unix() >= j.NextRun().Unix()
 }
 
 // setUnit sets the unit type

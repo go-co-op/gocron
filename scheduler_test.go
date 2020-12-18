@@ -317,11 +317,11 @@ func TestLess(t *testing.T) {
 func TestSetLocation(t *testing.T) {
 	s := NewScheduler(time.FixedZone("UTC-8", -8*60*60))
 
-	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.loc)
+	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.Location())
 
 	s.ChangeLocation(time.UTC)
 
-	assert.Equal(t, time.UTC, s.loc)
+	assert.Equal(t, time.UTC, s.Location())
 }
 
 func TestClear(t *testing.T) {
