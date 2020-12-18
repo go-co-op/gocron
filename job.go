@@ -179,7 +179,7 @@ func (j *Job) LimitRunsTo(n int) {
 	j.Lock()
 	defer j.Unlock()
 	j.runConfig.finiteRuns = true
-	j.runConfig.finiteRuns = n
+	j.runConfig.maxRuns = n
 }
 
 // SingletonMode Sets the mode to block startup if the current job has not finished
