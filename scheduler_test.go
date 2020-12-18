@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,10 +42,16 @@ func taskWithParams(a int, b string) {
 func TestExecutionSecond(t *testing.T) {
 	sched := NewScheduler(time.UTC)
 	success := false
-	sched.Every(1).Second().Do(func(mutableValue *bool) {
+	mu := sync.Mutex{}
+	sched.Every(1).Second().Do(func(mutableValue *bool, mu *sync.Mutex) {
+		mu.Lock()
+		defer mu.Unlock()
 		*mutableValue = !*mutableValue
-	}, &success)
+	}, &success, &mu)
 	sched.RunAllWithDelay(1)
+
+	mu.Lock()
+	defer mu.Unlock()
 	assert.Equal(t, true, success, "Task did not get called")
 }
 
@@ -95,20 +102,6 @@ func TestScheduledWithTag(t *testing.T) {
 	if !sched.Scheduled(task) {
 		t.Fatal("Task was scheduled but function couldn't find it")
 	}
-}
-
-func TestStartImmediately(t *testing.T) {
-	sched := NewScheduler(time.UTC)
-	now := time.Now().UTC()
-
-	job, _ := sched.Every(1).Hour().StartImmediately().Do(task)
-	sched.scheduleAllJobs()
-	next := job.ScheduledTime()
-
-	nextRounded := time.Date(next.Year(), next.Month(), next.Day(), next.Hour(), next.Minute(), next.Second(), 0, time.UTC)
-	expected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC)
-
-	assert.Exactly(t, expected, nextRounded)
 }
 
 func TestAtFuture(t *testing.T) {
@@ -324,11 +317,11 @@ func TestLess(t *testing.T) {
 func TestSetLocation(t *testing.T) {
 	s := NewScheduler(time.FixedZone("UTC-8", -8*60*60))
 
-	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.loc)
+	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.Location())
 
 	s.ChangeLocation(time.UTC)
 
-	assert.Equal(t, time.UTC, s.loc)
+	assert.Equal(t, time.UTC, s.Location())
 }
 
 func TestClear(t *testing.T) {
@@ -380,15 +373,15 @@ func TestSetUnit(t *testing.T) {
 
 func TestScheduler_Stop(t *testing.T) {
 	t.Run("stops a running scheduler", func(t *testing.T) {
-		sched := NewScheduler(time.UTC)
-		sched.StartAsync()
-		sched.Stop()
-		assert.False(t, sched.running)
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+		s.Stop()
+		assert.False(t, s.IsRunning())
 	})
 	t.Run("noop on stopped scheduler", func(t *testing.T) {
-		sched := NewScheduler(time.UTC)
-		sched.Stop()
-		assert.False(t, sched.running)
+		s := NewScheduler(time.UTC)
+		s.Stop()
+		assert.False(t, s.IsRunning())
 	})
 }
 
@@ -813,7 +806,7 @@ func _getMinutes(i int) time.Duration {
 func TestScheduler_Do(t *testing.T) {
 	t.Run("adding a new job before scheduler starts does not schedule job", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		s.running = false
+		s.setRunning(false)
 		job, err := s.Every(1).Second().Do(func() {})
 		assert.Equal(t, nil, err)
 		assert.True(t, job.nextRun.IsZero())
@@ -821,7 +814,7 @@ func TestScheduler_Do(t *testing.T) {
 
 	t.Run("adding a new job when scheduler is running schedules job", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		s.running = true
+		s.setRunning(true)
 		job, err := s.Every(1).Second().Do(func() {})
 		assert.Equal(t, nil, err)
 		assert.False(t, job.nextRun.IsZero())
@@ -829,28 +822,35 @@ func TestScheduler_Do(t *testing.T) {
 }
 
 func TestRunJobsWithLimit(t *testing.T) {
-	f := func(in *int) {
+	f := func(in *int, mu *sync.RWMutex) {
+		mu.Lock()
+		defer mu.Unlock()
 		*in = *in + 1
 	}
 
 	s := NewScheduler(time.UTC)
 	s.StartAsync()
 
-	var j1Counter int
-	j1, err := s.Every(1).StartAt(time.Now().UTC().Add(1*time.Second)).Do(f, &j1Counter)
+	var j1Counter, j2Counter int
+	var j1Mutex, j2Mutex sync.RWMutex
+	j1, err := s.Every(1).StartAt(time.Now().UTC().Add(1*time.Second)).Do(f, &j1Counter, &j1Mutex)
 	require.NoError(t, err)
 
 	j1.LimitRunsTo(1)
 
-	var j2Counter int
-	j2, err := s.Every(1).StartAt(time.Now().UTC().Add(2*time.Second)).Do(f, &j2Counter)
+	j2, err := s.Every(1).StartAt(time.Now().UTC().Add(2*time.Second)).Do(f, &j2Counter, &j2Mutex)
 	require.NoError(t, err)
 
 	j2.LimitRunsTo(1)
 
 	time.Sleep(3 * time.Second)
 
+	j1Mutex.RLock()
+	j1Mutex.RUnlock()
 	assert.Exactly(t, 1, j1Counter)
+
+	j2Mutex.RLock()
+	j2Mutex.RUnlock()
 	assert.Exactly(t, 1, j2Counter)
 }
 

@@ -11,6 +11,27 @@ var task = func() {
 	fmt.Println("I am a task")
 }
 
+func ExampleScheduler_Location() {
+	s := gocron.NewScheduler(time.UTC)
+	fmt.Println(s.Location())
+	// Output: UTC
+}
+
+func ExampleScheduler_ChangeLocation() {
+	s := gocron.NewScheduler(time.UTC)
+	fmt.Println(s.Location())
+
+	location, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		panic(err)
+	}
+	s.ChangeLocation(location)
+	fmt.Println(s.Location())
+	// Output:
+	// UTC
+	// America/Los_Angeles
+}
+
 func ExampleScheduler_StartBlocking() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
@@ -21,13 +42,6 @@ func ExampleScheduler_StartAsync() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
 	s.StartAsync()
-}
-
-// Deprecated: All jobs start immediately by default unless set to a specific date or time
-func ExampleScheduler_StartImmediately() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Hour().StartImmediately().Do(task)
-	s.StartBlocking()
 }
 
 func ExampleScheduler_StartAt() {
@@ -48,13 +62,6 @@ func ExampleScheduler_At() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Day().At("10:30").Do(task)
 	_, _ = s.Every(1).Monday().At("10:30:01").Do(task)
-}
-
-func ExampleJob_ScheduledTime() {
-	s := gocron.NewScheduler(time.UTC)
-	job, _ := s.Every(1).Day().At("10:30").Do(task)
-	fmt.Println(job.ScheduledAtTime())
-	// Output: 10:30
 }
 
 func ExampleScheduler_RemoveJobByTag() {
@@ -88,6 +95,13 @@ func ExampleScheduler_Clear() {
 	// Output:
 	// 3
 	// 0
+}
+
+func ExampleJob_ScheduledTime() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Day().At("10:30").Do(task)
+	fmt.Println(job.ScheduledAtTime())
+	// Output: 10:30
 }
 
 func ExampleJob_LimitRunsTo() {
