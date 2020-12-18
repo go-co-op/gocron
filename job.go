@@ -186,7 +186,7 @@ func (j *Job) LimitRunsTo(n int) {
 func (j *Job) SingletonMode() {
 	j.Lock()
 	defer j.Unlock()
-  j.runConfig.mode = SingletonMode
+	j.runConfig.mode = SingletonMode
 }
 
 // shouldRun evaluates if this job should run again
