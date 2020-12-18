@@ -115,7 +115,7 @@ func ExampleJob_SingletonMode() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
 	job.SingletonMode()
-		<-s.StartAsync()
+	<-s.StartAsync()
 }
 
 func ExampleJob_LastRun() {
