@@ -137,7 +137,6 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 
 	// job can be scheduled with .StartAt()
 	if job.neverRan() {
-		// TODO check: if job already scheduled next run.
 		if !job.NextRun().IsZero() {
 			return // scheduled for future run and should skip scheduling
 		}
@@ -146,7 +145,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 
 	durationToNextRun := s.durationToNextRun(lastRun, job)
 	job.setNextRun(lastRun.Add(durationToNextRun))
-	job.Timer = time.AfterFunc(durationToNextRun, func() {
+	job.timer = time.AfterFunc(durationToNextRun, func() {
 		s.run(job)
 		s.scheduleNextRun(job)
 	})
@@ -302,12 +301,6 @@ func (s *Scheduler) Every(interval uint64) *Scheduler {
 	job := NewJob(interval)
 	s.setJobs(append(s.Jobs(), job))
 	return s
-}
-
-func (s *Scheduler) runAndReschedule(job *Job) error {
-	s.run(job)
-	s.scheduleNextRun(job)
-	return nil
 }
 
 func (s *Scheduler) run(job *Job) {

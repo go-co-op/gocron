@@ -26,7 +26,7 @@ type Job struct {
 	tags              []string                 // allow the user to tag Jobs with certain labels
 	runConfig         runConfig                // configuration for how many times to run the job
 	runCount          int                      // number of times the job ran
-	Timer             *time.Timer
+	timer             *time.Timer
 }
 
 type runConfig struct {
