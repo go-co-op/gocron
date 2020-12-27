@@ -26,6 +26,7 @@ type Job struct {
 	tags              []string                 // allow the user to tag Jobs with certain labels
 	runConfig         runConfig                // configuration for how many times to run the job
 	runCount          int                      // number of times the job ran
+	Timer             *time.Timer
 }
 
 type runConfig struct {
@@ -51,8 +52,8 @@ func NewJob(interval uint64) *Job {
 func (j *Job) run() {
 	j.Lock()
 	defer j.Unlock()
-	callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 	j.runCount++
+	go callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 }
 
 func (j *Job) neverRan() bool {
