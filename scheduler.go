@@ -145,10 +145,10 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 
 	durationToNextRun := s.durationToNextRun(lastRun, job)
 	job.setNextRun(lastRun.Add(durationToNextRun))
-	job.timer = time.AfterFunc(durationToNextRun, func() {
+	job.setTimer(time.AfterFunc(durationToNextRun, func() {
 		s.run(job)
 		s.scheduleNextRun(job)
-	})
+	}))
 }
 
 func (s *Scheduler) durationToNextRun(t time.Time, job *Job) time.Duration {

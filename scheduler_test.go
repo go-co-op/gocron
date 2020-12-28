@@ -63,12 +63,15 @@ func TestExecutionSeconds(t *testing.T) {
 		executions         []int64
 		interval           uint64 = 2
 		expectedExecutions        = 4
+		mu                 sync.RWMutex
 	)
 
 	runTime := time.Duration(6 * time.Second)
 	startTime := time.Now()
 
 	sched.Every(interval).Seconds().Do(func() {
+		mu.Lock()
+		defer mu.Unlock()
 		executions = append(executions, time.Now().UTC().Unix())
 		if time.Now().After(startTime.Add(runTime)) {
 			jobDone <- true
@@ -79,6 +82,8 @@ func TestExecutionSeconds(t *testing.T) {
 	<-jobDone // Wait job done
 	close(stop)
 
+	mu.RLock()
+	defer mu.RUnlock()
 	assert.Equal(t, expectedExecutions, len(executions), "did not run expected number of times")
 
 	for i := 1; i < expectedExecutions; i++ {
@@ -819,7 +824,7 @@ func TestScheduler_Do(t *testing.T) {
 		s.setRunning(true)
 		job, err := s.Every(1).Second().Do(func() {})
 		assert.Equal(t, nil, err)
-		assert.False(t, job.nextRun.IsZero())
+		assert.False(t, job.NextRun().IsZero())
 	})
 }
 

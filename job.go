@@ -74,6 +74,18 @@ func (j *Job) setStartsImmediately(b bool) {
 	j.startsImmediately = b
 }
 
+func (j *Job) getTimer() *time.Timer {
+	j.RLock()
+	defer j.RUnlock()
+	return j.timer
+}
+
+func (j *Job) setTimer(t *time.Timer) {
+	j.Lock()
+	defer j.Unlock()
+	j.timer = t
+}
+
 func (j *Job) getAtTime() time.Duration {
 	j.RLock()
 	defer j.RUnlock()
