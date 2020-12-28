@@ -133,7 +133,7 @@ func (s *Scheduler) Location() *time.Location {
 // scheduleNextRun Compute the instant when this Job should run next
 func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
-	lastRun := job.lastRun
+	lastRun := job.LastRun()
 
 	// job can be scheduled with .StartAt()
 	if job.neverRan() {
