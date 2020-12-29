@@ -313,7 +313,7 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 	job.setLastRun(s.now())
-	go job.run()
+	job.run()
 }
 
 // RunAll run all Jobs regardless if they are scheduled to run or not

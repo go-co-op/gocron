@@ -52,9 +52,8 @@ func NewJob(interval uint64) *Job {
 func (j *Job) run() {
 	j.Lock()
 	defer j.Unlock()
-	if j.shouldRun() {
-		callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
-	}
+	j.runCount++
+	go callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
 }
 
 func (j *Job) neverRan() bool {
@@ -175,12 +174,6 @@ func (j *Job) LimitRunsTo(n int) {
 	}
 }
 
-func (j *Job) setTimer(t *time.Timer) {
-	j.Lock()
-	defer j.Unlock()
-	j.timer = t
-}
-
 // shouldRun evaluates if this job should run again
 // based on the runConfig
 func (j *Job) shouldRun() bool {
@@ -199,7 +192,6 @@ func (j *Job) LastRun() time.Time {
 func (j *Job) setLastRun(t time.Time) {
 	j.Lock()
 	defer j.Unlock()
-	j.runCount++
 	j.lastRun = t
 }
 
