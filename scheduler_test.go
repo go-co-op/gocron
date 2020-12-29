@@ -387,6 +387,14 @@ func TestScheduler_Stop(t *testing.T) {
 		s.Stop()
 		assert.False(t, s.IsRunning())
 	})
+	t.Run("stops a running scheduler through StartAsync chan", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		c := s.StartAsync()
+		assert.True(t, s.IsRunning())
+		close(c)
+		time.Sleep(1 * time.Millisecond) // wait for stop goroutine to catch up
+		assert.False(t, s.IsRunning())
+	})
 	t.Run("noop on stopped scheduler", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.Stop()
@@ -816,7 +824,7 @@ func TestScheduler_Do(t *testing.T) {
 		s.setRunning(false)
 		job, err := s.Every(1).Second().Do(func() {})
 		assert.Equal(t, nil, err)
-		assert.True(t, job.nextRun.IsZero())
+		assert.True(t, job.NextRun().IsZero())
 	})
 
 	t.Run("adding a new job when scheduler is running schedules job", func(t *testing.T) {

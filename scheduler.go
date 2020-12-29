@@ -36,28 +36,33 @@ func NewScheduler(loc *time.Location) *Scheduler {
 	}
 }
 
-// StartBlocking starts all the pending jobs using a second-long ticker and blocks the current thread
+// StartBlocking starts all jobs and blocks the current thread
 func (s *Scheduler) StartBlocking() {
 	<-s.StartAsync()
 }
 
-// StartAsync starts a goroutine that runs all the pending using a second-long ticker
+// StartAsync starts all jobs without blocking the current thread
 func (s *Scheduler) StartAsync() chan struct{} {
 	if s.IsRunning() {
 		return s.stopChan
 	}
 	s.start()
+	go func() {
+		<-s.stopChan
+		s.setRunning(false)
+		return
+	}()
 	return s.stopChan
 }
 
-//start runs each job and schedules it's next run
+//start starts the scheduler, scheduling and running jobs
 func (s *Scheduler) start() {
 	s.setRunning(true)
-	s.runJobs()
+	s.runJobs(s.Jobs())
 }
 
-func (s *Scheduler) runJobs() {
-	for _, j := range s.Jobs() {
+func (s *Scheduler) runJobs(jobs []*Job) {
+	for _, j := range jobs {
 		if j.getStartsImmediately() {
 			s.run(j)
 			j.setStartsImmediately(false)
@@ -308,7 +313,7 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 	job.setLastRun(s.now())
-	job.run()
+	go job.run()
 }
 
 // RunAll run all Jobs regardless if they are scheduled to run or not
