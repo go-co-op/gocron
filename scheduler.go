@@ -309,9 +309,10 @@ func (s *Scheduler) Every(interval uint64) *Scheduler {
 }
 
 func (s *Scheduler) run(job *Job) {
-	if !s.running {
+	if !s.IsRunning() {
 		return
 	}
+
 	job.setLastRun(s.now())
 	job.run()
 }

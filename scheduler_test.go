@@ -116,7 +116,7 @@ func TestAtFuture(t *testing.T) {
 		now := time.Now().UTC()
 
 		// Schedule to run in next minute
-		nextMinuteTime := now.Add(1 * time.Minute)
+		nextMinuteTime := now.Add(1 * time.Minute) // fixme: test fails any hour at :59
 		startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
 		var hasRan bool
 		dayJob, _ := s.Every(1).Day().At(startAt).Do(func() {
