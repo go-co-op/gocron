@@ -31,39 +31,50 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		jobs:     make([]*Job, 0),
 		location: loc,
 		running:  false,
-		stopChan: make(chan struct{}),
+		stopChan: make(chan struct{}, 1),
 		time:     &trueTime{},
 	}
 }
 
-// StartBlocking starts all the pending jobs using a second-long ticker and blocks the current thread
+// StartBlocking starts all jobs and blocks the current thread
 func (s *Scheduler) StartBlocking() {
 	<-s.StartAsync()
 }
 
-// StartAsync starts a goroutine that runs all the pending using a second-long ticker
+// StartAsync starts all jobs without blocking the current thread
 func (s *Scheduler) StartAsync() chan struct{} {
 	if s.IsRunning() {
 		return s.stopChan
 	}
-	s.setRunning(true)
-
-	s.scheduleAllJobs()
-	ticker := s.time.NewTicker(1 * time.Second)
+	s.start()
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				s.RunPending()
-			case <-s.stopChan:
-				ticker.Stop()
-				s.setRunning(false)
-				return
-			}
-		}
+		<-s.stopChan
+		s.setRunning(false)
+		return
 	}()
-
 	return s.stopChan
+}
+
+//start starts the scheduler, scheduling and running jobs
+func (s *Scheduler) start() {
+	s.setRunning(true)
+	s.runJobs(s.Jobs())
+}
+
+func (s *Scheduler) runJobs(jobs []*Job) {
+	for _, j := range jobs {
+		if j.getStartsImmediately() {
+			s.run(j)
+			j.setStartsImmediately(false)
+		}
+		if !j.shouldRun() {
+			if j.getRemoveAfterLastRun() { // TODO: this method seems unnecessary as we could always remove after the run cout has expired. Maybe remove this in the future?
+				s.RemoveByReference(j)
+			}
+			continue
+		}
+		s.scheduleNextRun(j)
+	}
 }
 
 func (s *Scheduler) setRunning(b bool) {
@@ -126,41 +137,40 @@ func (s *Scheduler) Location() *time.Location {
 
 // scheduleNextRun Compute the instant when this Job should run next
 func (s *Scheduler) scheduleNextRun(job *Job) {
-	now := s.time.Now(s.Location())
+	now := s.now()
+	lastRun := job.LastRun()
 
+	// job can be scheduled with .StartAt()
 	if job.neverRan() {
 		if !job.NextRun().IsZero() {
 			return // scheduled for future run and should skip scheduling
 		}
-		// default is for jobs to start immediately unless scheduled at a specific time or day
-		if job.getStartsImmediately() {
-			job.setNextRun(now)
-			return
-		}
+		lastRun = now
 	}
 
-	job.setLastRun(now)
-
-	durationToNextRun := s.durationToNextRun(job)
-	job.setNextRun(job.LastRun().Add(durationToNextRun))
+	durationToNextRun := s.durationToNextRun(lastRun, job)
+	job.setNextRun(lastRun.Add(durationToNextRun))
+	job.setTimer(time.AfterFunc(durationToNextRun, func() {
+		s.run(job)
+		s.scheduleNextRun(job)
+	}))
 }
 
-func (s *Scheduler) durationToNextRun(job *Job) time.Duration {
-	lastRun := job.LastRun()
+func (s *Scheduler) durationToNextRun(t time.Time, job *Job) time.Duration {
 	var duration time.Duration
 	switch job.unit {
 	case seconds, minutes, hours:
 		duration = s.calculateDuration(job)
 	case days:
-		duration = s.calculateDays(job, lastRun)
+		duration = s.calculateDays(job, t)
 	case weeks:
 		if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
-			duration = s.calculateWeekday(job, lastRun)
+			duration = s.calculateWeekday(job, t)
 		} else {
-			duration = s.calculateWeeks(job, lastRun)
+			duration = s.calculateWeeks(job, t)
 		}
 	case months:
-		duration = s.calculateMonths(job, lastRun)
+		duration = s.calculateMonths(job, t)
 	}
 	return duration
 }
@@ -280,18 +290,6 @@ func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.Location())
 }
 
-// Get the current runnable Jobs, which shouldRun is True
-func (s *Scheduler) runnableJobs() []*Job {
-	var runnableJobs []*Job
-	sort.Sort(s)
-	for _, job := range s.Jobs() {
-		if s.shouldRun(job) {
-			runnableJobs = append(runnableJobs, job)
-		}
-	}
-	return runnableJobs
-}
-
 // NextRun datetime when the next Job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.Jobs()) <= 0 {
@@ -310,25 +308,13 @@ func (s *Scheduler) Every(interval uint64) *Scheduler {
 	return s
 }
 
-// RunPending runs all the Jobs that are scheduled to run.
-func (s *Scheduler) RunPending() {
-	for _, job := range s.runnableJobs() {
-		s.runAndReschedule(job) // we should handle this error somehow
+func (s *Scheduler) run(job *Job) {
+	if !s.IsRunning() {
+		return
 	}
-}
 
-func (s *Scheduler) runAndReschedule(job *Job) error {
-	if err := s.run(job); err != nil {
-		return err
-	}
-	s.scheduleNextRun(job)
-	return nil
-}
-
-func (s *Scheduler) run(job *Job) error {
-	job.setLastRun(s.time.Now(s.Location()))
-	go job.run()
-	return nil
+	job.setLastRun(s.now())
+	job.run()
 }
 
 // RunAll run all Jobs regardless if they are scheduled to run or not
@@ -339,10 +325,7 @@ func (s *Scheduler) RunAll() {
 // RunAllWithDelay runs all Jobs with delay seconds
 func (s *Scheduler) RunAllWithDelay(d int) {
 	for _, job := range s.Jobs() {
-		err := s.run(job)
-		if err != nil {
-			continue
-		}
+		s.run(job)
 		s.time.Sleep(time.Duration(d) * time.Second)
 	}
 }
@@ -418,11 +401,12 @@ func (s *Scheduler) Clear() {
 // Stop stops the scheduler. This is a no-op if the scheduler is already stopped .
 func (s *Scheduler) Stop() {
 	if s.IsRunning() {
-		s.stopScheduler()
+		s.stop()
 	}
 }
 
-func (s *Scheduler) stopScheduler() {
+func (s *Scheduler) stop() {
+	s.setRunning(false)
 	s.stopChan <- struct{}{}
 }
 
@@ -626,8 +610,6 @@ func (s *Scheduler) getCurrentJob() *Job {
 	return s.Jobs()[len(s.jobs)-1]
 }
 
-func (s *Scheduler) scheduleAllJobs() {
-	for _, j := range s.Jobs() {
-		s.scheduleNextRun(j)
-	}
+func (s *Scheduler) now() time.Time {
+	return s.time.Now(s.Location())
 }

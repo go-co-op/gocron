@@ -39,20 +39,20 @@ func taskWithParams(a int, b string) {
 	fmt.Println(a, b)
 }
 
-func TestExecutionSecond(t *testing.T) {
+func TestImmediateExecution(t *testing.T) {
 	sched := NewScheduler(time.UTC)
-	success := false
-	mu := sync.Mutex{}
-	sched.Every(1).Second().Do(func(mutableValue *bool, mu *sync.Mutex) {
-		mu.Lock()
-		defer mu.Unlock()
-		*mutableValue = !*mutableValue
-	}, &success, &mu)
-	sched.RunAllWithDelay(1)
+	semaphore := make(chan bool)
+	sched.Every(1).Second().Do(func() {
+		semaphore <- true
+	})
+	sched.StartAsync()
+	select {
+	case <-time.After(1 * time.Second):
+		t.Fatal("job did not run immediately")
+	case <-semaphore:
+		// test passed
+	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	assert.Equal(t, true, success, "Task did not get called")
 }
 
 func TestExecutionSeconds(t *testing.T) {
@@ -63,12 +63,15 @@ func TestExecutionSeconds(t *testing.T) {
 		executions         []int64
 		interval           uint64 = 2
 		expectedExecutions        = 4
+		mu                 sync.RWMutex
 	)
 
 	runTime := time.Duration(6 * time.Second)
 	startTime := time.Now()
 
 	sched.Every(interval).Seconds().Do(func() {
+		mu.Lock()
+		defer mu.Unlock()
 		executions = append(executions, time.Now().UTC().Unix())
 		if time.Now().After(startTime.Add(runTime)) {
 			jobDone <- true
@@ -79,6 +82,8 @@ func TestExecutionSeconds(t *testing.T) {
 	<-jobDone // Wait job done
 	close(stop)
 
+	mu.RLock()
+	defer mu.RUnlock()
 	assert.Equal(t, expectedExecutions, len(executions), "did not run expected number of times")
 
 	for i := 1; i < expectedExecutions; i++ {
@@ -105,36 +110,39 @@ func TestScheduledWithTag(t *testing.T) {
 }
 
 func TestAtFuture(t *testing.T) {
-	s := NewScheduler(time.UTC)
-	now := time.Now().UTC()
+	t.Run("calls to .At() should parse time correctly", func(t *testing.T) {
 
-	// Schedule to run in next minute
-	nextMinuteTime := now.Add(1 * time.Minute)
-	startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
-	shouldBeFalse := false
-	dayJob, _ := s.Every(1).Day().At(startAt).Do(func() {
-		shouldBeFalse = true
+		s := NewScheduler(time.UTC)
+		now := time.Now().UTC()
+
+		// Schedule to run in next minute
+		nextMinuteTime := now.Add(1 * time.Minute) // fixme: test fails any hour at :59
+		startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
+		var hasRan bool
+		dayJob, _ := s.Every(1).Day().At(startAt).Do(func() {
+			hasRan = true
+		})
+		s.start()
+
+		// Check first run
+		expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), now.Second(), 0, time.UTC)
+		nextRun := dayJob.ScheduledTime()
+		assert.Equal(t, expectedStartTime, nextRun)
+
+		// Check next run's scheduled time
+		nextRun = dayJob.ScheduledTime()
+		assert.Equal(t, expectedStartTime, nextRun)
+		assert.False(t, hasRan, "Day job was not expected to run as it was in the future")
+
 	})
-	s.scheduleAllJobs()
 
-	// Check first run
-	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), now.Second(), 0, time.UTC)
-	nextRun := dayJob.ScheduledTime()
-	assert.Equal(t, expectedStartTime, nextRun)
-
-	s.RunPending()
-
-	// Check next run's scheduled time
-	nextRun = dayJob.ScheduledTime()
-	assert.Equal(t, expectedStartTime, nextRun)
-	assert.Equal(t, false, shouldBeFalse, "Day job was not expected to run as it was in the future")
-	s.RemoveByReference(dayJob)
-
-	// error due to bad time format
-	badTime := "0:0"
-	s.Every(1).Day().At(badTime).Do(func() {})
-	assert.Zero(t, len(s.jobs), "The job should be deleted if the time format is wrong")
-
+	t.Run("error due to bad time format", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		badTime := "0:0"
+		_, err := s.Every(1).Day().At(badTime).Do(func() {})
+		assert.Error(t, err, "bad time format should not include jobs to the scheduler")
+		assert.Zero(t, len(s.jobs))
+	})
 }
 
 func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n uint64, s *Scheduler) *Scheduler {
@@ -375,7 +383,16 @@ func TestScheduler_Stop(t *testing.T) {
 	t.Run("stops a running scheduler", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.StartAsync()
+		assert.True(t, s.IsRunning())
 		s.Stop()
+		assert.False(t, s.IsRunning())
+	})
+	t.Run("stops a running scheduler through StartAsync chan", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		c := s.StartAsync()
+		assert.True(t, s.IsRunning())
+		close(c)
+		time.Sleep(1 * time.Millisecond) // wait for stop goroutine to catch up
 		assert.False(t, s.IsRunning())
 	})
 	t.Run("noop on stopped scheduler", func(t *testing.T) {
@@ -391,16 +408,14 @@ func TestScheduler_StartAt(t *testing.T) {
 
 	// With StartAt
 	job, _ := scheduler.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
-	scheduler.scheduleAllJobs()
-	_, nextRun := scheduler.NextRun()
-	assert.Equal(t, now.Add(time.Second*5), nextRun)
-	scheduler.Remove(job)
+	assert.False(t, job.getStartsImmediately())
+	scheduler.start()
+	assert.Equal(t, now.Add(time.Second*5), job.NextRun())
+	scheduler.stop()
 
 	// Without StartAt
 	job, _ = scheduler.Every(3).Seconds().Do(func() {})
-	scheduler.scheduleNextRun(job)
-	_, nextRun = scheduler.NextRun()
-	assert.Equal(t, now.Second(), nextRun.Second())
+	assert.True(t, job.getStartsImmediately())
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
@@ -776,7 +791,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 	for i := range tests {
 		t.Run(tests[i].name, func(t *testing.T) {
 			sched := NewScheduler(time.UTC)
-			got := sched.durationToNextRun(&tests[i].job)
+			got := sched.durationToNextRun(tests[i].job.LastRun(), &tests[i].job)
 			assert.Equalf(t, tests[i].wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tests[i].wantTimeUntilNextRun.String(), got.String()))
 		})
 	}
@@ -809,7 +824,7 @@ func TestScheduler_Do(t *testing.T) {
 		s.setRunning(false)
 		job, err := s.Every(1).Second().Do(func() {})
 		assert.Equal(t, nil, err)
-		assert.True(t, job.nextRun.IsZero())
+		assert.True(t, job.NextRun().IsZero())
 	})
 
 	t.Run("adding a new job when scheduler is running schedules job", func(t *testing.T) {
@@ -817,7 +832,7 @@ func TestScheduler_Do(t *testing.T) {
 		s.setRunning(true)
 		job, err := s.Every(1).Second().Do(func() {})
 		assert.Equal(t, nil, err)
-		assert.False(t, job.nextRun.IsZero())
+		assert.False(t, job.NextRun().IsZero())
 	})
 }
 
@@ -829,20 +844,20 @@ func TestRunJobsWithLimit(t *testing.T) {
 	}
 
 	s := NewScheduler(time.UTC)
-	s.StartAsync()
 
 	var j1Counter, j2Counter int
 	var j1Mutex, j2Mutex sync.RWMutex
-	j1, err := s.Every(1).StartAt(time.Now().UTC().Add(1*time.Second)).Do(f, &j1Counter, &j1Mutex)
+	j1, err := s.Every(1).Second().Do(f, &j1Counter, &j1Mutex)
 	require.NoError(t, err)
 
 	j1.LimitRunsTo(1)
 
-	j2, err := s.Every(1).StartAt(time.Now().UTC().Add(2*time.Second)).Do(f, &j2Counter, &j2Mutex)
+	j2, err := s.Every(1).Second().Do(f, &j2Counter, &j2Mutex)
 	require.NoError(t, err)
 
 	j2.LimitRunsTo(1)
 
+	s.StartAsync()
 	time.Sleep(3 * time.Second)
 
 	j1Mutex.RLock()
@@ -884,13 +899,13 @@ func TestDo(t *testing.T) {
 
 func TestRemoveAfterExec(t *testing.T) {
 	s := NewScheduler(time.UTC)
-	s.StartAsync()
 
-	job, err := s.Every(1).StartAt(time.Now().Add(1*time.Second)).Do(task, s)
+	job, err := s.Every(1).Second().Do(task, s)
 	require.NoError(t, err)
 
 	job.LimitRunsTo(1)
 	job.RemoveAfterLastRun()
+	s.StartAsync()
 
 	time.Sleep(2 * time.Second)
 
