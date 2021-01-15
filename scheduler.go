@@ -68,7 +68,7 @@ func (s *Scheduler) runJobs(jobs []*Job) {
 			j.setStartsImmediately(false)
 		}
 		if !j.shouldRun() {
-			if j.getRemoveAfterLastRun() { // TODO: this method seems unnecessary as we could always remove after the run cout has expired. Maybe remove this in the future?
+			if j.getRemoveAfterLastRun() {
 				s.RemoveByReference(j)
 			}
 			continue
@@ -140,11 +140,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
 	lastRun := job.LastRun()
 
-	// job can be scheduled with .StartAt()
 	if job.neverRan() {
-		if !job.NextRun().IsZero() {
-			return // scheduled for future run and should skip scheduling
-		}
 		lastRun = now
 	}
 
@@ -156,28 +152,33 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}))
 }
 
-func (s *Scheduler) durationToNextRun(t time.Time, job *Job) time.Duration {
+func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration {
+	// job can be scheduled with .StartAt()
+	if job.getStartAtTime().After(lastRun) {
+		return job.getStartAtTime().Sub(s.now())
+	}
+
 	var duration time.Duration
 	switch job.unit {
 	case seconds, minutes, hours:
 		duration = s.calculateDuration(job)
 	case days:
-		duration = s.calculateDays(job, t)
+		duration = s.calculateDays(job, lastRun)
 	case weeks:
 		if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
-			duration = s.calculateWeekday(job, t)
+			duration = s.calculateWeekday(job, lastRun)
 		} else {
-			duration = s.calculateWeeks(job, t)
+			duration = s.calculateWeeks(job, lastRun)
 		}
 	case months:
-		duration = s.calculateMonths(job, t)
+		duration = s.calculateMonths(job, lastRun)
 	}
 	return duration
 }
 
 func (s *Scheduler) getJobLastRun(job *Job) time.Time {
 	if job.neverRan() {
-		return s.time.Now(s.Location())
+		return s.now()
 	}
 	return job.LastRun()
 }
@@ -293,7 +294,7 @@ func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
 // NextRun datetime when the next Job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.Jobs()) <= 0 {
-		return nil, s.time.Now(s.Location())
+		return nil, s.now()
 	}
 
 	sort.Sort(s)
@@ -464,7 +465,7 @@ func (s *Scheduler) SetTag(t []string) *Scheduler {
 // StartAt schedules the next run of the Job
 func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 	job := s.getCurrentJob()
-	job.setNextRun(t)
+	job.setStartAtTime(t)
 	job.startsImmediately = false
 	return s
 }
@@ -477,7 +478,7 @@ func (s *Scheduler) shouldRun(j *Job) bool {
 		s.RemoveByReference(j)
 	}
 
-	return j.shouldRun() && s.time.Now(s.Location()).Unix() >= j.NextRun().Unix()
+	return j.shouldRun() && s.now().Unix() >= j.NextRun().Unix()
 }
 
 // setUnit sets the unit type

@@ -403,19 +403,39 @@ func TestScheduler_Stop(t *testing.T) {
 }
 
 func TestScheduler_StartAt(t *testing.T) {
-	scheduler := NewScheduler(time.Local)
-	now := time.Now()
+	t.Run("scheduling", func(t *testing.T) {
+		s := NewScheduler(time.Local)
+		now := time.Now()
 
-	// With StartAt
-	job, _ := scheduler.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
-	assert.False(t, job.getStartsImmediately())
-	scheduler.start()
-	assert.Equal(t, now.Add(time.Second*5), job.NextRun())
-	scheduler.stop()
+		// With StartAt
+		job, _ := s.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
+		assert.False(t, job.getStartsImmediately())
+		s.start()
+		assert.Equal(t, now.Add(time.Second*5).Truncate(time.Second), job.NextRun().Truncate(time.Second))
+		s.stop()
 
-	// Without StartAt
-	job, _ = scheduler.Every(3).Seconds().Do(func() {})
-	assert.True(t, job.getStartsImmediately())
+		// Without StartAt
+		job, _ = s.Every(3).Seconds().Do(func() {})
+		assert.True(t, job.getStartsImmediately())
+	})
+
+	t.Run("run", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		s.Every(1).Day().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+			semaphore <- true
+		})
+
+		s.StartAsync()
+
+		select {
+		case <-time.After(2 * time.Second):
+			t.Fatal("job did not run at 1 second")
+		case <-semaphore:
+			// test passed
+		}
+	})
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
