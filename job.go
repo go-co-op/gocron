@@ -15,7 +15,8 @@ type Job struct {
 	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	startsImmediately bool                     // if the Job should run upon scheduler start
 	jobFunc           string                   // the Job jobFunc to run, func[jobFunc]
-	atTime            time.Duration            // optional time at which this Job runs
+	atTime            time.Duration            // optional time at which this Job runs when interval is day
+	startAtTime       time.Time                // optional time at which the Job starts
 	err               error                    // error related to Job
 	lastRun           time.Time                // datetime of last run
 	nextRun           time.Time                // datetime of next run
@@ -96,6 +97,18 @@ func (j *Job) setAtTime(t time.Duration) {
 	j.Lock()
 	defer j.Unlock()
 	j.atTime = t
+}
+
+func (j *Job) getStartAtTime() time.Time {
+	j.RLock()
+	defer j.RUnlock()
+	return j.startAtTime
+}
+
+func (j *Job) setStartAtTime(t time.Time) {
+	j.Lock()
+	defer j.Unlock()
+	j.startAtTime = t
 }
 
 // Err returns an error if one occurred while creating the Job
@@ -241,6 +254,7 @@ func (j *Job) getMaxRuns() int {
 	return j.runConfig.maxRuns
 }
 
+// TODO: this method seems unnecessary as we could always remove after the run count has expired. Maybe remove this in the future?
 func (j *Job) getRemoveAfterLastRun() bool {
 	j.RLock()
 	defer j.RUnlock()
