@@ -424,7 +424,8 @@ func TestScheduler_StartAt(t *testing.T) {
 		semaphore := make(chan bool)
 
 		s.Every(1).Day().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
-			semaphore <- true })
+			semaphore <- true
+		})
 
 		s.StartAsync()
 
