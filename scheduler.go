@@ -142,9 +142,6 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 
 	// job can be scheduled with .StartAt()
 	if job.neverRan() {
-		if !job.NextRun().IsZero() {
-			return // scheduled for future run and should skip scheduling
-		}
 		lastRun = now
 	}
 
@@ -157,6 +154,11 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 }
 
 func (s *Scheduler) durationToNextRun(t time.Time, job *Job) time.Duration {
+	// job can be scheduled with .StartAt() and already has a next run
+	if job.nextRun.After(s.time.Now(s.Location())) {
+		return job.nextRun.Sub(s.time.Now(s.Location()))
+	}
+
 	var duration time.Duration
 	switch job.unit {
 	case seconds, minutes, hours:
