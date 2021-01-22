@@ -199,7 +199,7 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 				nextRun = nextRun.AddDate(0, int(job.interval), daysDifference)
 			}
 		}
-		return s.until(lastRunRoundedMidnight, nextRun)
+		return s.until(lastRun, nextRun)
 	}
 	nextRun := lastRunRoundedMidnight.Add(job.getAtTime()).AddDate(0, int(job.interval), 0)
 	return s.until(lastRunRoundedMidnight, nextRun)
