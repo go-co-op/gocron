@@ -387,7 +387,7 @@ func TestScheduler_Stop(t *testing.T) {
 		s.Stop()
 		assert.False(t, s.IsRunning())
 	})
-	t.Run("stops a running scheduler through StartAsync chan", func(t *testing.T) {
+	t.Run("stops a running scheduler calling .Stop()", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.StartAsync()
 		assert.True(t, s.IsRunning())
