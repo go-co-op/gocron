@@ -78,9 +78,9 @@ func TestExecutionSeconds(t *testing.T) {
 		}
 	})
 
-	stop := sched.StartAsync()
+	sched.StartAsync()
 	<-jobDone // Wait job done
-	close(stop)
+	sched.Stop()
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -389,9 +389,9 @@ func TestScheduler_Stop(t *testing.T) {
 	})
 	t.Run("stops a running scheduler through StartAsync chan", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		c := s.StartAsync()
+		s.StartAsync()
 		assert.True(t, s.IsRunning())
-		close(c)
+		s.Stop()
 		time.Sleep(1 * time.Millisecond) // wait for stop goroutine to catch up
 		assert.False(t, s.IsRunning())
 	})
