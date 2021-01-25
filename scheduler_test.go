@@ -931,3 +931,13 @@ func TestRemoveAfterExec(t *testing.T) {
 
 	assert.Zero(t, len(s.Jobs()))
 }
+
+func TestCalculateMonths(t *testing.T) {
+	s := NewScheduler(time.Local)
+	s.StartAsync()
+	job, _ := s.Every(1).Month(1).At("10:00").Do(func() {
+		fmt.Println("hello task")
+	})
+	fmt.Println(job.ScheduledTime().Format("2006-01-02 15:04:05"))
+	time.Sleep(2 * time.Second)
+}
