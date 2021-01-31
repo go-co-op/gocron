@@ -342,6 +342,8 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	for _, job := range s.Jobs() {
 		if !shouldRemove(job) {
 			retainedJobs = append(retainedJobs, job)
+		} else {
+			job.timer.Stop()
 		}
 	}
 	s.setJobs(retainedJobs)
@@ -354,6 +356,7 @@ func (s *Scheduler) RemoveJobByTag(tag string) error {
 		return err
 	}
 	// Remove job if jobindex is valid
+	s.jobs[jobindex].timer.Stop()
 	s.setJobs(removeAtIndex(s.jobs, jobindex))
 	return nil
 }
