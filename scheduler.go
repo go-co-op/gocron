@@ -19,8 +19,7 @@ type Scheduler struct {
 	location      *time.Location
 
 	runningMutex sync.RWMutex
-	running      bool          // represents if the scheduler is running at the moment or not
-	stopChan     chan struct{} // signal to stop scheduling
+	running      bool // represents if the scheduler is running at the moment or not
 
 	time timeWrapper // wrapper around time.Time
 }
@@ -31,28 +30,21 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		jobs:     make([]*Job, 0),
 		location: loc,
 		running:  false,
-		stopChan: make(chan struct{}, 1),
 		time:     &trueTime{},
 	}
 }
 
 // StartBlocking starts all jobs and blocks the current thread
 func (s *Scheduler) StartBlocking() {
-	<-s.StartAsync()
+	s.StartAsync()
+	<-make(chan bool)
 }
 
 // StartAsync starts all jobs without blocking the current thread
-func (s *Scheduler) StartAsync() chan struct{} {
-	if s.IsRunning() {
-		return s.stopChan
+func (s *Scheduler) StartAsync() {
+	if !s.IsRunning() {
+		s.start()
 	}
-	s.start()
-	go func() {
-		<-s.stopChan
-		s.setRunning(false)
-		return
-	}()
-	return s.stopChan
 }
 
 //start starts the scheduler, scheduling and running jobs
@@ -408,7 +400,6 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) stop() {
 	s.setRunning(false)
-	s.stopChan <- struct{}{}
 }
 
 // Do specifies the jobFunc that should be called every time the Job runs

@@ -55,6 +55,7 @@ func ExampleScheduler_Stop() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Second().Do(task)
 	s.StartAsync()
+	time.Sleep(time.Second * 5)
 	s.Stop()
 }
 
@@ -120,7 +121,7 @@ func ExampleJob_LastRun() {
 			time.Sleep(time.Second)
 		}
 	}()
-	<-s.StartAsync()
+	s.StartBlocking()
 }
 
 func ExampleJob_NextRun() {
@@ -132,7 +133,7 @@ func ExampleJob_NextRun() {
 			time.Sleep(time.Second)
 		}
 	}()
-	<-s.StartAsync()
+	s.StartAsync()
 }
 
 func ExampleJob_RunCount() {
@@ -144,7 +145,7 @@ func ExampleJob_RunCount() {
 			time.Sleep(time.Second)
 		}
 	}()
-	<-s.StartAsync()
+	s.StartAsync()
 }
 
 func ExampleJob_RemoveAfterLastRun() {
