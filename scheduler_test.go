@@ -77,7 +77,8 @@ func TestExecutionSeconds(t *testing.T) {
 	runTime := time.Duration(6 * time.Second)
 	startTime := time.Now()
 
-	sched.Every(interval).Seconds().Do(func() {
+	// default unit is seconds
+	s.Every(interval).Do(func() {
 		mu.Lock()
 		defer mu.Unlock()
 		executions = append(executions, time.Now().UTC().Unix())

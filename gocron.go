@@ -40,7 +40,8 @@ var (
 type timeUnit int
 
 const (
-	seconds timeUnit = iota + 1
+	// default unit is seconds
+	seconds timeUnit = iota
 	minutes
 	hours
 	days
