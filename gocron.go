@@ -25,10 +25,10 @@ var (
 	ErrTimeFormat            = errors.New("time format error")
 	ErrParamsNotAdapted      = errors.New("the number of params is not adapted")
 	ErrNotAFunction          = errors.New("only functions can be schedule into the job queue")
-	ErrPeriodNotSpecified    = errors.New("unspecified job period")
 	ErrNotScheduledWeekday   = errors.New("job not scheduled weekly on a weekday")
 	ErrJobNotFoundWithTag    = errors.New("no jobs found with given tag")
 	ErrUnsupportedTimeFormat = errors.New("the given time format is not supported")
+	ErrInvalidInterval       = errors.New(".Every() interval must be greater than 0")
 )
 
 // regex patterns for supported time formats

@@ -297,6 +297,9 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 // Every schedules a new periodic Job with interval
 func (s *Scheduler) Every(interval uint64) *Scheduler {
 	job := NewJob(interval)
+	if interval == 0 {
+		job.err = ErrInvalidInterval
+	}
 	s.setJobs(append(s.Jobs(), job))
 	return s
 }

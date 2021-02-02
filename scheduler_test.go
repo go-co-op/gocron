@@ -55,6 +55,14 @@ func TestImmediateExecution(t *testing.T) {
 
 }
 
+func TestInvalidEveryInterval(t *testing.T) {
+	s := NewScheduler(time.UTC)
+
+	_, err := s.Every(0).Do(func() {})
+
+	assert.EqualError(t, err, ErrInvalidInterval.Error())
+}
+
 func TestExecutionSeconds(t *testing.T) {
 	sched := NewScheduler(time.UTC)
 	jobDone := make(chan bool)
