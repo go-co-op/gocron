@@ -297,6 +297,9 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 // Every schedules a new periodic Job with interval
 func (s *Scheduler) Every(interval uint64) *Scheduler {
 	job := NewJob(interval)
+	if interval == 0 {
+		job.err = ErrInvalidInterval
+	}
 	s.setJobs(append(s.Jobs(), job))
 	return s
 }
@@ -342,6 +345,8 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	for _, job := range s.Jobs() {
 		if !shouldRemove(job) {
 			retainedJobs = append(retainedJobs, job)
+		} else {
+			job.stopTimer()
 		}
 	}
 	s.setJobs(retainedJobs)
@@ -354,6 +359,7 @@ func (s *Scheduler) RemoveJobByTag(tag string) error {
 		return err
 	}
 	// Remove job if jobindex is valid
+	s.jobs[jobindex].stopTimer()
 	s.setJobs(removeAtIndex(s.jobs, jobindex))
 	return nil
 }
