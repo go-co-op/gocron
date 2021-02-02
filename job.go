@@ -260,3 +260,9 @@ func (j *Job) getRemoveAfterLastRun() bool {
 	defer j.RUnlock()
 	return j.runConfig.removeAfterLastRun
 }
+
+func (j *Job) stopTimer() {
+	if j.timer != nil {
+		j.timer.Stop()
+	}
+}

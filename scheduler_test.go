@@ -40,12 +40,12 @@ func taskWithParams(a int, b string) {
 }
 
 func TestImmediateExecution(t *testing.T) {
-	sched := NewScheduler(time.UTC)
+	s := NewScheduler(time.UTC)
 	semaphore := make(chan bool)
-	sched.Every(1).Second().Do(func() {
+	s.Every(1).Second().Do(func() {
 		semaphore <- true
 	})
-	sched.StartAsync()
+	s.StartAsync()
 	select {
 	case <-time.After(1 * time.Second):
 		t.Fatal("job did not run immediately")
@@ -55,8 +55,16 @@ func TestImmediateExecution(t *testing.T) {
 
 }
 
+func TestInvalidEveryInterval(t *testing.T) {
+	s := NewScheduler(time.UTC)
+
+	_, err := s.Every(0).Do(func() {})
+
+	assert.EqualError(t, err, ErrInvalidInterval.Error())
+}
+
 func TestExecutionSeconds(t *testing.T) {
-	sched := NewScheduler(time.UTC)
+	s := NewScheduler(time.UTC)
 	jobDone := make(chan bool)
 
 	var (
@@ -66,10 +74,11 @@ func TestExecutionSeconds(t *testing.T) {
 		mu                 sync.RWMutex
 	)
 
-	runTime := time.Duration(6 * time.Second)
+	runTime := 6 * time.Second
 	startTime := time.Now()
 
-	sched.Every(interval).Seconds().Do(func() {
+	// default unit is seconds
+	s.Every(interval).Do(func() {
 		mu.Lock()
 		defer mu.Unlock()
 		executions = append(executions, time.Now().UTC().Unix())
@@ -78,9 +87,9 @@ func TestExecutionSeconds(t *testing.T) {
 		}
 	})
 
-	sched.StartAsync()
+	s.StartAsync()
 	<-jobDone // Wait job done
-	sched.Stop()
+	s.Stop()
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -101,10 +110,10 @@ func TestScheduled(t *testing.T) {
 }
 
 func TestScheduledWithTag(t *testing.T) {
-	sched := NewScheduler(time.UTC)
+	s := NewScheduler(time.UTC)
 	customtag := []string{"mycustomtag"}
-	sched.Every(1).Hour().SetTag(customtag).Do(task)
-	if !sched.Scheduled(task) {
+	s.Every(1).Hour().SetTag(customtag).Do(task)
+	if !s.Scheduled(task) {
 		t.Fatal("Task was scheduled but function couldn't find it")
 	}
 }
@@ -224,54 +233,102 @@ func TestWeekdayAt(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	scheduler := NewScheduler(time.UTC)
-	scheduler.Every(1).Minute().Do(task)
-	scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
-	scheduler.Every(1).Minute().Do(task)
 
-	assert.Equal(t, 3, scheduler.Len(), "Incorrect number of jobs")
+	t.Run("remove from non-running", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		s.Every(1).Minute().Do(task)
+		s.Every(1).Minute().Do(taskWithParams, 1, "hello")
+		s.Every(1).Minute().Do(task)
 
-	scheduler.Remove(task)
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 2 job")
+		assert.Equal(t, 3, s.Len(), "Incorrect number of jobs")
 
-	scheduler.Remove(task)
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
+		s.Remove(task)
+		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 2 job")
+
+		s.Remove(task)
+		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing non-existent job")
+	})
+
+	t.Run("remove from running scheduler", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		j, err := s.Every(1).Seconds().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		s.Remove(j.funcs[j.jobFunc])
+
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			t.Fatal("job ran after being removed")
+		}
+	})
 }
 
-func TestRemoveByRef(t *testing.T) {
-	scheduler := NewScheduler(time.UTC)
-	job1, _ := scheduler.Every(1).Minute().Do(task)
-	job2, _ := scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
+func TestRemoveByReference(t *testing.T) {
+	t.Run("remove from non-running scheduler", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		job1, _ := s.Every(1).Minute().Do(task)
+		job2, _ := s.Every(1).Minute().Do(taskWithParams, 1, "hello")
 
-	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+		assert.Equal(t, 2, s.Len(), "Incorrect number of jobs")
 
-	scheduler.RemoveByReference(job1)
-	assert.ElementsMatch(t, []*Job{job2}, scheduler.Jobs())
+		s.RemoveByReference(job1)
+		assert.ElementsMatch(t, []*Job{job2}, s.Jobs())
+	})
+
+	t.Run("remove from running scheduler", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		j, err := s.Every(1).Seconds().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		s.RemoveByReference(j)
+
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			t.Fatal("job ran after being removed")
+		}
+	})
 }
 
 func TestRemoveByTag(t *testing.T) {
-	scheduler := NewScheduler(time.UTC)
+	s := NewScheduler(time.UTC)
 
 	// Creating 2 Jobs with Unique tags
-	customtag1 := []string{"tag one"}
-	customtag2 := []string{"tag two"}
-	scheduler.Every(1).Minute().SetTag(customtag1).Do(taskWithParams, 1, "hello") // index 0
-	scheduler.Every(1).Minute().SetTag(customtag2).Do(taskWithParams, 2, "world") // index 1
+	tag1 := []string{"tag one"}
+	tag2 := []string{"tag two"}
+	_, err := s.Every(1).Second().SetTag(tag1).Do(taskWithParams, 1, "hello") // index 0
+	require.NoError(t, err)
+	_, err = s.Every(1).Second().SetTag(tag2).Do(taskWithParams, 2, "world") // index 1
+	require.NoError(t, err)
 
-	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+	// check Jobs()[0] tags is equal with tag "tag one" (tag1)
+	assert.Equal(t, s.Jobs()[0].Tags(), tag1, "Job With Tag 'tag one' is removed from index 0")
 
-	// check Jobs()[0] tags is equal with tag "tag one" (customtag1)
-	assert.Equal(t, scheduler.Jobs()[0].Tags(), customtag1, "Job With Tag 'tag one' is removed from index 0")
+	err = s.RemoveJobByTag("tag one")
+	require.NoError(t, err)
+	assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
-	scheduler.RemoveJobByTag("tag one")
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 1 job")
-
-	// check Jobs()[0] tags is equal with tag "tag two" (customtag2) after removing "tag one"
-	assert.Equal(t, scheduler.Jobs()[0].Tags(), customtag2, "Job With Tag 'tag two' is removed from index 0")
+	// check Jobs()[0] tags is equal with tag "tag two" (tag2) after removing "tag one"
+	assert.Equal(t, s.Jobs()[0].Tags(), tag2, "Job With Tag 'tag two' is removed from index 0")
 
 	// Removing Non Existent Job with "tag one" because already removed above (will not removing any jobs because tag not match)
-	scheduler.RemoveJobByTag("tag one")
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
+	err = s.RemoveJobByTag("tag one")
+	assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
 }
 
 func TestJobs(t *testing.T) {
@@ -810,8 +867,8 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 
 	for i := range tests {
 		t.Run(tests[i].name, func(t *testing.T) {
-			sched := NewScheduler(time.UTC)
-			got := sched.durationToNextRun(tests[i].job.LastRun(), &tests[i].job)
+			s := NewScheduler(time.UTC)
+			got := s.durationToNextRun(tests[i].job.LastRun(), &tests[i].job)
 			assert.Equalf(t, tests[i].wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tests[i].wantTimeUntilNextRun.String(), got.String()))
 		})
 	}

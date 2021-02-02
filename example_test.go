@@ -79,8 +79,8 @@ func ExampleScheduler_NextRun() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Day().At("10:30").Do(task)
 	s.StartAsync()
-	_, time := s.NextRun()
-	fmt.Println(time.Format("15:04")) // print only the hour and minute (hh:mm)
+	_, t := s.NextRun()
+	fmt.Println(t.Format("15:04")) // print only the hour and minute (hh:mm)
 	// Output: 10:30
 }
 
@@ -96,6 +96,16 @@ func ExampleScheduler_Clear() {
 	// Output:
 	// 3
 	// 0
+}
+
+func ExampleScheduler_Seconds() {
+	s := gocron.NewScheduler(time.UTC)
+
+	// the default unit is seconds
+	// these are all the same
+	_, _ = s.Every(1).Do(task)
+	_, _ = s.Every(1).Second().Do(task)
+	_, _ = s.Every(1).Second().Do(task)
 }
 
 func ExampleJob_ScheduledTime() {
