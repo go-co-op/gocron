@@ -133,6 +133,10 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	lastRun := job.LastRun()
 
 	if job.neverRan() {
+		// Increment startAtTime until it is in the future
+		for job.startAtTime.Before(now) && !job.startAtTime.IsZero() {
+			job.startAtTime = job.startAtTime.Add(s.durationToNextRun(job.startAtTime, job))
+		}
 		lastRun = now
 	}
 
@@ -459,7 +463,8 @@ func (s *Scheduler) SetTag(t []string) *Scheduler {
 	return s
 }
 
-// StartAt schedules the next run of the Job
+// StartAt schedules the next run of the Job. If this time is in the past, the configured interval will be used
+// to calculate the next future time
 func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 	job := s.getCurrentJob()
 	job.setStartAtTime(t)
