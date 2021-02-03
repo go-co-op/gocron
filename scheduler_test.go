@@ -988,3 +988,19 @@ func TestRemoveAfterExec(t *testing.T) {
 
 	assert.Zero(t, len(s.Jobs()))
 }
+
+func TestCalculateMonths(t *testing.T) {
+	ft := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+	}}
+	s := NewScheduler(time.UTC)
+	s.time = ft
+	s.StartAsync()
+	job, err := s.Every(1).Month(1).At("10:00").Do(func() {
+		fmt.Println("hello task")
+	})
+	require.NoError(t, err)
+	s.Stop()
+
+	assert.Equal(t, s.time.Now(s.location).AddDate(0, 1, 0).Month(), job.nextRun.Month())
+}
