@@ -914,36 +914,90 @@ func TestScheduler_Do(t *testing.T) {
 }
 
 func TestRunJobsWithLimit(t *testing.T) {
-	f := func(in *int, mu *sync.RWMutex) {
-		mu.Lock()
-		defer mu.Unlock()
-		*in = *in + 1
-	}
+	t.Run("simple", func(t *testing.T) {
+		semaphore := make(chan bool)
 
-	s := NewScheduler(time.UTC)
+		s := NewScheduler(time.UTC)
 
-	var j1Counter, j2Counter int
-	var j1Mutex, j2Mutex sync.RWMutex
-	j1, err := s.Every(1).Second().Do(f, &j1Counter, &j1Mutex)
-	require.NoError(t, err)
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
 
-	j1.LimitRunsTo(1)
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
 
-	j2, err := s.Every(1).Second().Do(f, &j2Counter, &j2Mutex)
-	require.NoError(t, err)
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			counter++
+			if counter > 1 {
+				t.Fatal("job did not run immediately")
+			}
+		}
+	})
 
-	j2.LimitRunsTo(1)
+	t.Run("change limit", func(t *testing.T) {
+		semaphore := make(chan bool)
 
-	s.StartAsync()
-	time.Sleep(3 * time.Second)
+		s := NewScheduler(time.UTC)
 
-	j1Mutex.RLock()
-	j1Mutex.RUnlock()
-	assert.Exactly(t, 1, j1Counter)
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
 
-	j2Mutex.RLock()
-	j2Mutex.RUnlock()
-	assert.Exactly(t, 1, j2Counter)
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
+
+		j.LimitRunsTo(2)
+		time.Sleep(1)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			if counter != 2 {
+				t.Fatal("job did not run immediately")
+			}
+			// test passed
+		case <-semaphore:
+			counter++
+			if counter > 2 {
+				t.Fatal("job did not run immediately")
+			}
+		}
+	})
+
+	t.Run("remove after last run", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+		j.RemoveAfterLastRun()
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 0, len(s.Jobs()))
+		case <-semaphore:
+			counter++
+			if counter > 1 {
+				t.Fatal("job did not run immediately")
+			}
+		}
+	})
 }
 
 func TestDo(t *testing.T) {
@@ -972,21 +1026,6 @@ func TestDo(t *testing.T) {
 			tt.evalFunc(s)
 		})
 	}
-}
-
-func TestRemoveAfterExec(t *testing.T) {
-	s := NewScheduler(time.UTC)
-
-	job, err := s.Every(1).Second().Do(task, s)
-	require.NoError(t, err)
-
-	job.LimitRunsTo(1)
-	job.RemoveAfterLastRun()
-	s.StartAsync()
-
-	time.Sleep(2 * time.Second)
-
-	assert.Zero(t, len(s.Jobs()))
 }
 
 func TestCalculateMonths(t *testing.T) {
