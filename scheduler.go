@@ -384,7 +384,7 @@ func removeAtIndex(jobs []*Job, i int) []*Job {
 	return jobs
 }
 
-// Scheduled checks if specific Job j was already added
+// Scheduled checks if specific job function was already added
 func (s *Scheduler) Scheduled(j interface{}) bool {
 	for _, job := range s.Jobs() {
 		if job.jobFunc == getFunctionName(j) {
