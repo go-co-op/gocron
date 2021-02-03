@@ -495,6 +495,18 @@ func TestScheduler_StartAt(t *testing.T) {
 			// test passed
 		}
 	})
+
+	t.Run("start in past", func(t *testing.T) {
+		s := NewScheduler(time.Local)
+		now := time.Now()
+
+		// Start 5 seconds ago and make sure next run is in the future
+		job, _ := s.Every(24).Hours().StartAt(now.Add(-24 * time.Hour).Add(10 * time.Minute)).Do(func() {})
+		assert.False(t, job.getStartsImmediately())
+		s.start()
+		assert.Equal(t, now.Add(10*time.Minute).Truncate(time.Second), job.NextRun().Truncate(time.Second))
+		s.stop()
+	})
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
