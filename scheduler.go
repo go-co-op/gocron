@@ -55,16 +55,6 @@ func (s *Scheduler) start() {
 
 func (s *Scheduler) runJobs(jobs []*Job) {
 	for _, j := range jobs {
-		if j.getStartsImmediately() {
-			s.run(j)
-			j.setStartsImmediately(false)
-		}
-		if !j.shouldRun() {
-			if j.getRemoveAfterLastRun() {
-				s.RemoveByReference(j)
-			}
-			continue
-		}
 		s.scheduleNextRun(j)
 	}
 }
@@ -132,12 +122,24 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
 	lastRun := job.LastRun()
 
+	if job.getStartsImmediately() {
+		s.run(job)
+		job.setStartsImmediately(false)
+	}
+
 	if job.neverRan() {
 		// Increment startAtTime until it is in the future
 		for job.startAtTime.Before(now) && !job.startAtTime.IsZero() {
 			job.startAtTime = job.startAtTime.Add(s.durationToNextRun(job.startAtTime, job))
 		}
 		lastRun = now
+	}
+
+	if !job.shouldRun() {
+		if job.getRemoveAfterLastRun() {
+			s.RemoveByReference(job)
+		}
+		return
 	}
 
 	durationToNextRun := s.durationToNextRun(lastRun, job)
@@ -386,7 +388,7 @@ func removeAtIndex(jobs []*Job, i int) []*Job {
 	return jobs
 }
 
-// Scheduled checks if specific Job j was already added
+// Scheduled checks if specific job function was already added
 func (s *Scheduler) Scheduled(j interface{}) bool {
 	for _, job := range s.Jobs() {
 		if job.jobFunc == getFunctionName(j) {

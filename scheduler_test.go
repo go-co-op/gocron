@@ -102,54 +102,56 @@ func TestExecutionSeconds(t *testing.T) {
 }
 
 func TestScheduled(t *testing.T) {
-	n := NewScheduler(time.UTC)
-	n.Every(1).Second().Do(task)
-	if !n.Scheduled(task) {
-		t.Fatal("Task was scheduled but function couldn't find it")
-	}
+	t.Run("simple", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		_, err := s.Every(1).Second().Do(task)
+		require.NoError(t, err)
+		assert.True(t, s.Scheduled(task))
+	})
+
+	t.Run("with tag", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		tag := []string{"my_custom_tag"}
+		_, err := s.Every(1).Hour().SetTag(tag).Do(task)
+		require.NoError(t, err)
+		assert.True(t, s.Scheduled(task))
+	})
 }
 
-func TestScheduledWithTag(t *testing.T) {
-	s := NewScheduler(time.UTC)
-	customtag := []string{"mycustomtag"}
-	s.Every(1).Hour().SetTag(customtag).Do(task)
-	if !s.Scheduled(task) {
-		t.Fatal("Task was scheduled but function couldn't find it")
-	}
-}
-
-func TestAtFuture(t *testing.T) {
-	t.Run("calls to .At() should parse time correctly", func(t *testing.T) {
+func TestAt(t *testing.T) {
+	t.Run("job scheduled for future hasn't run yet", func(t *testing.T) {
+		ft := fakeTime{onNow: func(l *time.Location) time.Time {
+			return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+		}}
 
 		s := NewScheduler(time.UTC)
-		now := time.Now().UTC()
+		s.time = ft
+		now := ft.onNow(time.UTC)
+		semaphore := make(chan bool)
 
-		// Schedule to run in next minute
-		nextMinuteTime := now.Add(1 * time.Minute) // fixme: test fails any hour at :59
+		nextMinuteTime := now.Add(1 * time.Minute)
 		startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
-		var hasRan bool
-		dayJob, _ := s.Every(1).Day().At(startAt).Do(func() {
-			hasRan = true
+		dayJob, err := s.Every(1).Day().At(startAt).Do(func() {
+			semaphore <- true
 		})
-		s.start()
+		require.NoError(t, err)
 
-		// Check first run
-		expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), now.Second(), 0, time.UTC)
-		nextRun := dayJob.ScheduledTime()
-		assert.Equal(t, expectedStartTime, nextRun)
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
 
-		// Check next run's scheduled time
-		nextRun = dayJob.ScheduledTime()
-		assert.Equal(t, expectedStartTime, nextRun)
-		assert.False(t, hasRan, "Day job was not expected to run as it was in the future")
-
+		select {
+		case <-time.After(1 * time.Second):
+			assert.Equal(t, now.Add(1*time.Minute), dayJob.nextRun)
+		case <-semaphore:
+			t.Fatal("job ran even though scheduled in future")
+		}
 	})
 
 	t.Run("error due to bad time format", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		badTime := "0:0"
 		_, err := s.Every(1).Day().At(badTime).Do(func() {})
-		assert.Error(t, err, "bad time format should not include jobs to the scheduler")
+		assert.EqualError(t, err, ErrTimeFormat.Error())
 		assert.Zero(t, len(s.jobs))
 	})
 }
@@ -926,36 +928,82 @@ func TestScheduler_Do(t *testing.T) {
 }
 
 func TestRunJobsWithLimit(t *testing.T) {
-	f := func(in *int, mu *sync.RWMutex) {
-		mu.Lock()
-		defer mu.Unlock()
-		*in = *in + 1
-	}
+	t.Run("simple", func(t *testing.T) {
+		semaphore := make(chan bool)
 
-	s := NewScheduler(time.UTC)
+		s := NewScheduler(time.UTC)
 
-	var j1Counter, j2Counter int
-	var j1Mutex, j2Mutex sync.RWMutex
-	j1, err := s.Every(1).Second().Do(f, &j1Counter, &j1Mutex)
-	require.NoError(t, err)
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
 
-	j1.LimitRunsTo(1)
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
 
-	j2, err := s.Every(1).Second().Do(f, &j2Counter, &j2Mutex)
-	require.NoError(t, err)
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
 
-	j2.LimitRunsTo(1)
+	t.Run("change limit", func(t *testing.T) {
+		semaphore := make(chan bool)
 
-	s.StartAsync()
-	time.Sleep(3 * time.Second)
+		s := NewScheduler(time.UTC)
 
-	j1Mutex.RLock()
-	j1Mutex.RUnlock()
-	assert.Exactly(t, 1, j1Counter)
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
 
-	j2Mutex.RLock()
-	j2Mutex.RUnlock()
-	assert.Exactly(t, 1, j2Counter)
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
+
+		j.LimitRunsTo(2)
+		time.Sleep(1)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 2, counter)
+			// test passed
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 2)
+		}
+	})
+
+	t.Run("remove after last run", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+		j.RemoveAfterLastRun()
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 0, len(s.Jobs()))
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
 }
 
 func TestDo(t *testing.T) {
@@ -984,21 +1032,6 @@ func TestDo(t *testing.T) {
 			tt.evalFunc(s)
 		})
 	}
-}
-
-func TestRemoveAfterExec(t *testing.T) {
-	s := NewScheduler(time.UTC)
-
-	job, err := s.Every(1).Second().Do(task, s)
-	require.NoError(t, err)
-
-	job.LimitRunsTo(1)
-	job.RemoveAfterLastRun()
-	s.StartAsync()
-
-	time.Sleep(2 * time.Second)
-
-	assert.Zero(t, len(s.Jobs()))
 }
 
 func TestCalculateMonths(t *testing.T) {
