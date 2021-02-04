@@ -7,9 +7,7 @@ import (
 	"github.com/go-co-op/gocron"
 )
 
-var task = func() {
-	fmt.Println("I am a task")
-}
+var task = func() {}
 
 // ---------------------------------------------------------------------
 // -------------------SCHEDULER-FUNCTIONS-------------------------------
@@ -128,7 +126,7 @@ func ExampleScheduler_RemoveAfterLastRun() {
 
 	j, _ := s.Every(1).Second().LimitRunsTo(1).RemoveAfterLastRun().Do(task)
 	s.StartAsync()
-
+	s.Stop()
 	fmt.Println(j.RunCount())
 	fmt.Println(s.Len())
 	// Output:
