@@ -388,7 +388,22 @@ func removeAtIndex(jobs []*Job, i int) []*Job {
 	return jobs
 }
 
-// Scheduled checks if specific job function was already added
+// LimitRunsTo limits the number of executions of this job to n. However,
+// the job will still remain in the scheduler
+func (s *Scheduler) LimitRunsTo(i int) *Scheduler {
+	job := s.getCurrentJob()
+	job.LimitRunsTo(i)
+	return s
+}
+
+// RemoveAfterLastRun sets the job to be removed after it's last run (when limited)
+func (s *Scheduler) RemoveAfterLastRun() *Scheduler {
+	job := s.getCurrentJob()
+	job.RemoveAfterLastRun()
+	return s
+}
+
+// Scheduled checks if specific Job j was already added
 func (s *Scheduler) Scheduled(j interface{}) bool {
 	for _, job := range s.Jobs() {
 		if job.jobFunc == getFunctionName(j) {
@@ -472,17 +487,6 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 	job.setStartAtTime(t)
 	job.startsImmediately = false
 	return s
-}
-
-// shouldRun returns true if the Job should be run now
-func (s *Scheduler) shouldRun(j *Job) bool {
-
-	// option remove the job's in the scheduler after its last execution
-	if j.getRemoveAfterLastRun() && (j.getMaxRuns()-j.RunCount()) == 1 {
-		s.RemoveByReference(j)
-	}
-
-	return j.shouldRun() && s.now().Unix() >= j.NextRun().Unix()
 }
 
 // setUnit sets the unit type

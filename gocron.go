@@ -11,9 +11,7 @@
 package gocron
 
 import (
-	"crypto/sha256"
 	"errors"
-	"fmt"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -63,12 +61,6 @@ func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect
 
 func getFunctionName(fn interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
-}
-
-func getFunctionKey(funcName string) string {
-	h := sha256.New()
-	h.Write([]byte(funcName))
-	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func parseTime(t string) (hour, min, sec int, err error) {

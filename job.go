@@ -175,9 +175,12 @@ func (j *Job) Weekday() (time.Weekday, error) {
 	return *j.scheduledWeekday, nil
 }
 
-// LimitRunsTo limits the number of executions of this
-// job to n. However, the job will still remain in the
-// scheduler
+// LimitRunsTo limits the number of executions of this job to n. However,
+// the job will still remain in the scheduler
+// Note: if a job is added to a running scheduler and this method is used
+// you may see the job run more than the limit as it's scheduled immediately
+// upon being added to the scheduler. It's recommended to use the LimitRunsTo()
+// when scheduling the job scheduler.LimitRunsTo(1).Do()
 func (j *Job) LimitRunsTo(n int) {
 	j.Lock()
 	defer j.Unlock()
@@ -185,6 +188,21 @@ func (j *Job) LimitRunsTo(n int) {
 		finiteRuns: true,
 		maxRuns:    n,
 	}
+}
+
+// RemoveAfterLastRun sets the job to be removed after it's last run (when limited)
+func (j *Job) RemoveAfterLastRun() *Job {
+	j.Lock()
+	defer j.Unlock()
+	j.runConfig.removeAfterLastRun = true
+	return j
+}
+
+// TODO: this method seems unnecessary as we could always remove after the run count has expired. Maybe remove this in the future?
+func (j *Job) getRemoveAfterLastRun() bool {
+	j.RLock()
+	defer j.RUnlock()
+	return j.runConfig.removeAfterLastRun
 }
 
 // shouldRun evaluates if this job should run again
@@ -234,14 +252,6 @@ func (j *Job) setRunCount(i int) {
 	j.runCount = i
 }
 
-// RemoveAfterLastRun update the job in order to remove the job after its last exec
-func (j *Job) RemoveAfterLastRun() *Job {
-	j.Lock()
-	defer j.Unlock()
-	j.runConfig.removeAfterLastRun = true
-	return j
-}
-
 func (j *Job) getFiniteRuns() bool {
 	j.RLock()
 	defer j.RUnlock()
@@ -252,13 +262,6 @@ func (j *Job) getMaxRuns() int {
 	j.RLock()
 	defer j.RUnlock()
 	return j.runConfig.maxRuns
-}
-
-// TODO: this method seems unnecessary as we could always remove after the run count has expired. Maybe remove this in the future?
-func (j *Job) getRemoveAfterLastRun() bool {
-	j.RLock()
-	defer j.RUnlock()
-	return j.runConfig.removeAfterLastRun
 }
 
 func (j *Job) stopTimer() {
