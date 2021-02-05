@@ -174,13 +174,6 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	return duration
 }
 
-func (s *Scheduler) getJobLastRun(job *Job) time.Time {
-	if job.neverRan() {
-		return s.now()
-	}
-	return job.LastRun()
-}
-
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 

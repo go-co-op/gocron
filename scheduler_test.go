@@ -42,9 +42,10 @@ func taskWithParams(a int, b string) {
 func TestImmediateExecution(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	semaphore := make(chan bool)
-	s.Every(1).Second().Do(func() {
+	_, err := s.Every(1).Second().Do(func() {
 		semaphore <- true
 	})
+	require.NoError(t, err)
 	s.StartAsync()
 	select {
 	case <-time.After(1 * time.Second):
@@ -78,7 +79,7 @@ func TestExecutionSeconds(t *testing.T) {
 	startTime := time.Now()
 
 	// default unit is seconds
-	s.Every(interval).Do(func() {
+	_, err := s.Every(interval).Do(func() {
 		mu.Lock()
 		defer mu.Unlock()
 		executions = append(executions, time.Now().UTC().Unix())
@@ -86,6 +87,7 @@ func TestExecutionSeconds(t *testing.T) {
 			jobDone <- true
 		}
 	})
+	require.NoError(t, err)
 
 	s.StartAsync()
 	<-jobDone // Wait job done
@@ -238,9 +240,12 @@ func TestRemove(t *testing.T) {
 
 	t.Run("remove from non-running", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		s.Every(1).Minute().Do(task)
-		s.Every(1).Minute().Do(taskWithParams, 1, "hello")
-		s.Every(1).Minute().Do(task)
+		_, err := s.Every(1).Minute().Do(task)
+		require.NoError(t, err)
+		_, err = s.Every(1).Minute().Do(taskWithParams, 1, "hello")
+		require.NoError(t, err)
+		_, err = s.Every(1).Minute().Do(task)
+		require.NoError(t, err)
 
 		assert.Equal(t, 3, s.Len(), "Incorrect number of jobs")
 
@@ -356,14 +361,14 @@ func TestLen(t *testing.T) {
 
 func TestSwap(t *testing.T) {
 	s := NewScheduler(time.UTC)
-	s.Every(1).Minute().Do(task)
-	s.Every(2).Minute().Do(task)
+	_, err := s.Every(1).Minute().Do(task)
+	require.NoError(t, err)
+	_, err = s.Every(2).Minute().Do(task)
+	require.NoError(t, err)
 
 	jb := s.Jobs()
 	var jobsBefore []*Job
-	for _, p := range jb {
-		jobsBefore = append(jobsBefore, p)
-	}
+	jobsBefore = append(jobsBefore, jb...)
 
 	s.Swap(1, 0)
 
@@ -997,7 +1002,7 @@ func TestRunJobsWithLimit(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		j.LimitRunsTo(2)
-		time.Sleep(1)
+		time.Sleep(1 * time.Second)
 
 		var counter int
 		select {
