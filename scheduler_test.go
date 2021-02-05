@@ -79,8 +79,7 @@ func TestScheduler_EveryDuration(t *testing.T) {
 
 	now := time.Now()
 	for time.Now().Before(now.Add(500 * time.Millisecond)) {
-		select {
-		case <-semaphore:
+		if <-semaphore {
 			counter++
 		}
 	}
