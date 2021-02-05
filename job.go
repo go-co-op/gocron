@@ -6,12 +6,10 @@ import (
 	"time"
 )
 
-type jobInterval uint64
-
 // Job struct stores the information necessary to run a Job
 type Job struct {
 	sync.RWMutex
-	interval          jobInterval              // pause interval * unit between runs
+	interval          int                      // pause interval * unit between runs
 	duration          time.Duration            // time duration between runs
 	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	startsImmediately bool                     // if the Job should run upon scheduler start
@@ -38,9 +36,9 @@ type runConfig struct {
 }
 
 // NewJob creates a new Job with the provided interval
-func NewJob(interval uint64) *Job {
+func NewJob(interval int) *Job {
 	return &Job{
-		interval:          jobInterval(interval),
+		interval:          interval,
 		lastRun:           time.Time{},
 		nextRun:           time.Time{},
 		funcs:             make(map[string]interface{}),

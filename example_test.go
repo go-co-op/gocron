@@ -46,9 +46,11 @@ func ExampleScheduler_StartAsync() {
 	s.StartAsync()
 }
 
-func ExampleScheduler_EveryDuration() {
+func ExampleScheduler_Every() {
 	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.EveryDuration(500 * time.Millisecond).Do(task)
+	_, _ = s.Every(1).Second().Do(task)
+	_, _ = s.Every(1 * time.Second).Do(task)
+	_, _ = s.Every("1s").Do(task)
 	s.StartAsync()
 }
 
