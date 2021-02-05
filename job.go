@@ -54,7 +54,9 @@ func (j *Job) run() {
 	j.Lock()
 	defer j.Unlock()
 	j.runCount++
-	go callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	go func() {
+		_, _ = callJobFuncWithParams(j.funcs[j.jobFunc], j.fparams[j.jobFunc])
+	}()
 }
 
 func (j *Job) neverRan() bool {
@@ -73,12 +75,6 @@ func (j *Job) setStartsImmediately(b bool) {
 	j.Lock()
 	defer j.Unlock()
 	j.startsImmediately = b
-}
-
-func (j *Job) getTimer() *time.Timer {
-	j.RLock()
-	defer j.RUnlock()
-	return j.timer
 }
 
 func (j *Job) setTimer(t *time.Timer) {
@@ -124,9 +120,7 @@ func (j *Job) Tag(t string, others ...string) {
 	j.Lock()
 	defer j.Unlock()
 	j.tags = append(j.tags, t)
-	for _, tag := range others {
-		j.tags = append(j.tags, tag)
-	}
+	j.tags = append(j.tags, others...)
 }
 
 // Untag removes a tag from a Job
@@ -244,24 +238,6 @@ func (j *Job) RunCount() int {
 	j.RLock()
 	defer j.RUnlock()
 	return j.runCount
-}
-
-func (j *Job) setRunCount(i int) {
-	j.Lock()
-	defer j.Unlock()
-	j.runCount = i
-}
-
-func (j *Job) getFiniteRuns() bool {
-	j.RLock()
-	defer j.RUnlock()
-	return j.runConfig.finiteRuns
-}
-
-func (j *Job) getMaxRuns() int {
-	j.RLock()
-	defer j.RUnlock()
-	return j.runConfig.maxRuns
 }
 
 func (j *Job) stopTimer() {
