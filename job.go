@@ -12,6 +12,7 @@ type jobInterval uint64
 type Job struct {
 	sync.RWMutex
 	interval          jobInterval              // pause interval * unit between runs
+	duration          time.Duration            // time duration between runs
 	unit              timeUnit                 // time units, ,e.g. 'minutes', 'hours'...
 	startsImmediately bool                     // if the Job should run upon scheduler start
 	jobFunc           string                   // the Job jobFunc to run, func[jobFunc]

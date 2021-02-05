@@ -156,22 +156,24 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 		return job.getStartAtTime().Sub(s.now())
 	}
 
-	var duration time.Duration
+	var d time.Duration
 	switch job.unit {
 	case seconds, minutes, hours:
-		duration = s.calculateDuration(job)
+		d = s.calculateDuration(job)
 	case days:
-		duration = s.calculateDays(job, lastRun)
+		d = s.calculateDays(job, lastRun)
 	case weeks:
 		if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
-			duration = s.calculateWeekday(job, lastRun)
+			d = s.calculateWeekday(job, lastRun)
 		} else {
-			duration = s.calculateWeeks(job, lastRun)
+			d = s.calculateWeeks(job, lastRun)
 		}
 	case months:
-		duration = s.calculateMonths(job, lastRun)
+		d = s.calculateMonths(job, lastRun)
+	case duration:
+		d = job.duration
 	}
-	return duration
+	return d
 }
 
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
@@ -299,6 +301,15 @@ func (s *Scheduler) Every(interval uint64) *Scheduler {
 	if interval == 0 {
 		job.err = ErrInvalidInterval
 	}
+	s.setJobs(append(s.Jobs(), job))
+	return s
+}
+
+// Every schedules a new periodic Job with interval
+func (s *Scheduler) EveryDuration(d time.Duration) *Scheduler {
+	job := NewJob(0)
+	job.duration = d
+	job.unit = duration
 	s.setJobs(append(s.Jobs(), job))
 	return s
 }

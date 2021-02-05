@@ -64,6 +64,28 @@ func TestInvalidEveryInterval(t *testing.T) {
 	assert.EqualError(t, err, ErrInvalidInterval.Error())
 }
 
+func TestScheduler_EveryDuration(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	semaphore := make(chan bool)
+
+	_, err := s.EveryDuration(100 * time.Millisecond).Do(func() {
+		semaphore <- true
+	})
+	require.NoError(t, err)
+
+	s.StartAsync()
+
+	var counter int
+
+	select {
+	case <-time.After(500 * time.Millisecond):
+		s.Stop()
+	case <-semaphore:
+		counter++
+	}
+	assert.Equal(t, 6, counter)
+}
+
 func TestExecutionSeconds(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	jobDone := make(chan bool)
