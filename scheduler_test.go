@@ -77,12 +77,14 @@ func TestScheduler_EveryDuration(t *testing.T) {
 
 	var counter int
 
-	select {
-	case <-time.After(500 * time.Millisecond):
-		s.Stop()
-	case <-semaphore:
-		counter++
+	now := time.Now()
+	for time.Now().Before(now.Add(500 * time.Millisecond)) {
+		select {
+		case <-semaphore:
+			counter++
+		}
 	}
+	s.Stop()
 	assert.Equal(t, 6, counter)
 }
 
