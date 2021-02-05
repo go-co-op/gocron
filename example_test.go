@@ -7,9 +7,11 @@ import (
 	"github.com/go-co-op/gocron"
 )
 
-var task = func() {
-	fmt.Println("I am a task")
-}
+var task = func() {}
+
+// ---------------------------------------------------------------------
+// -------------------SCHEDULER-FUNCTIONS-------------------------------
+// ---------------------------------------------------------------------
 
 func ExampleScheduler_Location() {
 	s := gocron.NewScheduler(time.UTC)
@@ -105,8 +107,36 @@ func ExampleScheduler_Seconds() {
 	// these are all the same
 	_, _ = s.Every(1).Do(task)
 	_, _ = s.Every(1).Second().Do(task)
-	_, _ = s.Every(1).Second().Do(task)
+	_, _ = s.Every(1).Seconds().Do(task)
 }
+
+func ExampleScheduler_LimitRunsTo() {
+	s := gocron.NewScheduler(time.UTC)
+
+	j, _ := s.Every(1).Second().LimitRunsTo(1).Do(task)
+	s.StartAsync()
+
+	fmt.Println(j.RunCount())
+	// Output:
+	// 1
+}
+
+func ExampleScheduler_RemoveAfterLastRun() {
+	s := gocron.NewScheduler(time.UTC)
+
+	j, _ := s.Every(1).Second().LimitRunsTo(1).RemoveAfterLastRun().Do(task)
+	s.StartAsync()
+	s.Stop()
+	fmt.Println(j.RunCount())
+	fmt.Println(s.Len())
+	// Output:
+	// 1
+	// 0
+}
+
+// ---------------------------------------------------------------------
+// ----------------------JOB-FUNCTIONS----------------------------------
+// ---------------------------------------------------------------------
 
 func ExampleJob_ScheduledTime() {
 	s := gocron.NewScheduler(time.UTC)

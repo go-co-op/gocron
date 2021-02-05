@@ -175,9 +175,13 @@ func (j *Job) Weekday() (time.Weekday, error) {
 	return *j.scheduledWeekday, nil
 }
 
-// LimitRunsTo limits the number of executions of this
-// job to n. However, the job will still remain in the
-// scheduler
+// LimitRunsTo limits the number of executions of this job to n.
+// The job will remain in the scheduler.
+// Note: If a job is added to a running scheduler and this method is used
+// you may see the job run more than the set limit as job is scheduled immediately
+// by default upon being added to the scheduler. It is recommended to use the
+// LimitRunsTo() func on the scheduler chain when scheduling the job.
+// For example: scheduler.LimitRunsTo(1).Do()
 func (j *Job) LimitRunsTo(n int) {
 	j.Lock()
 	defer j.Unlock()
@@ -185,6 +189,20 @@ func (j *Job) LimitRunsTo(n int) {
 		finiteRuns: true,
 		maxRuns:    n,
 	}
+}
+
+// RemoveAfterLastRun sets the job to be removed after it's last run (when limited)
+func (j *Job) RemoveAfterLastRun() *Job {
+	j.Lock()
+	defer j.Unlock()
+	j.runConfig.removeAfterLastRun = true
+	return j
+}
+
+func (j *Job) getRemoveAfterLastRun() bool {
+	j.RLock()
+	defer j.RUnlock()
+	return j.runConfig.removeAfterLastRun
 }
 
 // shouldRun evaluates if this job should run again
@@ -234,14 +252,6 @@ func (j *Job) setRunCount(i int) {
 	j.runCount = i
 }
 
-// RemoveAfterLastRun update the job in order to remove the job after its last exec
-func (j *Job) RemoveAfterLastRun() *Job {
-	j.Lock()
-	defer j.Unlock()
-	j.runConfig.removeAfterLastRun = true
-	return j
-}
-
 func (j *Job) getFiniteRuns() bool {
 	j.RLock()
 	defer j.RUnlock()
@@ -252,13 +262,6 @@ func (j *Job) getMaxRuns() int {
 	j.RLock()
 	defer j.RUnlock()
 	return j.runConfig.maxRuns
-}
-
-// TODO: this method seems unnecessary as we could always remove after the run count has expired. Maybe remove this in the future?
-func (j *Job) getRemoveAfterLastRun() bool {
-	j.RLock()
-	defer j.RUnlock()
-	return j.runConfig.removeAfterLastRun
 }
 
 func (j *Job) stopTimer() {

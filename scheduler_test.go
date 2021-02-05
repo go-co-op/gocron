@@ -152,7 +152,7 @@ func TestAt(t *testing.T) {
 		badTime := "0:0"
 		_, err := s.Every(1).Day().At(badTime).Do(func() {})
 		assert.EqualError(t, err, ErrTimeFormat.Error())
-		assert.Zero(t, len(s.jobs))
+		assert.Zero(t, s.Len())
 	})
 }
 
@@ -910,21 +910,51 @@ func _getMinutes(i int) time.Duration {
 }
 
 func TestScheduler_Do(t *testing.T) {
-	t.Run("adding a new job before scheduler starts does not schedule job", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-		s.setRunning(false)
-		job, err := s.Every(1).Second().Do(func() {})
-		assert.Equal(t, nil, err)
-		assert.True(t, job.NextRun().IsZero())
-	})
-
-	t.Run("adding a new job when scheduler is running schedules job", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-		s.setRunning(true)
-		job, err := s.Every(1).Second().Do(func() {})
-		assert.Equal(t, nil, err)
-		assert.False(t, job.NextRun().IsZero())
-	})
+	var testCases = []struct {
+		description string
+		evalFunc    func(*Scheduler)
+	}{
+		{
+			"adding a new job before scheduler starts does not schedule job",
+			func(s *Scheduler) {
+				s.setRunning(false)
+				job, err := s.Every(1).Second().Do(func() {})
+				assert.Equal(t, nil, err)
+				assert.True(t, job.NextRun().IsZero())
+			},
+		},
+		{
+			"adding a new job when scheduler is running schedules job",
+			func(s *Scheduler) {
+				s.setRunning(true)
+				job, err := s.Every(1).Second().Do(func() {})
+				assert.Equal(t, nil, err)
+				assert.False(t, job.NextRun().IsZero())
+			},
+		},
+		{
+			description: "error due to the arg passed to Do() not being a function",
+			evalFunc: func(s *Scheduler) {
+				_, err := s.Every(1).Second().Do(1)
+				assert.EqualError(t, err, ErrNotAFunction.Error())
+				assert.Zero(t, s.Len(), "The job should be deleted if the arg passed to Do() is not a function")
+			},
+		},
+		{
+			description: "positive case",
+			evalFunc: func(s *Scheduler) {
+				_, err := s.Every(1).Day().Do(func() {})
+				require.NoError(t, err)
+				assert.Equal(t, 1, s.Len())
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.Local)
+			tc.evalFunc(s)
+		})
+	}
 }
 
 func TestRunJobsWithLimit(t *testing.T) {
@@ -998,40 +1028,12 @@ func TestRunJobsWithLimit(t *testing.T) {
 		var counter int
 		select {
 		case <-time.After(2 * time.Second):
-			assert.Equal(t, 0, len(s.Jobs()))
+			assert.Equal(t, 0, s.Len())
 		case <-semaphore:
 			counter++
 			require.LessOrEqual(t, counter, 1)
 		}
 	})
-}
-
-func TestDo(t *testing.T) {
-	var tests = []struct {
-		name     string
-		evalFunc func(*Scheduler)
-	}{
-		{
-			name: "error due to the arg passed to Do() not being a function",
-			evalFunc: func(s *Scheduler) {
-				s.Every(1).Second().Do(1)
-				assert.Zero(t, len(s.jobs), "The job should be deleted if the arg passed to Do() is not a function")
-			},
-		},
-		{
-			name: "positive case",
-			evalFunc: func(s *Scheduler) {
-				s.Every(1).Day().Do(func() {})
-				assert.Equal(t, 1, len(s.jobs))
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := NewScheduler(time.Local)
-			tt.evalFunc(s)
-		})
-	}
 }
 
 func TestCalculateMonths(t *testing.T) {
@@ -1048,4 +1050,102 @@ func TestCalculateMonths(t *testing.T) {
 	s.Stop()
 
 	assert.Equal(t, s.time.Now(s.location).AddDate(0, 1, 0).Month(), job.nextRun.Month())
+}
+
+func TestScheduler_LimitRunsTo(t *testing.T) {
+	t.Run("job added before starting scheduler", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		_, err := s.Every(1).Second().LimitRunsTo(1).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 1, counter)
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
+
+	t.Run("job added after starting scheduler", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+
+		_, err := s.Every(1).Second().LimitRunsTo(1).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 1, counter)
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
+
+	t.Run("job added after starting scheduler - using job's LimitRunsTo - results in two runs", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 2, counter)
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 2)
+		}
+	})
+}
+
+func TestScheduler_RemoveAfterLastRun(t *testing.T) {
+	t.Run("job removed after the last run", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		_, err := s.Every(1).Second().LimitRunsTo(1).RemoveAfterLastRun().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 1, counter)
+			assert.Zero(t, s.Len())
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
 }
