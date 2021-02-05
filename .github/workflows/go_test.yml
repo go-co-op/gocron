@@ -23,3 +23,9 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           version: v1.36.0
+      - name: Install Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: test
+        run: make test
