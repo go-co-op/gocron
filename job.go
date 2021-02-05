@@ -175,12 +175,13 @@ func (j *Job) Weekday() (time.Weekday, error) {
 	return *j.scheduledWeekday, nil
 }
 
-// LimitRunsTo limits the number of executions of this job to n. However,
-// the job will still remain in the scheduler
-// Note: if a job is added to a running scheduler and this method is used
-// you may see the job run more than the limit as it's scheduled immediately
-// upon being added to the scheduler. It's recommended to use the LimitRunsTo()
-// when scheduling the job scheduler.LimitRunsTo(1).Do()
+// LimitRunsTo limits the number of executions of this job to n.
+// The job will remain in the scheduler.
+// Note: If a job is added to a running scheduler and this method is used
+// you may see the job run more than the set limit as job is scheduled immediately
+// by default upon being added to the scheduler. It is recommended to use the
+// LimitRunsTo() func on the scheduler chain when scheduling the job.
+// For example: scheduler.LimitRunsTo(1).Do()
 func (j *Job) LimitRunsTo(n int) {
 	j.Lock()
 	defer j.Unlock()
