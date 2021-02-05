@@ -199,7 +199,6 @@ func (j *Job) RemoveAfterLastRun() *Job {
 	return j
 }
 
-// TODO: this method seems unnecessary as we could always remove after the run count has expired. Maybe remove this in the future?
 func (j *Job) getRemoveAfterLastRun() bool {
 	j.RLock()
 	defer j.RUnlock()
