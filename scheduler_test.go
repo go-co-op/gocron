@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestInvalidEveryInterval(t *testing.T) {
 	}{
 		{"zero", 0, ErrInvalidInterval.Error()},
 		{"negative", -1, ErrInvalidInterval.Error()},
-		{"invalid string duration", "bad", "time: invalid duration \"bad\""},
+		{"invalid string duration", "bad", "time: invalid duration"},
 	}
 
 	s := NewScheduler(time.UTC)
@@ -70,8 +71,10 @@ func TestInvalidEveryInterval(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			_, err := s.Every(tc.interval).Do(func() {})
-
-			assert.EqualError(t, err, tc.expectedError)
+			require.Error(t, err)
+			// wonky way to assert on the error message, but between go 1.14
+			// and go 1.15 the error value was wrapped in quotes
+			assert.True(t, strings.HasPrefix(err.Error(), tc.expectedError))
 		})
 	}
 
