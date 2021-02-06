@@ -27,6 +27,8 @@ var (
 	ErrJobNotFoundWithTag    = errors.New("no jobs found with given tag")
 	ErrUnsupportedTimeFormat = errors.New("the given time format is not supported")
 	ErrInvalidInterval       = errors.New(".Every() interval must be greater than 0")
+	ErrInvalidIntervalType   = errors.New(".Every() interval must be int, time.Duration, or string")
+	ErrInvalidSelection      = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
 )
 
 // regex patterns for supported time formats
@@ -45,6 +47,7 @@ const (
 	days
 	weeks
 	months
+	duration
 )
 
 func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect.Value, error) {

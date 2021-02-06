@@ -46,6 +46,14 @@ func ExampleScheduler_StartAsync() {
 	s.StartAsync()
 }
 
+func ExampleScheduler_Every() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Second().Do(task)
+	_, _ = s.Every(1 * time.Second).Do(task)
+	_, _ = s.Every("1s").Do(task)
+	s.StartAsync()
+}
+
 func ExampleScheduler_StartAt() {
 	s := gocron.NewScheduler(time.UTC)
 	specificTime := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)

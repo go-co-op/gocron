@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+var _ timeWrapper = (*fakeTime)(nil)
 
 type fakeTime struct {
 	onNow func(location *time.Location) time.Time
@@ -24,10 +27,6 @@ func (f fakeTime) Unix(i int64, i2 int64) time.Time {
 }
 
 func (f fakeTime) Sleep(duration time.Duration) {
-	panic("implement me")
-}
-
-func (f fakeTime) NewTicker(duration time.Duration) *time.Ticker {
 	panic("implement me")
 }
 
@@ -57,11 +56,99 @@ func TestImmediateExecution(t *testing.T) {
 }
 
 func TestInvalidEveryInterval(t *testing.T) {
+	testCases := []struct {
+		description   string
+		interval      interface{}
+		expectedError string
+	}{
+		{"zero", 0, ErrInvalidInterval.Error()},
+		{"negative", -1, ErrInvalidInterval.Error()},
+		{"invalid string duration", "bad", "time: invalid duration"},
+	}
+
 	s := NewScheduler(time.UTC)
 
-	_, err := s.Every(0).Do(func() {})
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, err := s.Every(tc.interval).Do(func() {})
+			require.Error(t, err)
+			// wonky way to assert on the error message, but between go 1.14
+			// and go 1.15 the error value was wrapped in quotes
+			assert.True(t, strings.HasPrefix(err.Error(), tc.expectedError))
+		})
+	}
 
-	assert.EqualError(t, err, ErrInvalidInterval.Error())
+}
+
+func TestScheduler_Every(t *testing.T) {
+	t.Run("time.Duration", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every(100 * time.Millisecond).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(500 * time.Millisecond)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 6, counter)
+	})
+
+	t.Run("int", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(1 * time.Second)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 2, counter)
+	})
+
+	t.Run("string duration", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every("1s").Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(1 * time.Second)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 2, counter)
+	})
 }
 
 func TestExecutionSeconds(t *testing.T) {
@@ -70,8 +157,8 @@ func TestExecutionSeconds(t *testing.T) {
 
 	var (
 		executions         []int64
-		interval           uint64 = 2
-		expectedExecutions        = 4
+		interval           = 2
+		expectedExecutions = 4
 		mu                 sync.RWMutex
 	)
 
@@ -158,7 +245,7 @@ func TestAt(t *testing.T) {
 	})
 }
 
-func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n uint64, s *Scheduler) *Scheduler {
+func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n int, s *Scheduler) *Scheduler {
 	switch weekday {
 	case time.Monday:
 		if next {
@@ -211,7 +298,8 @@ func TestWeekdayBeforeToday(t *testing.T) {
 	s := NewScheduler(time.UTC)
 
 	s = schedulerForNextOrPreviousWeekdayEveryNTimes(now.Weekday(), false, 1, s)
-	weekJob, _ := s.Do(task)
+	weekJob, err := s.Do(task)
+	require.NoError(t, err)
 	s.scheduleNextRun(weekJob)
 	sixDaysFromNow := now.AddDate(0, 0, 6)
 
