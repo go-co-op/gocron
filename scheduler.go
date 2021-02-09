@@ -125,6 +125,10 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
 	lastRun := job.LastRun()
 
+	if !s.jobPresent(job) {
+		return
+	}
+
 	if job.getStartsImmediately() {
 		s.run(job)
 		job.setStartsImmediately(false)
@@ -370,6 +374,8 @@ func (s *Scheduler) Remove(j interface{}) {
 // RemoveByReference removes specific Job j by reference
 func (s *Scheduler) RemoveByReference(j *Job) {
 	s.removeByCondition(func(someJob *Job) bool {
+		j.RLock()
+		defer j.RUnlock()
 		return someJob == j
 	})
 }
@@ -435,6 +441,15 @@ func (s *Scheduler) RemoveAfterLastRun() *Scheduler {
 func (s *Scheduler) TaskPresent(j interface{}) bool {
 	for _, job := range s.Jobs() {
 		if job.jobFunc == getFunctionName(j) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Scheduler) jobPresent(j *Job) bool {
+	for _, job := range s.Jobs() {
+		if job == j {
 			return true
 		}
 	}
