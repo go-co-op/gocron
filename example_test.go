@@ -18,7 +18,8 @@ func ExampleJob_Err() {
 	s.Every(1).Day().At("bad time")
 	j := s.Jobs()[0]
 	fmt.Println(j.Err())
-	// Output: time format error
+	// Output:
+	// time format error
 }
 
 func ExampleJob_LastRun() {
@@ -73,7 +74,8 @@ func ExampleJob_ScheduledAtTime() {
 	job, _ := s.Every(1).Day().At("10:30").Do(task)
 	s.StartAsync()
 	fmt.Println(job.ScheduledAtTime())
-	// Output: 10:30
+	// Output:
+	// 10:30
 }
 
 func ExampleJob_ScheduledTime() {
@@ -90,7 +92,8 @@ func ExampleJob_Tag() {
 	job.Tag("tag1", "tag2", "tag3")
 	s.StartAsync()
 	fmt.Println(job.Tags())
-	// Output: [tag1 tag2 tag3]
+	// Output:
+	// [tag1 tag2 tag3]
 }
 
 func ExampleJob_Tags() {
@@ -100,7 +103,8 @@ func ExampleJob_Tags() {
 	job.Tag("tag1", "tag2", "tag3")
 	s.StartAsync()
 	fmt.Println(job.Tags())
-	// Output: [tag1 tag2 tag3]
+	// Output:
+	// [tag1 tag2 tag3]
 }
 
 func ExampleJob_Untag() {
@@ -460,7 +464,8 @@ func ExampleScheduler_Stop() {
 	s.StartAsync()
 	s.Stop()
 	fmt.Println(s.IsRunning())
-	// Output: false
+	// Output:
+	// false
 }
 
 func ExampleScheduler_Sunday() {
@@ -500,10 +505,8 @@ func ExampleScheduler_TaskPresent() {
 
 	_, _ = s.Every(1).Do(task)
 	fmt.Println(s.TaskPresent(task))
-	s.StartAsync()
-	fmt.Println(s.TaskPresent(task))
 	// Output:
-	//
+	// true
 }
 
 func ExampleScheduler_Thursday() {

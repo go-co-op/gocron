@@ -15,9 +15,12 @@ If you want to chat, you can find us at Slack! [<img src="https://img.shields.io
 
 ## FAQ
 
- * Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication? 
- * A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+* Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication? 
+* A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
 
+* Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
+* A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.
+  
 --- 
 Looking to contribute? Try to follow these guidelines:
  * Use issues for everything
