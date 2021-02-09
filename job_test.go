@@ -102,9 +102,9 @@ func TestJob_LimitRunsTo(t *testing.T) {
 	j, _ := NewScheduler(time.Local).Every(1).Second().Do(func() {})
 	j.LimitRunsTo(2)
 	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
-	j.run()
+	j.runCount++
 	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
-	j.run()
+	j.runCount++
 	assert.Equal(t, j.shouldRun(), false, "Not expecting it to run again")
 }
 

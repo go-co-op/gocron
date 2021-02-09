@@ -354,7 +354,7 @@ func TestScheduler_Remove(t *testing.T) {
 
 		s.StartAsync()
 
-		s.Remove(j.funcs[j.jobFunc])
+		s.Remove(j.functions[j.name])
 
 		select {
 		case <-time.After(2 * time.Second):

@@ -17,7 +17,6 @@ import (
 // Error declarations for gocron related errors
 var (
 	ErrTimeFormat            = errors.New("time format error")
-	ErrParamsNotAdapted      = errors.New("the number of params is not adapted")
 	ErrNotAFunction          = errors.New("only functions can be schedule into the job queue")
 	ErrNotScheduledWeekday   = errors.New("job not scheduled weekly on a weekday")
 	ErrJobNotFoundWithTag    = errors.New("no jobs found with given tag")
@@ -46,16 +45,16 @@ const (
 	duration
 )
 
-func callJobFuncWithParams(jobFunc interface{}, params []interface{}) ([]reflect.Value, error) {
+func callJobFuncWithParams(jobFunc interface{}, params []interface{}) {
 	f := reflect.ValueOf(jobFunc)
 	if len(params) != f.Type().NumIn() {
-		return nil, ErrParamsNotAdapted
+		return
 	}
 	in := make([]reflect.Value, len(params))
 	for k, param := range params {
 		in[k] = reflect.ValueOf(param)
 	}
-	return f.Call(in), nil
+	f.Call(in)
 }
 
 func getFunctionName(fn interface{}) string {

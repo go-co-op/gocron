@@ -13,6 +13,10 @@ See also these two great articles:
 
 If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
+## Examples
+
+Take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
+
 ## FAQ
 
 * Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication? 
