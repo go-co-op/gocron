@@ -195,15 +195,14 @@ func TestScheduled(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		_, err := s.Every(1).Second().Do(task)
 		require.NoError(t, err)
-		assert.True(t, s.Scheduled(task))
+		assert.True(t, s.TaskPresent(task))
 	})
 
 	t.Run("with tag", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		tag := []string{"my_custom_tag"}
-		_, err := s.Every(1).Hour().SetTag(tag).Do(task)
+		_, err := s.Every(1).Hour().Tag("my_custom_tag").Do(task)
 		require.NoError(t, err)
-		assert.True(t, s.Scheduled(task))
+		assert.True(t, s.TaskPresent(task))
 	})
 }
 
@@ -324,7 +323,7 @@ func TestWeekdayAt(t *testing.T) {
 	})
 }
 
-func TestRemove(t *testing.T) {
+func TestScheduler_Remove(t *testing.T) {
 
 	t.Run("remove from non-running", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
@@ -404,25 +403,25 @@ func TestRemoveByTag(t *testing.T) {
 	s := NewScheduler(time.UTC)
 
 	// Creating 2 Jobs with Unique tags
-	tag1 := []string{"tag one"}
-	tag2 := []string{"tag two"}
-	_, err := s.Every(1).Second().SetTag(tag1).Do(taskWithParams, 1, "hello") // index 0
+	tag1 := "tag one"
+	tag2 := "tag two"
+	_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
 	require.NoError(t, err)
-	_, err = s.Every(1).Second().SetTag(tag2).Do(taskWithParams, 2, "world") // index 1
+	_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
 	require.NoError(t, err)
 
 	// check Jobs()[0] tags is equal with tag "tag one" (tag1)
-	assert.Equal(t, s.Jobs()[0].Tags(), tag1, "Job With Tag 'tag one' is removed from index 0")
+	assert.Equal(t, s.Jobs()[0].Tags()[0], tag1, "Job With Tag 'tag one' is removed from index 0")
 
-	err = s.RemoveJobByTag("tag one")
+	err = s.RemoveByTag("tag one")
 	require.NoError(t, err)
 	assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
 	// check Jobs()[0] tags is equal with tag "tag two" (tag2) after removing "tag one"
-	assert.Equal(t, s.Jobs()[0].Tags(), tag2, "Job With Tag 'tag two' is removed from index 0")
+	assert.Equal(t, s.Jobs()[0].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
 
 	// Removing Non Existent Job with "tag one" because already removed above (will not removing any jobs because tag not match)
-	err = s.RemoveJobByTag("tag one")
+	err = s.RemoveByTag("tag one")
 	assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
 }
 

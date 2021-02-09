@@ -92,15 +92,18 @@ func (s *Scheduler) Len() int {
 	return len(s.jobs)
 }
 
-// Swap
+// Swap places each job into the other job's position given
+// the provided job indexes.
 func (s *Scheduler) Swap(i, j int) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()
 	s.jobs[i], s.jobs[j] = s.jobs[j], s.jobs[i]
 }
 
-func (s *Scheduler) Less(i, j int) bool {
-	return s.Jobs()[j].NextRun().Unix() >= s.Jobs()[i].NextRun().Unix()
+// Less compares the next run of jobs based on their index.
+// Returns true if the second job is after the first.
+func (s *Scheduler) Less(first, second int) bool {
+	return s.Jobs()[second].NextRun().Unix() >= s.Jobs()[first].NextRun().Unix()
 }
 
 // ChangeLocation changes the default time location
@@ -121,6 +124,10 @@ func (s *Scheduler) Location() *time.Location {
 func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
 	lastRun := job.LastRun()
+
+	if !s.jobPresent(job) {
+		return
+	}
 
 	if job.getStartsImmediately() {
 		s.run(job)
@@ -295,7 +302,10 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 	return s.Jobs()[0], s.Jobs()[0].NextRun()
 }
 
-// Every schedules a new periodic Job with interval
+// Every schedules a new periodic Job with an interval.
+// Interval can be an int, time.Duration or a string that
+// parses with time.ParseDuration().
+// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	switch interval := interval.(type) {
 	case int:
@@ -340,15 +350,21 @@ func (s *Scheduler) RunAll() {
 	s.RunAllWithDelay(0)
 }
 
-// RunAllWithDelay runs all Jobs with delay seconds
-func (s *Scheduler) RunAllWithDelay(d int) {
+// RunAllWithDelay runs all jobs with the provided delay in between each job
+func (s *Scheduler) RunAllWithDelay(d time.Duration) {
 	for _, job := range s.Jobs() {
 		s.run(job)
-		s.time.Sleep(time.Duration(d) * time.Second)
+		s.time.Sleep(d)
 	}
 }
 
 // Remove specific Job j by function
+//
+// Removing a job stops that job's timer. However, if a job has already
+// been started by by the job's timer before being removed, there is no way to stop
+// it through gocron as https://pkg.go.dev/time#Timer.Stop explains.
+// The job function would need to have implemented a means of
+// stopping, e.g. using a context.WithCancel().
 func (s *Scheduler) Remove(j interface{}) {
 	s.removeByCondition(func(someJob *Job) bool {
 		return someJob.jobFunc == getFunctionName(j)
@@ -358,6 +374,8 @@ func (s *Scheduler) Remove(j interface{}) {
 // RemoveByReference removes specific Job j by reference
 func (s *Scheduler) RemoveByReference(j *Job) {
 	s.removeByCondition(func(someJob *Job) bool {
+		j.RLock()
+		defer j.RUnlock()
 		return someJob == j
 	})
 }
@@ -374,8 +392,8 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	s.setJobs(retainedJobs)
 }
 
-// RemoveJobByTag will Remove Jobs by Tag
-func (s *Scheduler) RemoveJobByTag(tag string) error {
+// RemoveByTag will remove a job by a given tag.
+func (s *Scheduler) RemoveByTag(tag string) error {
 	jobindex, err := s.findJobsIndexByTag(tag)
 	if err != nil {
 		return err
@@ -419,10 +437,19 @@ func (s *Scheduler) RemoveAfterLastRun() *Scheduler {
 	return s
 }
 
-// Scheduled checks if specific Job j was already added
-func (s *Scheduler) Scheduled(j interface{}) bool {
+// TaskPresent checks if specific job's function was added to the scheduler.
+func (s *Scheduler) TaskPresent(j interface{}) bool {
 	for _, job := range s.Jobs() {
 		if job.jobFunc == getFunctionName(j) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Scheduler) jobPresent(j *Job) bool {
+	for _, job := range s.Jobs() {
+		if job == j {
 			return true
 		}
 	}
@@ -489,8 +516,8 @@ func (s *Scheduler) At(t string) *Scheduler {
 	return s
 }
 
-// SetTag will add tag when creating a job
-func (s *Scheduler) SetTag(t []string) *Scheduler {
+// Tag will add a tag when creating a job.
+func (s *Scheduler) Tag(t ...string) *Scheduler {
 	job := s.getCurrentJob()
 	job.tags = t
 	return s

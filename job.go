@@ -115,11 +115,10 @@ func (j *Job) Err() error {
 
 // Tag allows you to add arbitrary labels to a Job that do not
 // impact the functionality of the Job
-func (j *Job) Tag(t string, others ...string) {
+func (j *Job) Tag(tags ...string) {
 	j.Lock()
 	defer j.Unlock()
-	j.tags = append(j.tags, t)
-	j.tags = append(j.tags, others...)
+	j.tags = append(j.tags, tags...)
 }
 
 // Untag removes a tag from a Job
@@ -240,6 +239,8 @@ func (j *Job) RunCount() int {
 }
 
 func (j *Job) stopTimer() {
+	j.Lock()
+	defer j.Unlock()
 	if j.timer != nil {
 		j.timer.Stop()
 	}

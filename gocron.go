@@ -1,13 +1,9 @@
 // Package gocron : A Golang Job Scheduling Package.
 //
 // An in-process scheduler for periodic jobs that uses the builder pattern
-// for configuration. Schedule lets you run Golang functions periodically
+// for configuration. gocron lets you run Golang functions periodically
 // at pre-determined intervals using a simple, human-friendly syntax.
 //
-// Copyright 2014 Jason Lyu. jasonlvhit@gmail.com .
-// All rights reserved.
-// Use of this source code is governed by a BSD-style .
-// license that can be found in the LICENSE file.
 package gocron
 
 import (
