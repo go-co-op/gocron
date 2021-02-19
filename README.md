@@ -38,9 +38,9 @@ Looking to contribute? Try to follow these guidelines:
 * For bigger changes, please open an issue for discussion before sending a PR.
 * PRs should have: tests, documentation and examples (if it makes sense)
 * You can also contribute by:
-   * Reporting issues
-   * Suggesting new features or enhancements
-   * Improving/fixing documentation
+  * Reporting issues
+  * Suggesting new features or enhancements
+  * Improving/fixing documentation
 ---
 
 [Jetbrains](https://www.jetbrains.com/?from=gocron) supports this project with GoLand licenses. We appreciate their support for free and open source software!
