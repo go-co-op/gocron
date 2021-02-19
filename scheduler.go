@@ -21,16 +21,20 @@ type Scheduler struct {
 	runningMutex sync.RWMutex
 	running      bool // represents if the scheduler is running at the moment or not
 
-	time timeWrapper // wrapper around time.Time
+	time     timeWrapper // wrapper around time.Time
+	executor *executor   // executes jobs passed via chan
 }
 
 // NewScheduler creates a new Scheduler
 func NewScheduler(loc *time.Location) *Scheduler {
+	executor := newExecutor()
+
 	return &Scheduler{
 		jobs:     make([]*Job, 0),
 		location: loc,
 		running:  false,
 		time:     &trueTime{},
+		executor: &executor,
 	}
 }
 
@@ -49,6 +53,7 @@ func (s *Scheduler) StartAsync() {
 
 //start starts the scheduler, scheduling and running jobs
 func (s *Scheduler) start() {
+	go s.executor.start()
 	s.setRunning(true)
 	s.runJobs(s.Jobs())
 }
@@ -342,7 +347,8 @@ func (s *Scheduler) run(job *Job) {
 	}
 
 	job.setLastRun(s.now())
-	job.run()
+	job.runCount++
+	s.executor.jobFunctions <- job.jobFunction
 }
 
 // RunAll run all Jobs regardless if they are scheduled to run or not
@@ -367,7 +373,7 @@ func (s *Scheduler) RunAllWithDelay(d time.Duration) {
 // stopping, e.g. using a context.WithCancel().
 func (s *Scheduler) Remove(j interface{}) {
 	s.removeByCondition(func(someJob *Job) bool {
-		return someJob.jobFunc == getFunctionName(j)
+		return someJob.name == getFunctionName(j)
 	})
 }
 
@@ -398,7 +404,7 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 	if err != nil {
 		return err
 	}
-	// Remove job if jobindex is valid
+	// Remove job if job index is valid
 	s.jobs[jobindex].stopTimer()
 	s.setJobs(removeAtIndex(s.jobs, jobindex))
 	return nil
@@ -440,7 +446,7 @@ func (s *Scheduler) RemoveAfterLastRun() *Scheduler {
 // TaskPresent checks if specific job's function was added to the scheduler.
 func (s *Scheduler) TaskPresent(j interface{}) bool {
 	for _, job := range s.Jobs() {
-		if job.jobFunc == getFunctionName(j) {
+		if job.name == getFunctionName(j) {
 			return true
 		}
 	}
@@ -470,6 +476,7 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) stop() {
 	s.setRunning(false)
+	s.executor.stop <- struct{}{}
 }
 
 // Do specifies the jobFunc that should be called every time the Job runs
@@ -490,9 +497,9 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	}
 
 	fname := getFunctionName(jobFun)
-	j.funcs[fname] = jobFun
-	j.fparams[fname] = params
-	j.jobFunc = fname
+	j.functions[fname] = jobFun
+	j.params[fname] = params
+	j.name = fname
 
 	// we should not schedule if not running since we cant foresee how long it will take for the scheduler to start
 	if s.IsRunning() {
