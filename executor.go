@@ -24,7 +24,17 @@ func (e *executor) start() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				callJobFuncWithParams(f.functions[f.name], f.params[f.name])
+
+				switch f.runConfig.mode {
+				case defaultMode:
+					callJobFuncWithParams(f.functions[f.name], f.params[f.name])
+				case singletonMode:
+					_, _, _ = f.limiter.Do("main", func() (interface{}, error) {
+						callJobFuncWithParams(f.functions[f.name], f.params[f.name])
+						return nil, nil
+					})
+				}
+
 			}()
 		case <-e.stop:
 			wg.Wait()

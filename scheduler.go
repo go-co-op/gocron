@@ -346,6 +346,8 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 
+	job.Lock()
+	defer job.Unlock()
 	job.setLastRun(s.now())
 	job.runCount++
 	s.executor.jobFunctions <- job.jobFunction
@@ -433,6 +435,14 @@ func removeAtIndex(jobs []*Job, i int) []*Job {
 func (s *Scheduler) LimitRunsTo(i int) *Scheduler {
 	job := s.getCurrentJob()
 	job.LimitRunsTo(i)
+	return s
+}
+
+// SingletonMode prevents a new job from starting if the prior job has not yet
+// completed it's run
+func (s *Scheduler) SingletonMode() *Scheduler {
+	job := s.getCurrentJob()
+	job.SingletonMode()
 	return s
 }
 

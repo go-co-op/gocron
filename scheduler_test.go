@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var _ timeWrapper = (*fakeTime)(nil)
@@ -1142,6 +1142,29 @@ func TestCalculateMonths(t *testing.T) {
 	s.Stop()
 
 	assert.Equal(t, s.time.Now(s.location).AddDate(0, 1, 0).Month(), job.nextRun.Month())
+}
+
+func TestScheduler_SingletonMode(t *testing.T) {
+	t.Run("next run of long running job doesn't overrun", func(t *testing.T) {
+		//semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		var trigger int32
+
+		_, err := s.Every(1).Second().SingletonMode().Do(func() {
+			if atomic.LoadInt32(&trigger) == 1 {
+				t.Fatal("Restart should not occur")
+			}
+			atomic.AddInt32(&trigger, 1)
+			fmt.Println("I am a long task")
+			time.Sleep(3 * time.Second)
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+		s.Stop()
+	})
 }
 
 func TestScheduler_LimitRunsTo(t *testing.T) {
