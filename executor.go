@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -39,6 +40,8 @@ func newExecutor() executor {
 
 func (e *executor) start() {
 	wg := sync.WaitGroup{}
+	ctx, cancel := context.WithCancel(context.Background())
+
 	for {
 		select {
 		case f := <-e.jobFunctions:
@@ -54,6 +57,12 @@ func (e *executor) start() {
 							return
 						case WaitMode:
 							for {
+								select {
+								case <-ctx.Done():
+									return
+								default:
+								}
+
 								if e.maxRunningJobs.TryAcquire(1) {
 									break
 								}
@@ -75,6 +84,7 @@ func (e *executor) start() {
 				}
 			}()
 		case <-e.stop:
+			cancel()
 			wg.Wait()
 			return
 		}

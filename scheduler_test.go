@@ -1240,85 +1240,84 @@ func TestScheduler_LimitRunsTo(t *testing.T) {
 }
 
 func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
-	t.Run("reschedule mode", func(t *testing.T) {
-		semaphore := make(chan bool)
+	semaphore := make(chan bool)
 
-		s := NewScheduler(time.UTC)
-		s.SetMaxConcurrentJobs(2, RescheduleMode)
-
-		f := func() {
-			semaphore <- true
-			time.Sleep(2 * time.Second)
-		}
-
-		_, err := s.Every(1).Second().Do(f)
-		require.NoError(t, err)
-
-		_, err = s.Every(2).Second().Do(f)
-		require.NoError(t, err)
-
-		_, err = s.Every(3).Second().Do(f)
-		require.NoError(t, err)
-
-		s.StartAsync()
-
-		var counter int
-
-		now := time.Now()
-		for time.Now().Before(now.Add(4 * time.Second)) {
-			if <-semaphore {
-				counter++
-			}
-		}
-
-		// Expecting a total of 5 job runs:
+	testCases := []struct {
+		description       string
+		maxConcurrentJobs int
+		mode              limitMode
+		expectedRuns      int
+		f                 func()
+	}{
+		// Expecting a total of 4 job runs:
 		// 0s - jobs 1 & 3 run, job 2 hits the limit and is skipped
 		// 1s - job 1 hits the limit and is skipped
 		// 2s - job 1 & 2 run
 		// 3s - job 1 hits the limit and is skipped
-		// 4s - job 1 runs
-		assert.Equal(t, 5, counter)
-	})
+		{"reschedule mode", 2, RescheduleMode, 4,
+			func() {
+				semaphore <- true
+				time.Sleep(2 * time.Second)
+			},
+		},
 
-	t.Run("wait mode", func(t *testing.T) {
-		semaphore := make(chan bool)
-
-		s := NewScheduler(time.UTC)
-		s.SetMaxConcurrentJobs(2, WaitMode)
-
-		f := func() {
-			semaphore <- true
-			time.Sleep(1 * time.Second)
-		}
-
-		_, err := s.Every(1).Second().Do(f)
-		require.NoError(t, err)
-
-		_, err = s.Every(2).Second().Do(f)
-		require.NoError(t, err)
-
-		_, err = s.Every(3).Second().Do(f)
-		require.NoError(t, err)
-
-		s.StartAsync()
-
-		var counter int
-
-		now := time.Now()
-		for time.Now().Before(now.Add(4 * time.Second)) {
-			if <-semaphore {
-				counter++
-			}
-		}
-
-		// Expecting a total of 9 job runs. The exact order of jobs may vary, for example:
+		// Expecting a total of 8 job runs. The exact order of jobs may vary, for example:
 		// 0s - jobs 2 & 3 run, job 1 hits the limit and waits
 		// 1s - job 1 runs twice, the blocked run and the regularly scheduled run
 		// 2s - jobs 1 & 3 run
 		// 3s - jobs 2 & 3 run, job 1 hits the limit and waits
-		// 4s - job 1 runs
-		assert.Equal(t, 9, counter)
-	})
+		{"wait mode", 2, WaitMode, 8,
+			func() {
+				semaphore <- true
+				time.Sleep(1 * time.Second)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			s := NewScheduler(time.UTC)
+			s.SetMaxConcurrentJobs(tc.maxConcurrentJobs, tc.mode)
+
+			_, err := s.Every(1).Second().Do(tc.f)
+			require.NoError(t, err)
+
+			_, err = s.Every(2).Second().Do(tc.f)
+			require.NoError(t, err)
+
+			_, err = s.Every(3).Second().Do(tc.f)
+			require.NoError(t, err)
+
+			s.StartAsync()
+
+			var counter int
+
+			now := time.Now()
+			for time.Now().Before(now.Add(4 * time.Second)) {
+				select {
+				case <-semaphore:
+					counter++
+				default:
+				}
+			}
+
+			s.Stop()
+			//make sure no more jobs are run as the executor
+			//should be properly stopped
+
+			now = time.Now()
+			for time.Now().Before(now.Add(1 * time.Second)) {
+				select {
+				case <-semaphore:
+					counter++
+				default:
+				}
+			}
+
+			assert.Equal(t, tc.expectedRuns, counter)
+		})
+	}
 }
 
 func TestScheduler_RemoveAfterLastRun(t *testing.T) {
