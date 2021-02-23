@@ -1272,10 +1272,11 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		}
 
 		// Expecting a total of 5 job runs:
-		// 0s - jobs 1 & 2 run, job 3 hits the limit and is skipped
-		// 1s - job 1 hits the limit as skipped
-		// 2s - jobs 1 & 2 hit the limit and are skipped
-		// 3s - jobs 1 & 3 run
+		// 0s - jobs 1 & 3 run, job 2 hits the limit and is skipped
+		// 1s - job 1 hits the limit and is skipped
+		// 2s - job 1 & 2 run
+		// 3s - job 1 hits the limit and is skipped
+		// 4s - job 1 runs
 		assert.Equal(t, 5, counter)
 	})
 
@@ -1315,6 +1316,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		// 1s - job 1 runs twice, the blocked run and the regularly scheduled run
 		// 2s - jobs 1 & 3 run
 		// 3s - jobs 2 & 3 run, job 1 hits the limit and waits
+		// 4s - job 1 runs
 		assert.Equal(t, 9, counter)
 	})
 }
