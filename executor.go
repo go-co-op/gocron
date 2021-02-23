@@ -54,9 +54,7 @@ func (e *executor) start() {
 							return
 						case WaitMode:
 							for {
-								if !e.maxRunningJobs.TryAcquire(1) {
-									continue
-								} else {
+								if e.maxRunningJobs.TryAcquire(1) {
 									break
 								}
 							}
