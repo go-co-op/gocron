@@ -1239,6 +1239,87 @@ func TestScheduler_LimitRunsTo(t *testing.T) {
 	})
 }
 
+func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
+	t.Run("reschedule mode", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.SetMaxConcurrentJobs(2, RescheduleMode)
+
+		f := func() {
+			semaphore <- true
+			time.Sleep(time.Second)
+		}
+
+		_, err := s.Every(1).Second().Do(f)
+		require.NoError(t, err)
+
+		_, err = s.Every(2).Second().Do(f)
+		require.NoError(t, err)
+
+		_, err = s.Every(3).Second().Do(f)
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(4 * time.Second)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+
+		// Expecting a total of 7 job runs:
+		// 0s - jobs 1 & 2 run, job 3 hits the limit and is skipped
+		// 1s - job 1 runs
+		// 2s - jobs 1 & 2 run
+		// 3s - jobs 1 & 3 run
+		assert.Equal(t, 7, counter)
+	})
+
+	t.Run("wait mode", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.SetMaxConcurrentJobs(2, WaitMode)
+
+		f := func() {
+			semaphore <- true
+			time.Sleep(time.Second)
+		}
+
+		_, err := s.Every(1).Second().Do(f)
+		require.NoError(t, err)
+
+		_, err = s.Every(2).Second().Do(f)
+		require.NoError(t, err)
+
+		_, err = s.Every(3).Second().Do(f)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(4 * time.Second)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+
+		// Expecting a total of 9 job runs. The exact order of jobs may vary, for example:
+		// 0s - jobs 2 & 3 run, job 1 hits the limit and waits
+		// 1s - job 1 runs twice, the blocked run and the regularly scheduled run
+		// 2s - jobs 1 & 3 run
+		// 3s - jobs 2 & 3 run, job 1 hits the limit and waits
+		assert.Equal(t, 9, counter)
+	})
+}
+
 func TestScheduler_RemoveAfterLastRun(t *testing.T) {
 	t.Run("job removed after the last run", func(t *testing.T) {
 		semaphore := make(chan bool)

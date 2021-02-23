@@ -17,6 +17,7 @@ If you want to chat, you can find us at Slack! [<img src="https://img.shields.io
 
 ```golang
 s := gocron.NewScheduler(time.UTC)
+
 s.Every(5).Seconds().Do(func(){ ... })
 ```
 

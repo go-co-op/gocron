@@ -13,20 +13,6 @@ import (
 
 type limitMode int8
 
-const (
-	// default is that if a limit on maximum concurrent jobs is set
-	// and the limit is reached, a job will skip it's run and try
-	// again on the next occurrence in the schedule
-	RescheduleMode limitMode = iota
-
-	// in wait mode if a limit on maximum concurrent jobs is set
-	// and the limit is reached, a job will wait to try and run
-	// until a spot in the limit is freed up.
-	//
-	// Note: this mode can be dangerous
-	WaitMode
-)
-
 // Scheduler struct stores a list of Jobs and the location of time Scheduler
 // Scheduler implements the sort.Interface{} for sorting Jobs, by the time of nextRun
 type Scheduler struct {
@@ -38,12 +24,8 @@ type Scheduler struct {
 	runningMutex  sync.RWMutex
 	running       bool // represents if the scheduler is running at the moment or not
 
-	time timeWrapper // wrapper around time.Time
-
-	limitMode      limitMode
-	maxRunningJobs *semaphore.Weighted // for limiting concurrent jobs
-
-	executor *executor // executes jobs passed via chan
+	time     timeWrapper // wrapper around time.Time
+	executor *executor   // executes jobs passed via chan
 }
 
 // NewScheduler creates a new Scheduler
@@ -62,8 +44,8 @@ func NewScheduler(loc *time.Location) *Scheduler {
 // SetMaxConcurrentJobs limits how many jobs can be running at the same time.
 // This is useful when running resource intensive jobs and a precise start time is not critical.
 func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
-	s.maxRunningJobs = semaphore.NewWeighted(int64(n))
-	s.limitMode = mode
+	s.executor.maxRunningJobs = semaphore.NewWeighted(int64(n))
+	s.executor.limitMode = mode
 }
 
 // StartBlocking starts all jobs and blocks the current thread
@@ -372,21 +354,6 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 func (s *Scheduler) run(job *Job) {
 	if !s.IsRunning() {
 		return
-	}
-
-	if s.maxRunningJobs != nil {
-		if !s.maxRunningJobs.TryAcquire(1) {
-
-			switch s.limitMode {
-			case RescheduleMode:
-				return
-			case WaitMode:
-				s.run(job)
-			}
-
-		} else {
-			defer s.maxRunningJobs.Release(1)
-		}
 	}
 
 	job.Lock()
