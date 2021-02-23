@@ -53,3 +53,77 @@ func TestGetWeekday(t *testing.T) {
 		})
 	}
 }
+
+func TestJob_shouldRunAgain(t *testing.T) {
+	tests := []struct {
+		name      string
+		runConfig runConfig
+		runCount  int
+		want      bool
+	}{
+		{
+			name:      "should run again (infinite)",
+			runConfig: runConfig{finiteRuns: false},
+			want:      true,
+		},
+		{
+			name:      "should run again (finite)",
+			runConfig: runConfig{finiteRuns: true, maxRuns: 2},
+			runCount:  1,
+			want:      true,
+		},
+		{
+			name:      "shouldn't run again #1",
+			runConfig: runConfig{finiteRuns: true, maxRuns: 2},
+			runCount:  2,
+			want:      false,
+		},
+		{
+			name:      "shouldn't run again #2",
+			runConfig: runConfig{finiteRuns: true, maxRuns: 2},
+			runCount:  4,
+			want:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &Job{
+				jobFunction: jobFunction{
+					runConfig: tt.runConfig,
+				},
+				runCount: tt.runCount,
+			}
+			if got := j.shouldRun(); got != tt.want {
+				t.Errorf("Job.shouldRunAgain() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestJob_LimitRunsTo(t *testing.T) {
+	j, _ := NewScheduler(time.Local).Every(1).Second().Do(func() {})
+	j.LimitRunsTo(2)
+	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
+	j.runCount++
+	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
+	j.runCount++
+	assert.Equal(t, j.shouldRun(), false, "Not expecting it to run again")
+}
+
+func TestJob_CommonExports(t *testing.T) {
+	s := NewScheduler(time.Local)
+	j, _ := s.Every(1).Second().Do(func() {})
+	assert.Equal(t, 0, j.RunCount())
+	assert.True(t, j.LastRun().IsZero())
+	assert.True(t, j.NextRun().IsZero())
+
+	s.StartAsync()
+	assert.False(t, j.NextRun().IsZero())
+
+	j.runCount = 5
+	assert.Equal(t, 5, j.RunCount())
+
+	lastRun := time.Now()
+	j.lastRun = lastRun
+	assert.Equal(t, lastRun, j.LastRun())
+}

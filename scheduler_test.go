@@ -2,11 +2,33 @@ package gocron
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+var _ timeWrapper = (*fakeTime)(nil)
+
+type fakeTime struct {
+	onNow func(location *time.Location) time.Time
+}
+
+func (f fakeTime) Now(loc *time.Location) time.Time {
+	return f.onNow(loc)
+}
+
+func (f fakeTime) Unix(i int64, i2 int64) time.Time {
+	panic("implement me")
+}
+
+func (f fakeTime) Sleep(duration time.Duration) {
+	panic("implement me")
+}
 
 func task() {
 	fmt.Println("I am a running job.")
@@ -16,155 +38,256 @@ func taskWithParams(a int, b string) {
 	fmt.Println(a, b)
 }
 
-func TestExecutionSecond(t *testing.T) {
-	sched := NewScheduler(time.UTC)
-	success := false
-	sched.Every(1).Second().Do(func(mutableValue *bool) {
-		*mutableValue = !*mutableValue
-	}, &success)
-	sched.RunAllWithDelay(1)
-	assert.Equal(t, true, success, "Task did not get called")
+func TestImmediateExecution(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	semaphore := make(chan bool)
+	_, err := s.Every(1).Second().Do(func() {
+		semaphore <- true
+	})
+	require.NoError(t, err)
+	s.StartAsync()
+	select {
+	case <-time.After(1 * time.Second):
+		t.Fatal("job did not run immediately")
+	case <-semaphore:
+		// test passed
+	}
+
+}
+
+func TestInvalidEveryInterval(t *testing.T) {
+	testCases := []struct {
+		description   string
+		interval      interface{}
+		expectedError string
+	}{
+		{"zero", 0, ErrInvalidInterval.Error()},
+		{"negative", -1, ErrInvalidInterval.Error()},
+		{"invalid string duration", "bad", "time: invalid duration"},
+	}
+
+	s := NewScheduler(time.UTC)
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			_, err := s.Every(tc.interval).Do(func() {})
+			require.Error(t, err)
+			// wonky way to assert on the error message, but between go 1.14
+			// and go 1.15 the error value was wrapped in quotes
+			assert.True(t, strings.HasPrefix(err.Error(), tc.expectedError))
+		})
+	}
+
+}
+
+func TestScheduler_Every(t *testing.T) {
+	t.Run("time.Duration", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every(100 * time.Millisecond).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(500 * time.Millisecond)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 6, counter)
+	})
+
+	t.Run("int", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(1 * time.Second)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 2, counter)
+	})
+
+	t.Run("string duration", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every("1s").Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(1 * time.Second)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 2, counter)
+	})
 }
 
 func TestExecutionSeconds(t *testing.T) {
-	sched := NewScheduler(time.UTC)
+	s := NewScheduler(time.UTC)
 	jobDone := make(chan bool)
-	var executionTimes []int64
-	numberOfIterations := 2
 
-	sched.Every(2).Seconds().Do(func() {
-		executionTimes = append(executionTimes, time.Now().Unix())
-		if len(executionTimes) >= numberOfIterations {
+	var (
+		executions         []int64
+		interval           = 2
+		expectedExecutions = 4
+		mu                 sync.RWMutex
+	)
+
+	runTime := 6 * time.Second
+	startTime := time.Now()
+
+	// default unit is seconds
+	_, err := s.Every(interval).Do(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		executions = append(executions, time.Now().UTC().Unix())
+		if time.Now().After(startTime.Add(runTime)) {
 			jobDone <- true
 		}
 	})
+	require.NoError(t, err)
 
-	stop := sched.StartAsync()
+	s.StartAsync()
 	<-jobDone // Wait job done
-	close(stop)
+	s.Stop()
 
-	assert.Equal(t, numberOfIterations, len(executionTimes), "did not run expected number of times")
+	mu.RLock()
+	defer mu.RUnlock()
+	assert.Equal(t, expectedExecutions, len(executions), "did not run expected number of times")
 
-	for i := 1; i < numberOfIterations; i++ {
-		durationBetweenExecutions := executionTimes[i] - executionTimes[i-1]
-		assert.Equal(t, int64(2), durationBetweenExecutions, "Duration between tasks does not correspond to expectations")
+	for i := 1; i < expectedExecutions; i++ {
+		durationBetweenExecutions := executions[i] - executions[i-1]
+		assert.Equal(t, int64(interval), durationBetweenExecutions, "duration between tasks does not correspond to expectations")
 	}
 }
 
 func TestScheduled(t *testing.T) {
-	n := NewScheduler(time.UTC)
-	n.Every(1).Second().Do(task)
-	if !n.Scheduled(task) {
-		t.Fatal("Task was scheduled but function couldn't find it")
-	}
-}
-
-func TestScheduledWithTag(t *testing.T) {
-	sched := NewScheduler(time.UTC)
-	customtag := []string{"mycustomtag"}
-	sched.Every(1).Hour().SetTag(customtag).Do(task)
-	if !sched.Scheduled(task) {
-		t.Fatal("Task was scheduled but function couldn't find it")
-	}
-}
-
-func TestStartImmediately(t *testing.T) {
-	sched := NewScheduler(time.UTC)
-	now := time.Now().UTC()
-
-	job, _ := sched.Every(1).Hour().StartImmediately().Do(task)
-	sched.scheduleAllJobs()
-	next := job.ScheduledTime()
-
-	nextRounded := time.Date(next.Year(), next.Month(), next.Day(), next.Hour(), next.Minute(), next.Second(), 0, time.UTC)
-	expected := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), now.Second(), 0, time.UTC)
-
-	assert.Exactly(t, expected, nextRounded)
-}
-
-func TestAtFuture(t *testing.T) {
-	s := NewScheduler(time.UTC)
-	now := time.Now().UTC()
-
-	// Schedule to run in next minute
-	nextMinuteTime := now.Add(1 * time.Minute)
-	startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
-	shouldBeFalse := false
-	dayJob, _ := s.Every(1).Day().At(startAt).Do(func() {
-		shouldBeFalse = true
+	t.Run("simple", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		_, err := s.Every(1).Second().Do(task)
+		require.NoError(t, err)
+		assert.True(t, s.TaskPresent(task))
 	})
-	s.scheduleAllJobs()
 
-	// Check first run
-	expectedStartTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Add(time.Minute).Minute(), now.Second(), 0, time.UTC)
-	nextRun := dayJob.ScheduledTime()
-	assert.Equal(t, expectedStartTime, nextRun)
-
-	s.RunPending()
-
-	// Check next run's scheduled time
-	nextRun = dayJob.ScheduledTime()
-	assert.Equal(t, expectedStartTime, nextRun)
-	assert.Equal(t, false, shouldBeFalse, "Day job was not expected to run as it was in the future")
+	t.Run("with tag", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		_, err := s.Every(1).Hour().Tag("my_custom_tag").Do(task)
+		require.NoError(t, err)
+		assert.True(t, s.TaskPresent(task))
+	})
 }
 
-func TestDay(t *testing.T) {
-	now := time.Now().UTC()
+func TestAt(t *testing.T) {
+	t.Run("job scheduled for future hasn't run yet", func(t *testing.T) {
+		ft := fakeTime{onNow: func(l *time.Location) time.Time {
+			return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+		}}
 
-	// Create new scheduler to have clean test env
-	s := NewScheduler(time.UTC)
+		s := NewScheduler(time.UTC)
+		s.time = ft
+		now := ft.onNow(time.UTC)
+		semaphore := make(chan bool)
 
-	// schedule next run 1 day
-	dayJob, _ := s.Every(1).Day().Do(task)
-	s.scheduleNextRun(dayJob)
-	tomorrow := now.AddDate(0, 0, 1)
-	expectedTime := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, expectedTime, dayJob.nextRun)
+		nextMinuteTime := now.Add(1 * time.Minute)
+		startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
+		dayJob, err := s.Every(1).Day().At(startAt).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
 
-	// schedule next run 2 days
-	dayJob, _ = s.Every(2).Days().Do(task)
-	s.scheduleNextRun(dayJob)
-	twoDaysFromNow := now.AddDate(0, 0, 2)
-	expectedTime = time.Date(twoDaysFromNow.Year(), twoDaysFromNow.Month(), twoDaysFromNow.Day(), 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, expectedTime, dayJob.nextRun)
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
 
-	// Job running longer than next schedule 1day 2 hours
-	dayJob, _ = s.Every(1).Day().Do(task)
-	twoHoursFromNow := now.Add(2 * time.Hour)
-	dayJob.lastRun = time.Date(twoHoursFromNow.Year(), twoHoursFromNow.Month(), twoHoursFromNow.Day(), twoHoursFromNow.Hour(), 0, 0, 0, time.UTC)
-	s.scheduleNextRun(dayJob)
-	expectedTime = time.Date(now.Year(), now.Month(), now.AddDate(0, 0, 1).Day(), 0, 0, 0, 0, time.UTC)
-	assert.Equal(t, expectedTime, dayJob.nextRun)
+		select {
+		case <-time.After(1 * time.Second):
+			assert.Equal(t, now.Add(1*time.Minute), dayJob.nextRun)
+		case <-semaphore:
+			t.Fatal("job ran even though scheduled in future")
+		}
+	})
 
-	// At() 2 hours before now
-	twoHoursBefore := now.Add(time.Duration(-2 * time.Hour))
-	startAt := fmt.Sprintf("%02d:%02d", twoHoursBefore.Hour(), twoHoursBefore.Minute())
-	dayJob, _ = s.Every(1).Day().At(startAt).Do(task)
-	s.scheduleNextRun(dayJob)
-
-	expectedTime = time.Date(twoHoursBefore.Year(), twoHoursBefore.Month(),
-		twoHoursBefore.AddDate(0, 0, 1).Day(),
-		twoHoursBefore.Hour(), twoHoursBefore.Minute(), 0, 0, time.UTC)
-
-	assert.Equal(t, expectedTime, dayJob.nextRun)
+	t.Run("error due to bad time format", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		badTime := "0:0"
+		_, err := s.Every(1).Day().At(badTime).Do(func() {})
+		assert.EqualError(t, err, ErrTimeFormat.Error())
+		assert.Zero(t, s.Len())
+	})
 }
 
-func schedulerForNextWeekdayEveryNTimes(weekday time.Weekday, n uint64, s *Scheduler) *Scheduler {
+func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n int, s *Scheduler) *Scheduler {
 	switch weekday {
 	case time.Monday:
-		s = s.Every(n).Tuesday()
+		if next {
+			s = s.Every(n).Tuesday()
+		} else {
+			s = s.Every(n).Sunday()
+		}
 	case time.Tuesday:
-		s = s.Every(n).Wednesday()
+		if next {
+			s = s.Every(n).Wednesday()
+		} else {
+			s = s.Every(n).Monday()
+		}
 	case time.Wednesday:
-		s = s.Every(n).Thursday()
+		if next {
+			s = s.Every(n).Thursday()
+		} else {
+			s = s.Every(n).Tuesday()
+		}
 	case time.Thursday:
-		s = s.Every(n).Friday()
+		if next {
+			s = s.Every(n).Friday()
+		} else {
+			s = s.Every(n).Wednesday()
+		}
 	case time.Friday:
-		s = s.Every(n).Saturday()
+		if next {
+			s = s.Every(n).Saturday()
+		} else {
+			s = s.Every(n).Thursday()
+		}
 	case time.Saturday:
-		s = s.Every(n).Sunday()
+		if next {
+			s = s.Every(n).Sunday()
+		} else {
+			s = s.Every(n).Friday()
+		}
 	case time.Sunday:
-		s = s.Every(n).Monday()
+		if next {
+			s = s.Every(n).Monday()
+		} else {
+			s = s.Every(n).Saturday()
+		}
 	}
 	return s
 }
@@ -173,24 +296,9 @@ func TestWeekdayBeforeToday(t *testing.T) {
 	now := time.Now().In(time.UTC)
 	s := NewScheduler(time.UTC)
 
-	// Schedule job at day before
-	switch now.Weekday() {
-	case time.Monday:
-		s = s.Every(1).Sunday()
-	case time.Tuesday:
-		s = s.Every(1).Monday()
-	case time.Wednesday:
-		s = s.Every(1).Tuesday()
-	case time.Thursday:
-		s = s.Every(1).Wednesday()
-	case time.Friday:
-		s = s.Every(1).Thursday()
-	case time.Saturday:
-		s = s.Every(1).Friday()
-	case time.Sunday:
-		s = s.Every(1).Saturday()
-	}
-	weekJob, _ := s.Do(task)
+	s = schedulerForNextOrPreviousWeekdayEveryNTimes(now.Weekday(), false, 1, s)
+	weekJob, err := s.Do(task)
+	require.NoError(t, err)
 	s.scheduleNextRun(weekJob)
 	sixDaysFromNow := now.AddDate(0, 0, 6)
 
@@ -202,7 +310,7 @@ func TestWeekdayAt(t *testing.T) {
 	t.Run("asserts weekday scheduling starts at the current week", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		now := time.Now().UTC()
-		s = schedulerForNextWeekdayEveryNTimes(now.Weekday(), 1, s)
+		s = schedulerForNextOrPreviousWeekdayEveryNTimes(now.Weekday(), true, 1, s)
 		weekdayJob, _ := s.Do(task)
 
 		s.scheduleNextRun(weekdayJob)
@@ -215,55 +323,106 @@ func TestWeekdayAt(t *testing.T) {
 	})
 }
 
-func TestRemove(t *testing.T) {
-	scheduler := NewScheduler(time.UTC)
-	scheduler.Every(1).Minute().Do(task)
-	scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
-	scheduler.Every(1).Minute().Do(task)
+func TestScheduler_Remove(t *testing.T) {
 
-	assert.Equal(t, 3, scheduler.Len(), "Incorrect number of jobs")
+	t.Run("remove from non-running", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		_, err := s.Every(1).Minute().Do(task)
+		require.NoError(t, err)
+		_, err = s.Every(1).Minute().Do(taskWithParams, 1, "hello")
+		require.NoError(t, err)
+		_, err = s.Every(1).Minute().Do(task)
+		require.NoError(t, err)
 
-	scheduler.Remove(task)
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 2 job")
+		assert.Equal(t, 3, s.Len(), "Incorrect number of jobs")
 
-	scheduler.Remove(task)
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
+		s.Remove(task)
+		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 2 job")
+
+		s.Remove(task)
+		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing non-existent job")
+	})
+
+	t.Run("remove from running scheduler", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		j, err := s.Every(1).Seconds().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		s.Remove(j.functions[j.name])
+
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			t.Fatal("job ran after being removed")
+		}
+	})
 }
 
-func TestRemoveByRef(t *testing.T) {
-	scheduler := NewScheduler(time.UTC)
-	job1, _ := scheduler.Every(1).Minute().Do(task)
-	job2, _ := scheduler.Every(1).Minute().Do(taskWithParams, 1, "hello")
+func TestRemoveByReference(t *testing.T) {
+	t.Run("remove from non-running scheduler", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		job1, _ := s.Every(1).Minute().Do(task)
+		job2, _ := s.Every(1).Minute().Do(taskWithParams, 1, "hello")
 
-	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+		assert.Equal(t, 2, s.Len(), "Incorrect number of jobs")
 
-	scheduler.RemoveByReference(job1)
-	assert.ElementsMatch(t, []*Job{job2}, scheduler.Jobs())
+		s.RemoveByReference(job1)
+		assert.ElementsMatch(t, []*Job{job2}, s.Jobs())
+	})
+
+	t.Run("remove from running scheduler", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		j, err := s.Every(1).Seconds().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		s.RemoveByReference(j)
+
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			t.Fatal("job ran after being removed")
+		}
+	})
 }
 
 func TestRemoveByTag(t *testing.T) {
-	scheduler := NewScheduler(time.UTC)
+	s := NewScheduler(time.UTC)
 
 	// Creating 2 Jobs with Unique tags
-	customtag1 := []string{"tag one"}
-	customtag2 := []string{"tag two"}
-	scheduler.Every(1).Minute().SetTag(customtag1).Do(taskWithParams, 1, "hello") // index 0
-	scheduler.Every(1).Minute().SetTag(customtag2).Do(taskWithParams, 2, "world") // index 1
+	tag1 := "tag one"
+	tag2 := "tag two"
+	_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
+	require.NoError(t, err)
+	_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
+	require.NoError(t, err)
 
-	assert.Equal(t, 2, scheduler.Len(), "Incorrect number of jobs")
+	// check Jobs()[0] tags is equal with tag "tag one" (tag1)
+	assert.Equal(t, s.Jobs()[0].Tags()[0], tag1, "Job With Tag 'tag one' is removed from index 0")
 
-	// check Jobs()[0] tags is equal with tag "tag one" (customtag1)
-	assert.Equal(t, scheduler.Jobs()[0].Tags(), customtag1, "Job With Tag 'tag one' is removed from index 0")
+	err = s.RemoveByTag("tag one")
+	require.NoError(t, err)
+	assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
-	scheduler.RemoveJobByTag("tag one")
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing 1 job")
-
-	// check Jobs()[0] tags is equal with tag "tag two" (customtag2) after removing "tag one"
-	assert.Equal(t, scheduler.Jobs()[0].Tags(), customtag2, "Job With Tag 'tag two' is removed from index 0")
+	// check Jobs()[0] tags is equal with tag "tag two" (tag2) after removing "tag one"
+	assert.Equal(t, s.Jobs()[0].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
 
 	// Removing Non Existent Job with "tag one" because already removed above (will not removing any jobs because tag not match)
-	scheduler.RemoveJobByTag("tag one")
-	assert.Equal(t, 1, scheduler.Len(), "Incorrect number of jobs after removing non-existent job")
+	err = s.RemoveByTag("tag one")
+	assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
 }
 
 func TestJobs(t *testing.T) {
@@ -289,21 +448,21 @@ func TestLen(t *testing.T) {
 
 func TestSwap(t *testing.T) {
 	s := NewScheduler(time.UTC)
-	s.Every(1).Minute().Do(task)
-	s.Every(2).Minute().Do(task)
+	_, err := s.Every(1).Minute().Do(task)
+	require.NoError(t, err)
+	_, err = s.Every(2).Minute().Do(task)
+	require.NoError(t, err)
 
 	jb := s.Jobs()
-	var jobsBefore []Job
-	for _, p := range jb {
-		jobsBefore = append(jobsBefore, *p)
-	}
+	var jobsBefore []*Job
+	jobsBefore = append(jobsBefore, jb...)
 
 	s.Swap(1, 0)
 
 	jobsAfter := s.Jobs()
 
-	assert.Equal(t, &jobsBefore[0], jobsAfter[1])
-	assert.Equal(t, &jobsBefore[1], jobsAfter[0])
+	assert.Equal(t, jobsBefore[0], jobsAfter[1])
+	assert.Equal(t, jobsBefore[1], jobsAfter[0])
 }
 
 func TestLess(t *testing.T) {
@@ -317,11 +476,11 @@ func TestLess(t *testing.T) {
 func TestSetLocation(t *testing.T) {
 	s := NewScheduler(time.FixedZone("UTC-8", -8*60*60))
 
-	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.loc)
+	assert.Equal(t, time.FixedZone("UTC-8", -8*60*60), s.Location())
 
 	s.ChangeLocation(time.UTC)
 
-	assert.Equal(t, time.UTC, s.loc)
+	assert.Equal(t, time.UTC, s.Location())
 }
 
 func TestClear(t *testing.T) {
@@ -373,261 +532,735 @@ func TestSetUnit(t *testing.T) {
 
 func TestScheduler_Stop(t *testing.T) {
 	t.Run("stops a running scheduler", func(t *testing.T) {
-		sched := NewScheduler(time.UTC)
-		sched.StartAsync()
-		sched.Stop()
-		assert.False(t, sched.running)
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+		assert.True(t, s.IsRunning())
+		s.Stop()
+		assert.False(t, s.IsRunning())
+	})
+	t.Run("stops a running scheduler calling .Stop()", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+		assert.True(t, s.IsRunning())
+		s.Stop()
+		time.Sleep(1 * time.Millisecond) // wait for stop goroutine to catch up
+		assert.False(t, s.IsRunning())
 	})
 	t.Run("noop on stopped scheduler", func(t *testing.T) {
-		sched := NewScheduler(time.UTC)
-		sched.Stop()
-		assert.False(t, sched.running)
+		s := NewScheduler(time.UTC)
+		s.Stop()
+		assert.False(t, s.IsRunning())
 	})
 }
 
 func TestScheduler_StartAt(t *testing.T) {
-	scheduler := NewScheduler(time.Local)
-	now := time.Now()
+	t.Run("scheduling", func(t *testing.T) {
+		s := NewScheduler(time.Local)
+		now := time.Now()
 
-	// With StartAt
-	job, _ := scheduler.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
-	scheduler.scheduleAllJobs()
-	_, nextRun := scheduler.NextRun()
-	assert.Equal(t, now.Add(time.Second*5), nextRun)
-	scheduler.Remove(job)
+		// With StartAt
+		job, _ := s.Every(3).Seconds().StartAt(now.Add(time.Second * 5)).Do(func() {})
+		assert.False(t, job.getStartsImmediately())
+		s.start()
+		assert.Equal(t, now.Add(time.Second*5).Truncate(time.Second), job.NextRun().Truncate(time.Second))
+		s.stop()
 
-	// Without StartAt
-	job, _ = scheduler.Every(3).Seconds().Do(func() {})
-	scheduler.scheduleNextRun(job)
-	_, nextRun = scheduler.NextRun()
-	assert.Equal(t, now.Add(time.Second*3).Second(), nextRun.Second())
+		// Without StartAt
+		job, _ = s.Every(3).Seconds().Do(func() {})
+		assert.True(t, job.getStartsImmediately())
+	})
+
+	t.Run("run", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		s.Every(1).Day().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+			semaphore <- true
+		})
+
+		s.StartAsync()
+
+		select {
+		case <-time.After(2 * time.Second):
+			t.Fatal("job did not run at 1 second")
+		case <-semaphore:
+			// test passed
+		}
+	})
+
+	t.Run("start in past", func(t *testing.T) {
+		s := NewScheduler(time.Local)
+		now := time.Now()
+
+		// Start 5 seconds ago and make sure next run is in the future
+		job, _ := s.Every(24).Hours().StartAt(now.Add(-24 * time.Hour).Add(10 * time.Minute)).Do(func() {})
+		assert.False(t, job.getStartsImmediately())
+		s.start()
+		assert.Equal(t, now.Add(10*time.Minute).Truncate(time.Second), job.NextRun().Truncate(time.Second))
+		s.stop()
+	})
 }
 
-func TestScheduler_FirstSchedule(t *testing.T) {
+func TestScheduler_CalculateNextRun(t *testing.T) {
 	day := time.Hour * 24
-	janFirst2020 := time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC)
-	monday := time.Date(2020, time.January, 6, 0, 0, 0, 0, time.UTC)
-	tuesday := monday.AddDate(0, 0, 1)
-	wednesday := monday.AddDate(0, 0, 2)
+	januaryFirst2020At := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
+	}
+	mondayAt := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 6, hour, minute, second, 0, time.UTC)
+	}
 
-	fakeTime := fakeTime{}
-	sched := NewScheduler(time.UTC)
-	sched.time = &fakeTime
 	var tests = []struct {
-		name             string
-		job              *Job
-		startRunningTime time.Time
-		wantNextSchedule time.Time
+		name                 string
+		job                  Job
+		wantTimeUntilNextRun time.Duration
 	}{
 		// SECONDS
 		{
-			name:             "every second test",
-			job:              getJob(sched.Every(1).Second().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(time.Second),
+			name: "every second test",
+			job: Job{
+				interval: 1,
+				unit:     seconds,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getSeconds(1),
 		},
 		{
-			name:             "every 62 seconds test",
-			job:              getJob(sched.Every(62).Seconds().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(62 * time.Second),
+			name: "every 62 seconds test",
+			job: Job{
+				interval: 62,
+				unit:     seconds,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getSeconds(62),
 		},
 		// MINUTES
 		{
-			name:             "every minute test",
-			job:              getJob(sched.Every(1).Minute().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(1 * time.Minute),
+			name: "every minute test",
+			job: Job{
+				interval: 1,
+				unit:     minutes,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getMinutes(1),
 		},
 		{
-			name:             "every 62 minutes test",
-			job:              getJob(sched.Every(62).Minutes().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(62 * time.Minute),
+			name: "every 62 minutes test",
+			job: Job{
+				interval: 62,
+				unit:     minutes,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getMinutes(62),
 		},
 		// HOURS
 		{
-			name:             "every hour test",
-			job:              getJob(sched.Every(1).Hour().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(1 * time.Hour),
+			name: "every hour test",
+			job: Job{
+				interval: 1,
+				unit:     hours,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getHours(1),
 		},
 		{
-			name:             "every 25 hours test",
-			job:              getJob(sched.Every(25).Hours().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(25 * time.Hour),
+			name: "every 25 hours test",
+			job: Job{
+				interval: 25,
+				unit:     hours,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getHours(25),
 		},
 		// DAYS
 		{
-			name:             "every day at midnight",
-			job:              getJob(sched.Every(1).Day().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: janFirst2020.Add(1 * day),
+			name: "every day at midnight",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time",
-			job:              getJob(sched.Every(1).Day().At("09:30").Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 1, 9, 30, 0, 0, time.UTC),
+			name: "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: _getHours(9) + _getMinutes(30),
 		},
 		{
-			name:             "every day at 09:30AM with scheduler starting after 09:30AM should run tomorrow at time",
-			job:              getJob(sched.Every(1).Day().At("09:30").Do),
-			startRunningTime: janFirst2020.Add(10 * time.Hour),
-			wantNextSchedule: time.Date(2020, time.January, 2, 9, 30, 0, 0, time.UTC),
+			name: "every day at 09:30AM which just ran should run tomorrow at 09:30AM",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(9, 30, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "every 31 days at midnight should run 31 days later",
-			job:              getJob(sched.Every(31).Days().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC),
-		},
-		// WEEKS
-		{
-			name:             "every week should run in 7 days",
-			job:              getJob(sched.Every(1).Week().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 8, 0, 0, 0, 0, time.UTC),
+			name: "every 31 days at midnight should run 31 days later",
+			job: Job{
+				interval: 31,
+				unit:     days,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31 * day,
 		},
 		{
-			name:             "every week at 09:30AM should run in 7 days at 09:30AM",
-			job:              getJob(sched.Every(1).Week().At("09:30").Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 8, 9, 30, 0, 0, time.UTC),
+			name: "daily job just ran at 8:30AM and should be scheduled for next day's 8:30AM",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(8, 30, 0),
+			},
+			wantTimeUntilNextRun: 24 * time.Hour,
 		},
 		{
-			name:             "every two weeks at 09:30AM should run in 14 days at 09:30AM",
-			job:              getJob(sched.Every(2).Weeks().At("09:30").Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 15, 9, 30, 0, 0, time.UTC),
+			name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM",
+			job: Job{
+				interval: 1,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(5, 30, 0),
+			},
+			wantTimeUntilNextRun: 3 * time.Hour,
 		},
 		{
-			name:             "every 31 weeks at midnight should run in 217 days (2020 was a leap year)",
-			job:              getJob(sched.Every(31).Weeks().Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.August, 5, 0, 0, 0, 0, time.UTC),
+			name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM",
+			job: Job{
+				interval: 2,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(5, 30, 0),
+			},
+			wantTimeUntilNextRun: (2 * day) + 3*time.Hour,
+		},
+		{
+			name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM",
+			job: Job{
+				interval: 2,
+				unit:     days,
+				atTime:   8*time.Hour + 30*time.Minute,
+				lastRun:  januaryFirst2020At(8, 30, 0),
+			},
+			wantTimeUntilNextRun: 2 * day,
+		},
+		//// WEEKS
+		{
+			name: "every week should run in 7 days",
+			job: Job{
+				interval: 1,
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 7 * day,
+		},
+		{
+			name: "every week with .At time rule should run respect .At time rule",
+			job: Job{
+				interval: 1,
+				atTime:   _getHours(9) + _getMinutes(30),
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(9, 30, 0),
+			},
+			wantTimeUntilNextRun: 7 * day,
+		},
+		{
+			name: "every two weeks at 09:30AM should run in 14 days at 09:30AM",
+			job: Job{
+				interval: 2,
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 14 * day,
+		},
+		{
+			name: "every 31 weeks ran at jan 1st at midnight should run at August 5, 2020",
+			job: Job{
+				interval: 31,
+				unit:     weeks,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31 * 7 * day,
 		},
 		// MONTHS
 		{
-			name:             "every month at first day starting at first day should run at same day",
-			job:              getJob(sched.Every(1).Month(1).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month in a 31 days month should be scheduled for 31 days ahead",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31 * day,
 		},
 		{
-			name:             "every month at first day at time, but started late, should run next month",
-			job:              getJob(sched.Every(1).Month(1).At("09:30").Do),
-			startRunningTime: janFirst2020.Add(10 * time.Hour),
-			wantNextSchedule: time.Date(2020, time.February, 1, 9, 30, 0, 0, time.UTC),
+			name: "every month in a 30 days month should be scheduled for 30 days ahead",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  time.Date(2020, time.April, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantTimeUntilNextRun: 30 * day,
 		},
 		{
-			name:             "every month at day 2, and started in day 1, day should run day 2 same month",
-			job:              getJob(sched.Every(1).Month(2).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
+			name: "every month at february on leap year should count 29 days",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantTimeUntilNextRun: 29 * day,
 		},
 		{
-			name:             "every month at day 1, but started on the day 8, should run next month at day 1",
-			job:              getJob(sched.Every(1).Month(1).Do),
-			startRunningTime: time.Date(2020, time.January, 8, 0, 0, 0, 0, time.UTC),
-			wantNextSchedule: time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month at february on non leap year should count 28 days",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				lastRun:  time.Date(2019, time.February, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantTimeUntilNextRun: 28 * day,
 		},
 		{
-			name:             "every 2 months at day 1, starting at day 1, should run in 2 months",
-			job:              getJob(sched.Every(2).Months(1).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month at first day at time should run next month + at time",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(9, 30, 0),
+			},
+			wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30),
 		},
 		{
-			name:             "every 2 months at day 2, starting at day 1, should run in 2 months",
-			job:              getJob(sched.Every(2).Months(2).Do),
-			startRunningTime: janFirst2020,
-			wantNextSchedule: time.Date(2020, time.March, 2, 0, 0, 0, 0, time.UTC),
+			name: "every month at day should consider at days",
+			job: Job{
+				interval:      1,
+				unit:          months,
+				dayOfTheMonth: 2,
+				lastRun:       januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "every 2 months at day 1, starting at day 2, should run 2 months later at day 1",
-			job:              getJob(sched.Every(2).Months(1).Do),
-			startRunningTime: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-			wantNextSchedule: time.Date(2020, time.March, 1, 0, 0, 0, 0, time.UTC),
+			name: "every month at day should consider at hours",
+			job: Job{
+				interval: 1,
+				unit:     months,
+				atTime:   _getHours(9) + _getMinutes(30),
+				lastRun:  januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30),
 		},
 		{
-			name:             "every 13 months at day 1, starting at day 2 run in 13 months",
-			job:              getJob(sched.Every(13).Months(1).Do),
-			startRunningTime: time.Date(2020, time.January, 2, 0, 0, 0, 0, time.UTC),
-			wantNextSchedule: time.Date(2021, time.February, 1, 0, 0, 0, 0, time.UTC),
-		},
-		// WEEKDAYS
-		{
-			name:             "every tuesday starting on a monday should run this tuesday",
-			job:              getJob(sched.Every(1).Tuesday().Do),
-			startRunningTime: monday,
-			wantNextSchedule: tuesday,
+			name: "every month on the first day, but started on january 8th, should run February 1st",
+			job: Job{
+				interval:      1,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0).AddDate(0, 0, 7),
+			},
+			wantTimeUntilNextRun: 24 * day,
 		},
 		{
-			name:             "every tuesday starting on tuesday a should run on same tuesday",
-			job:              getJob(sched.Every(1).Tuesday().Do),
-			startRunningTime: tuesday,
-			wantNextSchedule: tuesday,
+			name: "every 2 months at day 1, starting at day 1, should run in 2 months",
+			job: Job{
+				interval:      2,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31*day + 29*day, // 2020 january and february
 		},
 		{
-			name:             "every 2 tuesdays starting on a tuesday should run next tuesday",
-			job:              getJob(sched.Every(2).Tuesday().Do),
-			startRunningTime: tuesday,
-			wantNextSchedule: tuesday.AddDate(0, 0, 7),
+			name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day",
+			job: Job{
+				interval:      2,
+				unit:          months,
+				dayOfTheMonth: 2,
+				lastRun:       januaryFirst2020At(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 31*day + 29*day + 1*day, // 2020 january and february
 		},
 		{
-			name:             "every tuesday starting on a wednesday should run next tuesday",
-			job:              getJob(sched.Every(1).Tuesday().Do),
-			startRunningTime: wednesday,
-			wantNextSchedule: tuesday.AddDate(0, 0, 7),
+			name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day",
+			job: Job{
+				interval:      2,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: 30*day + 29*day, // 2020 january and february
 		},
 		{
-			name:             "starting on a monday, every monday at time to happen should run at same day at time",
-			job:              getJob(sched.Every(1).Monday().At("09:00").Do),
-			startRunningTime: monday,
-			wantNextSchedule: monday.Add(9 * time.Hour),
+			name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day",
+			job: Job{
+				interval:      13,
+				unit:          months,
+				dayOfTheMonth: 1,
+				lastRun:       januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0)),
+		},
+		//// WEEKDAYS
+		{
+			name: "every weekday starting on one day before it should run this weekday",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 1 * day,
 		},
 		{
-			name:             "starting on a monday, every monday at time that already passed should run at next week at time",
-			job:              getJob(sched.Every(1).Monday().At("09:00").Do),
-			startRunningTime: monday.Add(10 * time.Hour),
-			wantNextSchedule: monday.AddDate(0, 0, 7).Add(9 * time.Hour),
+			name: "every weekday starting on same weekday should run on same immediately",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: 0,
+		},
+		{
+			name: "every 2 weekdays counting this week's weekday should run next weekday",
+			job: Job{
+				interval:         2,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0),
+			},
+			wantTimeUntilNextRun: 8 * day,
+		},
+		{
+			name: "every weekday starting on one day after should count days remaning",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0).AddDate(0, 0, 2),
+			},
+			wantTimeUntilNextRun: 6 * day,
+		},
+		{
+			name: "every weekday starting before jobs .At() time should run at same day at time",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				atTime:           _getHours(9) + _getMinutes(30),
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(0, 0, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: _getHours(9) + _getMinutes(30),
+		},
+		{
+			name: "every weekday starting at same day at time that already passed should run at next week at time",
+			job: Job{
+				interval:         1,
+				unit:             weeks,
+				atTime:           _getHours(9) + _getMinutes(30),
+				scheduledWeekday: _tuesdayWeekday(),
+				lastRun:          mondayAt(10, 30, 0).AddDate(0, 0, 1),
+			},
+			wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0),
 		},
 	}
 
-	for i, tt := range tests {
-		fakeTime.onNow = func(location *time.Location) time.Time { // scheduler started
-			return tests[i].startRunningTime
+	for i := range tests {
+		t.Run(tests[i].name, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			got := s.durationToNextRun(tests[i].job.LastRun(), &tests[i].job)
+			assert.Equalf(t, tests[i].wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tests[i].wantTimeUntilNextRun.String(), got.String()))
+		})
+	}
+}
+
+// helper test method
+func _tuesdayWeekday() *time.Weekday {
+	tuesday := time.Tuesday
+	return &tuesday
+}
+
+// helper test method
+func _getSeconds(i int) time.Duration {
+	return time.Duration(i) * time.Second
+}
+
+// helper test method
+func _getHours(i int) time.Duration {
+	return time.Duration(i) * time.Hour
+}
+
+// helper test method
+func _getMinutes(i int) time.Duration {
+	return time.Duration(i) * time.Minute
+}
+
+func TestScheduler_Do(t *testing.T) {
+	var testCases = []struct {
+		description string
+		evalFunc    func(*Scheduler)
+	}{
+		{
+			"adding a new job before scheduler starts does not schedule job",
+			func(s *Scheduler) {
+				s.setRunning(false)
+				job, err := s.Every(1).Second().Do(func() {})
+				assert.Equal(t, nil, err)
+				assert.True(t, job.NextRun().IsZero())
+			},
+		},
+		{
+			"adding a new job when scheduler is running schedules job",
+			func(s *Scheduler) {
+				s.setRunning(true)
+				job, err := s.Every(1).Second().Do(func() {})
+				assert.Equal(t, nil, err)
+				assert.False(t, job.NextRun().IsZero())
+			},
+		},
+		{
+			description: "error due to the arg passed to Do() not being a function",
+			evalFunc: func(s *Scheduler) {
+				_, err := s.Every(1).Second().Do(1)
+				assert.EqualError(t, err, ErrNotAFunction.Error())
+				assert.Zero(t, s.Len(), "The job should be deleted if the arg passed to Do() is not a function")
+			},
+		},
+		{
+			description: "positive case",
+			evalFunc: func(s *Scheduler) {
+				_, err := s.Every(1).Day().Do(func() {})
+				require.NoError(t, err)
+				assert.Equal(t, 1, s.Len())
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.Local)
+			tc.evalFunc(s)
+		})
+	}
+}
+
+func TestRunJobsWithLimit(t *testing.T) {
+	t.Run("simple", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			// test passed
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
 		}
+	})
 
-		job := tt.job
-		sched.scheduleNextRun(job)
-		assert.Equal(t, tt.wantNextSchedule, job.nextRun, tt.name)
-	}
+	t.Run("change limit", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
+
+		j.LimitRunsTo(2)
+		time.Sleep(1 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 2, counter)
+			// test passed
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 2)
+		}
+	})
+
+	t.Run("remove after last run", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+		j.RemoveAfterLastRun()
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 0, s.Len())
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
 }
 
-func getJob(fn func(interface{}, ...interface{}) (*Job, error)) *Job {
-	j, _ := fn(func() {})
-	return j
+func TestCalculateMonths(t *testing.T) {
+	ft := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+	}}
+	s := NewScheduler(time.UTC)
+	s.time = ft
+	s.StartAsync()
+	job, err := s.Every(1).Month(1).At("10:00").Do(func() {
+		fmt.Println("hello task")
+	})
+	require.NoError(t, err)
+	s.Stop()
+
+	assert.Equal(t, s.time.Now(s.location).AddDate(0, 1, 0).Month(), job.nextRun.Month())
 }
 
-type fakeTime struct {
-	onNow func(location *time.Location) time.Time
+func TestScheduler_SingletonMode(t *testing.T) {
+	t.Run("next run of long running job doesn't overrun", func(t *testing.T) {
+		//semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		var trigger int32
+
+		_, err := s.Every(1).Second().SingletonMode().Do(func() {
+			if atomic.LoadInt32(&trigger) == 1 {
+				t.Fatal("Restart should not occur")
+			}
+			atomic.AddInt32(&trigger, 1)
+			fmt.Println("I am a long task")
+			time.Sleep(3 * time.Second)
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+		s.Stop()
+	})
 }
 
-func (f fakeTime) Now(loc *time.Location) time.Time {
-	return f.onNow(loc)
+func TestScheduler_LimitRunsTo(t *testing.T) {
+	t.Run("job added before starting scheduler", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+
+		_, err := s.Every(1).Second().LimitRunsTo(1).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 1, counter)
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
+
+	t.Run("job added after starting scheduler", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+
+		_, err := s.Every(1).Second().LimitRunsTo(1).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 1, counter)
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
+
+	t.Run("job added after starting scheduler - using job's LimitRunsTo - results in two runs", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.StartAsync()
+
+		j, err := s.Every(1).Second().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 2, counter)
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 2)
+		}
+	})
 }
 
-func (f fakeTime) Unix(i int64, i2 int64) time.Time {
-	panic("implement me")
-}
+func TestScheduler_RemoveAfterLastRun(t *testing.T) {
+	t.Run("job removed after the last run", func(t *testing.T) {
+		semaphore := make(chan bool)
 
-func (f fakeTime) Sleep(duration time.Duration) {
-	panic("implement me")
-}
+		s := NewScheduler(time.UTC)
 
-func (f fakeTime) NewTicker(duration time.Duration) *time.Ticker {
-	panic("implement me")
+		_, err := s.Every(1).Second().LimitRunsTo(1).RemoveAfterLastRun().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		time.Sleep(2 * time.Second)
+
+		var counter int
+		select {
+		case <-time.After(2 * time.Second):
+			assert.Equal(t, 1, counter)
+			assert.Zero(t, s.Len())
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+	})
 }

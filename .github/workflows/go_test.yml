@@ -6,29 +6,26 @@ on:
     branches:
       - master
 
-name: Go Test
+name: golangci-lint
 jobs:
-  test:
+  golangci:
     strategy:
       matrix:
         go-version:
-          - 1.13
           - 1.14
+          - 1.15
+    name: lint and test
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v1
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.36.0
       - name: Install Go
         uses: actions/setup-go@v1
         with:
           go-version: ${{ matrix.go-version }}
-      - name: Checkout code
-        uses: actions/checkout@v1
-      - name: fmt
-        run: gofmt -w .
-      - name: lint
-        run: |
-          go get golang.org/x/lint/golint
-          $(go list -f {{.Target}} golang.org/x/lint/golint) -set_exit_status ./...
-      - name: vet
-        run: go vet ./...
       - name: test
-        run: go test ./...
+        run: make test

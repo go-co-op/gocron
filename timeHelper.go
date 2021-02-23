@@ -2,11 +2,12 @@ package gocron
 
 import "time"
 
+var _ timeWrapper = (*trueTime)(nil)
+
 type timeWrapper interface {
 	Now(*time.Location) time.Time
 	Unix(int64, int64) time.Time
 	Sleep(time.Duration)
-	NewTicker(time.Duration) *time.Ticker
 }
 
 type trueTime struct{}
@@ -21,8 +22,4 @@ func (t *trueTime) Unix(sec int64, nsec int64) time.Time {
 
 func (t *trueTime) Sleep(d time.Duration) {
 	time.Sleep(d)
-}
-
-func (t *trueTime) NewTicker(d time.Duration) *time.Ticker {
-	return time.NewTicker(d)
 }
