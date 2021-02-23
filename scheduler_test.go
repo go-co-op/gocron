@@ -1248,7 +1248,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 
 		f := func() {
 			semaphore <- true
-			time.Sleep(time.Second)
+			time.Sleep(2 * time.Second)
 		}
 
 		_, err := s.Every(1).Second().Do(f)
@@ -1261,7 +1261,6 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		require.NoError(t, err)
 
 		s.StartAsync()
-		time.Sleep(2 * time.Second)
 
 		var counter int
 
@@ -1272,12 +1271,12 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			}
 		}
 
-		// Expecting a total of 7 job runs:
+		// Expecting a total of 5 job runs:
 		// 0s - jobs 1 & 2 run, job 3 hits the limit and is skipped
-		// 1s - job 1 runs
-		// 2s - jobs 1 & 2 run
+		// 1s - job 1 hits the limit as skipped
+		// 2s - jobs 1 & 2 hit the limit and are skipped
 		// 3s - jobs 1 & 3 run
-		assert.Equal(t, 7, counter)
+		assert.Equal(t, 5, counter)
 	})
 
 	t.Run("wait mode", func(t *testing.T) {
@@ -1288,7 +1287,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 
 		f := func() {
 			semaphore <- true
-			time.Sleep(time.Second)
+			time.Sleep(1 * time.Second)
 		}
 
 		_, err := s.Every(1).Second().Do(f)
@@ -1301,7 +1300,6 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		require.NoError(t, err)
 
 		s.StartAsync()
-		time.Sleep(2 * time.Second)
 
 		var counter int
 
