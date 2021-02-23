@@ -1145,26 +1145,41 @@ func TestCalculateMonths(t *testing.T) {
 }
 
 func TestScheduler_SingletonMode(t *testing.T) {
-	t.Run("next run of long running job doesn't overrun", func(t *testing.T) {
-		//semaphore := make(chan bool)
 
-		s := NewScheduler(time.UTC)
-		var trigger int32
+	testCases := []struct {
+		description string
+		removeJob   bool
+	}{
+		{"with scheduler stop", false},
+		{"with job removal", true},
+	}
 
-		_, err := s.Every(1).Second().SingletonMode().Do(func() {
-			if atomic.LoadInt32(&trigger) == 1 {
-				t.Fatal("Restart should not occur")
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			s := NewScheduler(time.UTC)
+			var trigger int32
+
+			j, err := s.Every(1).Second().SingletonMode().Do(func() {
+				if atomic.LoadInt32(&trigger) == 1 {
+					t.Fatal("Restart should not occur")
+				}
+				atomic.AddInt32(&trigger, 1)
+				time.Sleep(3 * time.Second)
+			})
+			require.NoError(t, err)
+
+			s.StartAsync()
+			time.Sleep(2 * time.Second)
+
+			if tc.removeJob {
+				s.RemoveByReference(j)
+				time.Sleep(3 * time.Second)
 			}
-			atomic.AddInt32(&trigger, 1)
-			fmt.Println("I am a long task")
-			time.Sleep(3 * time.Second)
+			s.Stop()
 		})
-		require.NoError(t, err)
+	}
 
-		s.StartAsync()
-		time.Sleep(2 * time.Second)
-		s.Stop()
-	})
 }
 
 func TestScheduler_LimitRunsTo(t *testing.T) {
@@ -1247,6 +1262,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		maxConcurrentJobs int
 		mode              limitMode
 		expectedRuns      int
+		removeJobs        bool
 		f                 func()
 	}{
 		// Expecting a total of 4 job runs:
@@ -1254,7 +1270,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		// 1s - job 1 hits the limit and is skipped
 		// 2s - job 1 & 2 run
 		// 3s - job 1 hits the limit and is skipped
-		{"reschedule mode", 2, RescheduleMode, 4,
+		{"reschedule mode", 2, RescheduleMode, 4, false,
 			func() {
 				semaphore <- true
 				time.Sleep(2 * time.Second)
@@ -1266,7 +1282,15 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		// 1s - job 1 runs twice, the blocked run and the regularly scheduled run
 		// 2s - jobs 1 & 3 run
 		// 3s - jobs 2 & 3 run, job 1 hits the limit and waits
-		{"wait mode", 2, WaitMode, 8,
+		{"wait mode", 2, WaitMode, 8, false,
+			func() {
+				semaphore <- true
+				time.Sleep(1 * time.Second)
+			},
+		},
+
+		// Same as above - this confirms the same behavior when jobs are removed rather than the scheduler being stopped
+		{"wait mode - with job removal", 2, WaitMode, 8, true,
 			func() {
 				semaphore <- true
 				time.Sleep(1 * time.Second)
@@ -1280,13 +1304,13 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.SetMaxConcurrentJobs(tc.maxConcurrentJobs, tc.mode)
 
-			_, err := s.Every(1).Second().Do(tc.f)
+			j1, err := s.Every(1).Second().Do(tc.f)
 			require.NoError(t, err)
 
-			_, err = s.Every(2).Second().Do(tc.f)
+			j2, err := s.Every(2).Second().Do(tc.f)
 			require.NoError(t, err)
 
-			_, err = s.Every(3).Second().Do(tc.f)
+			j3, err := s.Every(3).Second().Do(tc.f)
 			require.NoError(t, err)
 
 			s.StartAsync()
@@ -1302,9 +1326,17 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 				}
 			}
 
-			s.Stop()
-			//make sure no more jobs are run as the executor
-			//should be properly stopped
+			if tc.removeJobs {
+				s.RemoveByReference(j1)
+				s.RemoveByReference(j2)
+				s.RemoveByReference(j3)
+				defer s.Stop()
+			} else {
+				s.Stop()
+			}
+
+			// make sure no more jobs are run as the executor
+			// or job should be properly stopped
 
 			now = time.Now()
 			for time.Now().Before(now.Add(1 * time.Second)) {

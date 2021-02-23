@@ -40,7 +40,7 @@ func newExecutor() executor {
 
 func (e *executor) start() {
 	wg := sync.WaitGroup{}
-	ctx, cancel := context.WithCancel(context.Background())
+	stopCtx, cancel := context.WithCancel(context.Background())
 
 	for {
 		select {
@@ -58,7 +58,9 @@ func (e *executor) start() {
 						case WaitMode:
 							for {
 								select {
-								case <-ctx.Done():
+								case <-stopCtx.Done():
+									return
+								case <-f.ctx.Done():
 									return
 								default:
 								}
@@ -78,6 +80,13 @@ func (e *executor) start() {
 					callJobFuncWithParams(f.functions[f.name], f.params[f.name])
 				case singletonMode:
 					_, _, _ = f.limiter.Do("main", func() (interface{}, error) {
+						select {
+						case <-stopCtx.Done():
+							return nil, nil
+						case <-f.ctx.Done():
+							return nil, nil
+						default:
+						}
 						callJobFuncWithParams(f.functions[f.name], f.params[f.name])
 						return nil, nil
 					})

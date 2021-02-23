@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -34,6 +35,8 @@ type jobFunction struct {
 	name      string                   // the Job name to run, func[jobFunc]
 	runConfig runConfig                // configuration for how many times to run the job
 	limiter   *singleflight.Group      // limits inflight runs of job to one
+	ctx       context.Context          // for cancellation
+	cancel    context.CancelFunc       // for cancellation
 }
 
 type runConfig struct {
@@ -56,6 +59,7 @@ const (
 
 // NewJob creates a new Job with the provided interval
 func NewJob(interval int) *Job {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Job{
 		interval: interval,
 		lastRun:  time.Time{},
@@ -63,6 +67,8 @@ func NewJob(interval int) *Job {
 		jobFunction: jobFunction{
 			functions: make(map[string]interface{}),
 			params:    make(map[string][]interface{}),
+			ctx:       ctx,
+			cancel:    cancel,
 		},
 		tags:              []string{},
 		startsImmediately: true,
