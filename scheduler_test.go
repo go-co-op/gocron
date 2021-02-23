@@ -1298,6 +1298,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = s.Every(3).Second().Do(f)
+		require.NoError(t, err)
 
 		s.StartAsync()
 		time.Sleep(2 * time.Second)
