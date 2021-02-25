@@ -450,6 +450,15 @@ func ExampleScheduler_Seconds() {
 
 }
 
+func ExampleScheduler_SetMaxConcurrentJobs() {
+	s := gocron.NewScheduler(time.UTC)
+	s.SetMaxConcurrentJobs(1, gocron.RescheduleMode)
+	_, _ = s.Every(1).Seconds().Do(func() {
+		fmt.Println("This will run once every 5 seconds even though it is scheduled every second because maximum concurrent job limit is set.")
+		time.Sleep(5 * time.Second)
+	})
+}
+
 func ExampleScheduler_SingletonMode() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Second().SingletonMode().Do(task)

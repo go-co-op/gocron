@@ -7,7 +7,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 )
+
+type limitMode int8
 
 // Scheduler struct stores a list of Jobs and the location of time Scheduler
 // Scheduler implements the sort.Interface{} for sorting Jobs, by the time of nextRun
@@ -17,9 +21,8 @@ type Scheduler struct {
 
 	locationMutex sync.RWMutex
 	location      *time.Location
-
-	runningMutex sync.RWMutex
-	running      bool // represents if the scheduler is running at the moment or not
+	runningMutex  sync.RWMutex
+	running       bool // represents if the scheduler is running at the moment or not
 
 	time     timeWrapper // wrapper around time.Time
 	executor *executor   // executes jobs passed via chan
@@ -36,6 +39,13 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		time:     &trueTime{},
 		executor: &executor,
 	}
+}
+
+// SetMaxConcurrentJobs limits how many jobs can be running at the same time.
+// This is useful when running resource intensive jobs and a precise start time is not critical.
+func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
+	s.executor.maxRunningJobs = semaphore.NewWeighted(int64(n))
+	s.executor.limitMode = mode
 }
 
 // StartBlocking starts all jobs and blocks the current thread
@@ -395,6 +405,7 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 			retainedJobs = append(retainedJobs, job)
 		} else {
 			job.stopTimer()
+			job.cancel()
 		}
 	}
 	s.setJobs(retainedJobs)
@@ -408,6 +419,7 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 	}
 	// Remove job if job index is valid
 	s.jobs[jobindex].stopTimer()
+	s.jobs[jobindex].cancel()
 	s.setJobs(removeAtIndex(s.jobs, jobindex))
 	return nil
 }
