@@ -19,9 +19,33 @@ If you want to chat, you can find us at Slack! [<img src="https://img.shields.io
 s := gocron.NewScheduler(time.UTC)
 
 s.Every(5).Seconds().Do(func(){ ... })
+
+// strings parse to duration
+s.Every("5m").Do(func(){ ... })
+
+s.Every(5).Days().Do(func(){ ... })
 ```
 
 For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
+
+Interval | Supported schedule options
+-- | --
+sub-second | `StartAt()`
+seconds | `StartAt()`
+minutes | `StartAt()`
+hours | `StartAt()`
+days | `StartAt()`, `At()`
+weeks | `StartAt()`, `At()`, `Weekday()` (and all week day named functions)
+months | `StartAt()`, `At()`
+
+There are several options available to restrict how jobs run:
+
+Mode | Function | Behavior
+-- | -- | --
+Default |  | jobs are rescheduled at every interval
+Job singleton | `SingletonMode()` | a long running job will not be rescheduled until the current run is completed
+Scheduler limit | `SetMaxConcurrentJobs()` | set a collective maximum number of concurrent jobs running across the scheduler
+
 
 ## FAQ
 
