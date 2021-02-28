@@ -69,8 +69,8 @@ func (s *Scheduler) start() {
 }
 
 func (s *Scheduler) runJobs(jobs []*Job) {
-	for _, j := range jobs {
-		s.scheduleNextRun(j)
+	for _, job := range jobs {
+		s.scheduleNextRun(job)
 	}
 }
 
@@ -109,10 +109,10 @@ func (s *Scheduler) Len() int {
 
 // Swap places each job into the other job's position given
 // the provided job indexes.
-func (s *Scheduler) Swap(i, j int) {
+func (s *Scheduler) Swap(i, job int) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()
-	s.jobs[i], s.jobs[j] = s.jobs[j], s.jobs[i]
+	s.jobs[i], s.jobs[job] = s.jobs[job], s.jobs[i]
 }
 
 // Less compares the next run of jobs based on their index.
@@ -201,7 +201,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
-	if job.dayOfTheMonth > 0 { // calculate days to j.dayOfTheMonth
+	if job.dayOfTheMonth > 0 { // calculate days to job.dayOfTheMonth
 		jobDay := time.Date(lastRun.Year(), lastRun.Month(), job.dayOfTheMonth, 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 		daysDifference := int(math.Abs(lastRun.Sub(jobDay).Hours()) / 24)
 		nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime())
@@ -326,7 +326,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	case int:
 		job := NewJob(interval)
 		if interval <= 0 {
-			job.err = ErrInvalidInterval
+			job.err = wrapOrError(job.err, ErrInvalidInterval)
 		}
 		s.setJobs(append(s.Jobs(), job))
 	case time.Duration:
@@ -338,14 +338,14 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job := NewJob(0)
 		d, err := time.ParseDuration(interval)
 		if err != nil {
-			job.err = err
+			job.err = wrapOrError(job.err, err)
 		}
 		job.duration = d
 		job.unit = duration
 		s.setJobs(append(s.Jobs(), job))
 	default:
 		job := NewJob(0)
-		job.err = ErrInvalidIntervalType
+		job.err = wrapOrError(job.err, ErrInvalidIntervalType)
 		s.setJobs(append(s.Jobs(), job))
 	}
 	return s
@@ -376,25 +376,25 @@ func (s *Scheduler) RunAllWithDelay(d time.Duration) {
 	}
 }
 
-// Remove specific Job j by function
+// Remove specific Job job by function
 //
 // Removing a job stops that job's timer. However, if a job has already
 // been started by by the job's timer before being removed, there is no way to stop
 // it through gocron as https://pkg.go.dev/time#Timer.Stop explains.
 // The job function would need to have implemented a means of
 // stopping, e.g. using a context.WithCancel().
-func (s *Scheduler) Remove(j interface{}) {
+func (s *Scheduler) Remove(job interface{}) {
 	s.removeByCondition(func(someJob *Job) bool {
-		return someJob.name == getFunctionName(j)
+		return someJob.name == getFunctionName(job)
 	})
 }
 
-// RemoveByReference removes specific Job j by reference
-func (s *Scheduler) RemoveByReference(j *Job) {
+// RemoveByReference removes specific Job job by reference
+func (s *Scheduler) RemoveByReference(job *Job) {
 	s.removeByCondition(func(someJob *Job) bool {
-		j.RLock()
-		defer j.RUnlock()
-		return someJob == j
+		job.RLock()
+		defer job.RUnlock()
+		return someJob == job
 	})
 }
 
@@ -413,14 +413,14 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 
 // RemoveByTag will remove a job by a given tag.
 func (s *Scheduler) RemoveByTag(tag string) error {
-	jobindex, err := s.findJobsIndexByTag(tag)
+	index, err := s.findJobsIndexByTag(tag)
 	if err != nil {
 		return err
 	}
 	// Remove job if job index is valid
-	s.jobs[jobindex].stopTimer()
-	s.jobs[jobindex].cancel()
-	s.setJobs(removeAtIndex(s.jobs, jobindex))
+	s.jobs[index].stopTimer()
+	s.jobs[index].cancel()
+	s.setJobs(removeAtIndex(s.jobs, index))
 	return nil
 }
 
@@ -477,11 +477,11 @@ func (s *Scheduler) TaskPresent(j interface{}) bool {
 	return false
 }
 
-func (s *Scheduler) jobPresent(j *Job) bool {
+func (s *Scheduler) jobPresent(job *Job) bool {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
 	for _, job := range s.Jobs() {
-		if job == j {
+		if job == job {
 			return true
 		}
 	}
@@ -510,45 +510,54 @@ func (s *Scheduler) stop() {
 
 // Do specifies the jobFunc that should be called every time the Job runs
 func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
-	j := s.getCurrentJob()
-	if j.err != nil {
+	job := s.getCurrentJob()
+
+	if job.atTime != 0 && job.unit <= hours {
+		job.err = wrapOrError(job.err, ErrAtTimeNotSupported)
+	}
+
+	if job.scheduledWeekday != nil && job.unit != weeks {
+		job.err = wrapOrError(job.err, ErrWeekdayNotSupported)
+	}
+
+	if job.err != nil {
 		// delete the job from the scheduler as this job
 		// cannot be executed
-		s.RemoveByReference(j)
-		return nil, j.err
+		s.RemoveByReference(job)
+		return nil, job.err
 	}
 
 	typ := reflect.TypeOf(jobFun)
 	if typ.Kind() != reflect.Func {
 		// delete the job for the same reason as above
-		s.RemoveByReference(j)
+		s.RemoveByReference(job)
 		return nil, ErrNotAFunction
 	}
 
 	fname := getFunctionName(jobFun)
-	j.functions[fname] = jobFun
-	j.params[fname] = params
-	j.name = fname
+	job.functions[fname] = jobFun
+	job.params[fname] = params
+	job.name = fname
 
 	// we should not schedule if not running since we cant foresee how long it will take for the scheduler to start
 	if s.IsRunning() {
-		s.scheduleNextRun(j)
+		s.scheduleNextRun(job)
 	}
 
-	return j, nil
+	return job, nil
 }
 
 // At schedules the Job at a specific time of day in the form "HH:MM:SS" or "HH:MM"
 func (s *Scheduler) At(t string) *Scheduler {
-	j := s.getCurrentJob()
+	job := s.getCurrentJob()
 	hour, min, sec, err := parseTime(t)
 	if err != nil {
-		j.err = ErrTimeFormat
+		job.err = wrapOrError(job.err, err)
 		return s
 	}
 	// save atTime start as duration from midnight
-	j.setAtTime(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second)
-	j.startsImmediately = false
+	job.setAtTime(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second)
+	job.startsImmediately = false
 	return s
 }
 
@@ -572,7 +581,7 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 func (s *Scheduler) setUnit(unit timeUnit) {
 	job := s.getCurrentJob()
 	if job.unit == duration {
-		job.err = ErrInvalidSelection
+		job.err = wrapOrError(job.err, ErrInvalidIntervalUnitsSelection)
 	}
 	job.unit = unit
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTags(t *testing.T) {
@@ -21,8 +22,16 @@ func TestTags(t *testing.T) {
 }
 
 func TestGetScheduledTime(t *testing.T) {
-	j, _ := NewScheduler(time.UTC).Every(1).Minute().At("10:30").Do(task)
-	assert.Equal(t, "10:30", j.ScheduledAtTime())
+	t.Run("valid", func(t *testing.T) {
+		j, err := NewScheduler(time.UTC).Every(1).Day().At("10:30").Do(task)
+		require.NoError(t, err)
+		assert.Equal(t, "10:30", j.ScheduledAtTime())
+	})
+	t.Run("invalid", func(t *testing.T) {
+		j, err := NewScheduler(time.UTC).Every(1).Minute().At("10:30").Do(task)
+		assert.EqualError(t, err, ErrAtTimeNotSupported.Error())
+		assert.Nil(t, j)
+	})
 }
 
 func TestGetWeekday(t *testing.T) {

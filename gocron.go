@@ -8,6 +8,7 @@ package gocron
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -16,15 +17,27 @@ import (
 
 // Error declarations for gocron related errors
 var (
-	ErrTimeFormat            = errors.New("time format error")
-	ErrNotAFunction          = errors.New("only functions can be schedule into the job queue")
-	ErrNotScheduledWeekday   = errors.New("job not scheduled weekly on a weekday")
-	ErrJobNotFoundWithTag    = errors.New("no jobs found with given tag")
-	ErrUnsupportedTimeFormat = errors.New("the given time format is not supported")
-	ErrInvalidInterval       = errors.New(".Every() interval must be greater than 0")
-	ErrInvalidIntervalType   = errors.New(".Every() interval must be int, time.Duration, or string")
-	ErrInvalidSelection      = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
+	ErrNotAFunction                  = errors.New("only functions can be schedule into the job queue")
+	ErrNotScheduledWeekday           = errors.New("job not scheduled weekly on a weekday")
+	ErrJobNotFoundWithTag            = errors.New("no jobs found with given tag")
+	ErrUnsupportedTimeFormat         = errors.New("the given time format is not supported")
+	ErrInvalidInterval               = errors.New(".Every() interval must be greater than 0")
+	ErrInvalidIntervalType           = errors.New(".Every() interval must be int, time.Duration, or string")
+	ErrInvalidIntervalUnitsSelection = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
+
+	ErrAtTimeNotSupported  = errors.New("the At() not supported for time unit")
+	ErrWeekdayNotSupported = errors.New("weekday is not supported for time unit")
 )
+
+func wrapOrError(toWrap error, err error) error {
+	var returnErr error
+	if toWrap != nil {
+		returnErr = fmt.Errorf("%s: %w", err, toWrap)
+	} else {
+		returnErr = err
+	}
+	return returnErr
+}
 
 // regex patterns for supported time formats
 var (

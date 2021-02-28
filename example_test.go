@@ -19,7 +19,7 @@ func ExampleJob_Err() {
 	j := s.Jobs()[0]
 	fmt.Println(j.Err())
 	// Output:
-	// time format error
+	// the given time format is not supported
 }
 
 func ExampleJob_LastRun() {
