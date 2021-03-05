@@ -490,6 +490,9 @@ func (s *Scheduler) jobPresent(j *Job) bool {
 
 // Clear clear all Jobs from this scheduler
 func (s *Scheduler) Clear() {
+	for _, j := range s.Jobs() {
+		j.stopTimer()
+	}
 	s.setJobs(make([]*Job, 0))
 }
 

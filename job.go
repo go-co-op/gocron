@@ -230,6 +230,8 @@ func (j *Job) RunCount() int {
 }
 
 func (j *Job) stopTimer() {
+	j.Lock()
+	defer j.Unlock()
 	if j.timer != nil {
 		j.timer.Stop()
 	}
