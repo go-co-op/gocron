@@ -477,11 +477,11 @@ func (s *Scheduler) TaskPresent(j interface{}) bool {
 	return false
 }
 
-func (s *Scheduler) jobPresent(job *Job) bool {
+func (s *Scheduler) jobPresent(j *Job) bool {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
 	for _, job := range s.Jobs() {
-		if job == job {
+		if job == j {
 			return true
 		}
 	}
