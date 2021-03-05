@@ -783,35 +783,6 @@ func TestRunJobsWithLimit(t *testing.T) {
 		assert.Equal(t, 1, counter)
 	})
 
-	// this test isn't designed well and the functionality isn't working
-	//t.Run("change limit", func(t *testing.T) {
-	//	semaphore := make(chan bool)
-	//
-	//	s := NewScheduler(time.UTC)
-	//
-	//	j, err := s.Every(1).Second().Do(func() {
-	//		semaphore <- true
-	//	})
-	//	require.NoError(t, err)
-	//	j.LimitRunsTo(1)
-	//
-	//	s.StartAsync()
-	//	time.Sleep(1 * time.Second)
-	//
-	//	j.LimitRunsTo(2)
-	//	time.Sleep(1 * time.Second)
-	//
-	//	var counter int
-	//	select {
-	//	case <-time.After(2 * time.Second):
-	//		assert.Equal(t, 2, counter)
-	//		// test passed
-	//	case <-semaphore:
-	//		counter++
-	//		require.LessOrEqual(t, counter, 2)
-	//	}
-	//})
-
 	t.Run("remove after last run", func(t *testing.T) {
 		semaphore := make(chan bool)
 
@@ -1086,4 +1057,31 @@ func TestScheduler_RemoveAfterLastRun(t *testing.T) {
 			require.LessOrEqual(t, counter, 1)
 		}
 	})
+}
+
+func TestScheduler_TagsUnique(t *testing.T) {
+	const (
+		foo = "foo"
+		bar = "bar"
+		baz = "baz"
+	)
+
+	s := NewScheduler(time.UTC)
+	s.TagsUnique()
+
+	j, err := s.Every("1s").Tag(foo, bar).Do(func() {})
+	require.NoError(t, err)
+
+	// uniqueness not enforced on jobs tagged with job.Tag()
+	// thus tagging the job here is allowed
+	j.Tag(baz)
+	_, err = s.Every("1s").Tag(baz).Do(func() {})
+	require.NoError(t, err)
+
+	_, err = s.Every("1s").Tag(foo).Do(func() {})
+	assert.EqualError(t, err, ErrTagsUnique(foo).Error())
+
+	_, err = s.Every("1s").Tag(bar).Do(func() {})
+	assert.EqualError(t, err, ErrTagsUnique(bar).Error())
+
 }

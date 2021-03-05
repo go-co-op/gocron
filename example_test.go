@@ -525,6 +525,18 @@ func ExampleScheduler_Tag() {
 	// [tag]
 }
 
+func ExampleScheduler_TagsUnique() {
+	s := gocron.NewScheduler(time.UTC)
+	s.TagsUnique()
+
+	_, _ = s.Every(1).Week().Tag("foo").Do(task)
+	_, err := s.Every(1).Week().Tag("foo").Do(task)
+
+	fmt.Println(err)
+	// Output:
+	// a non-unique tag was set on the job: foo
+}
+
 func ExampleScheduler_TaskPresent() {
 	s := gocron.NewScheduler(time.UTC)
 
