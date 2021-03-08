@@ -13,6 +13,12 @@ See also these two great articles:
 
 If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
+## Concepts
+
+- **Scheduler**: The scheduler tracks all the jobs assigned to it and makes sure they are passed to the executor when ready to be run. The scheduler is able to manage overall aspects of job behavior like limiting how many jobs are running at one time.
+- **Job**: The job is simply aware of the task (go function) it's provided and is therefore only able to perform actions related to that task like preventing itself from overruning a previous task that is taking a long time.
+- **Executor**: The executor, as it's name suggests, is simply responsible for calling the task (go function) that the job hands to it when sent by the scheduler.
+
 ## Examples
 
 ```golang
@@ -28,9 +34,12 @@ s.Every(5).Days().Do(func(){ ... })
 
 For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
 
+## Options
+
 Interval | Supported schedule options
 -- | --
 sub-second | `StartAt()`
+milliseconds | `StartAt()`
 seconds | `StartAt()`
 minutes | `StartAt()`
 hours | `StartAt()`
