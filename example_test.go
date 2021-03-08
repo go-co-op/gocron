@@ -13,7 +13,7 @@ var task = func() {}
 // ----------------------JOB-FUNCTIONS----------------------------------
 // ---------------------------------------------------------------------
 
-func ExampleJob_Err() {
+func ExampleJob_Error() {
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Day().At("bad time")
 	j := s.Jobs()[0]
