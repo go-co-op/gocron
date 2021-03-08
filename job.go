@@ -19,7 +19,7 @@ type Job struct {
 	startsImmediately bool          // if the Job should run upon scheduler start
 	atTime            time.Duration // optional time at which this Job runs when interval is day
 	startAtTime       time.Time     // optional time at which the Job starts
-	err               error         // error related to Job
+	error             error         // error related to Job
 	lastRun           time.Time     // datetime of last run
 	nextRun           time.Time     // datetime of next run
 	scheduledWeekday  *time.Weekday // Specific day of the week to start on
@@ -40,10 +40,9 @@ type jobFunction struct {
 }
 
 type runConfig struct {
-	finiteRuns         bool
-	maxRuns            int
-	mode               mode
-	removeAfterLastRun bool
+	finiteRuns bool
+	maxRuns    int
+	mode       mode
 }
 
 // mode is the Job's running mode
@@ -62,6 +61,7 @@ func NewJob(interval int) *Job {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Job{
 		interval: interval,
+		unit:     seconds,
 		lastRun:  time.Time{},
 		nextRun:  time.Time{},
 		jobFunction: jobFunction{
@@ -109,9 +109,11 @@ func (j *Job) setStartAtTime(t time.Time) {
 	j.startAtTime = t
 }
 
-// Err returns an error if one occurred while creating the Job
-func (j *Job) Err() error {
-	return j.err
+// Error returns an error if one occurred while creating the Job.
+// If multiple errors occurred, they will be wrapped and can be
+// checked using the standard unwrap options.
+func (j *Job) Error() error {
+	return j.error
 }
 
 // Tag allows you to add arbitrary labels to a Job that do not
@@ -182,16 +184,6 @@ func (j *Job) SingletonMode() {
 	j.runConfig.mode = singletonMode
 	j.jobFunction.limiter = &singleflight.Group{}
 
-}
-
-// RemoveAfterLastRun sets the job to be removed after it's last run (when limited)
-func (j *Job) RemoveAfterLastRun() *Job {
-	j.runConfig.removeAfterLastRun = true
-	return j
-}
-
-func (j *Job) getRemoveAfterLastRun() bool {
-	return j.runConfig.removeAfterLastRun
 }
 
 // shouldRun evaluates if this job should run again

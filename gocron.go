@@ -25,7 +25,7 @@ var (
 	ErrInvalidIntervalType           = errors.New(".Every() interval must be int, time.Duration, or string")
 	ErrInvalidIntervalUnitsSelection = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
 
-	ErrAtTimeNotSupported  = errors.New("the At() not supported for time unit")
+	ErrAtTimeNotSupported  = errors.New("the At() method is not supported for this time unit")
 	ErrWeekdayNotSupported = errors.New("weekday is not supported for time unit")
 )
 
@@ -49,7 +49,8 @@ type timeUnit int
 
 const (
 	// default unit is seconds
-	seconds timeUnit = iota
+	milliseconds timeUnit = iota
+	seconds
 	minutes
 	hours
 	days
