@@ -24,9 +24,10 @@ var (
 	ErrInvalidInterval               = errors.New(".Every() interval must be greater than 0")
 	ErrInvalidIntervalType           = errors.New(".Every() interval must be int, time.Duration, or string")
 	ErrInvalidIntervalUnitsSelection = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
-	ErrAtTimeNotSupported            = errors.New("the At() not supported for time unit")
-	ErrWeekdayNotSupported           = errors.New("weekday is not supported for time unit")
-	ErrTagsUnique                    = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
+
+	ErrAtTimeNotSupported  = errors.New("the At() method is not supported for this time unit")
+	ErrWeekdayNotSupported = errors.New("weekday is not supported for time unit")
+	ErrTagsUnique          = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
 )
 
 func wrapOrError(toWrap error, err error) error {
@@ -49,7 +50,8 @@ type timeUnit int
 
 const (
 	// default unit is seconds
-	seconds timeUnit = iota
+	milliseconds timeUnit = iota
+	seconds
 	minutes
 	hours
 	days

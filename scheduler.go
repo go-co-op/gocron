@@ -160,9 +160,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}
 
 	if !job.shouldRun() {
-		if job.getRemoveAfterLastRun() {
-			s.RemoveByReference(job)
-		}
+		s.RemoveByReference(job)
 		return
 	}
 
@@ -182,7 +180,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 
 	var d time.Duration
 	switch job.unit {
-	case seconds, minutes, hours:
+	case milliseconds, seconds, minutes, hours:
 		d = s.calculateDuration(job)
 	case days:
 		d = s.calculateDays(job, lastRun)
@@ -282,6 +280,8 @@ func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 
 	interval := job.interval
 	switch job.unit {
+	case milliseconds:
+		return time.Duration(interval) * time.Millisecond
 	case seconds:
 		return time.Duration(interval) * time.Second
 	case minutes:
@@ -328,7 +328,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	case int:
 		job := NewJob(interval)
 		if interval <= 0 {
-			job.err = wrapOrError(job.err, ErrInvalidInterval)
+			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 		s.setJobs(append(s.Jobs(), job))
 	case time.Duration:
@@ -340,14 +340,14 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job := NewJob(0)
 		d, err := time.ParseDuration(interval)
 		if err != nil {
-			job.err = wrapOrError(job.err, err)
+			job.error = wrapOrError(job.error, err)
 		}
 		job.duration = d
 		job.unit = duration
 		s.setJobs(append(s.Jobs(), job))
 	default:
 		job := NewJob(0)
-		job.err = wrapOrError(job.err, ErrInvalidIntervalType)
+		job.error = wrapOrError(job.error, ErrInvalidIntervalType)
 		s.setJobs(append(s.Jobs(), job))
 	}
 	return s
@@ -444,8 +444,8 @@ func removeAtIndex(jobs []*Job, i int) []*Job {
 	return jobs
 }
 
-// LimitRunsTo limits the number of executions of this job to n. However,
-// the job will still remain in the scheduler
+// LimitRunsTo limits the number of executions of this job to n.
+// Upon reaching the limit, the job is removed from the scheduler.
 func (s *Scheduler) LimitRunsTo(i int) *Scheduler {
 	job := s.getCurrentJob()
 	job.LimitRunsTo(i)
@@ -457,13 +457,6 @@ func (s *Scheduler) LimitRunsTo(i int) *Scheduler {
 func (s *Scheduler) SingletonMode() *Scheduler {
 	job := s.getCurrentJob()
 	job.SingletonMode()
-	return s
-}
-
-// RemoveAfterLastRun sets the job to be removed after it's last run (when limited)
-func (s *Scheduler) RemoveAfterLastRun() *Scheduler {
-	job := s.getCurrentJob()
-	job.RemoveAfterLastRun()
 	return s
 }
 
@@ -515,18 +508,18 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	job := s.getCurrentJob()
 
 	if job.atTime != 0 && job.unit <= hours {
-		job.err = wrapOrError(job.err, ErrAtTimeNotSupported)
+		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
 	if job.scheduledWeekday != nil && job.unit != weeks {
-		job.err = wrapOrError(job.err, ErrWeekdayNotSupported)
+		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
-	if job.err != nil {
+	if job.error != nil {
 		// delete the job from the scheduler as this job
 		// cannot be executed
 		s.RemoveByReference(job)
-		return nil, job.err
+		return nil, job.error
 	}
 
 	typ := reflect.TypeOf(jobFun)
@@ -550,15 +543,24 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 }
 
 // At schedules the Job at a specific time of day in the form "HH:MM:SS" or "HH:MM"
-func (s *Scheduler) At(t string) *Scheduler {
+// or time.Time (note that only the hours, minutes, seconds and nanos are used).
+func (s *Scheduler) At(i interface{}) *Scheduler {
 	job := s.getCurrentJob()
-	hour, min, sec, err := parseTime(t)
-	if err != nil {
-		job.err = wrapOrError(job.err, err)
-		return s
+
+	switch t := i.(type) {
+	case string:
+		hour, min, sec, err := parseTime(t)
+		if err != nil {
+			job.error = wrapOrError(job.error, err)
+			return s
+		}
+		// save atTime start as duration from midnight
+		job.setAtTime(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second)
+	case time.Time:
+		job.setAtTime(time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute + time.Duration(t.Second())*time.Second + time.Duration(t.Nanosecond())*time.Nanosecond)
+	default:
+		job.error = wrapOrError(job.error, ErrUnsupportedTimeFormat)
 	}
-	// save atTime start as duration from midnight
-	job.setAtTime(time.Duration(hour)*time.Hour + time.Duration(min)*time.Minute + time.Duration(sec)*time.Second)
 	job.startsImmediately = false
 	return s
 }
@@ -570,7 +572,7 @@ func (s *Scheduler) Tag(t ...string) *Scheduler {
 	if s.tags != nil {
 		for _, tag := range t {
 			if _, ok := s.tags[tag]; ok {
-				job.err = wrapOrError(job.err, ErrTagsUnique(tag))
+				job.error = wrapOrError(job.error, ErrTagsUnique(tag))
 				return s
 			}
 			s.tags[tag] = struct{}{}
@@ -594,9 +596,20 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 func (s *Scheduler) setUnit(unit timeUnit) {
 	job := s.getCurrentJob()
 	if job.unit == duration {
-		job.err = wrapOrError(job.err, ErrInvalidIntervalUnitsSelection)
+		job.error = wrapOrError(job.error, ErrInvalidIntervalUnitsSelection)
 	}
 	job.unit = unit
+}
+
+// Second sets the unit with seconds
+func (s *Scheduler) Millisecond() *Scheduler {
+	return s.Milliseconds()
+}
+
+// Seconds sets the unit with seconds
+func (s *Scheduler) Milliseconds() *Scheduler {
+	s.setUnit(milliseconds)
+	return s
 }
 
 // Second sets the unit with seconds

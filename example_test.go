@@ -13,11 +13,11 @@ var task = func() {}
 // ----------------------JOB-FUNCTIONS----------------------------------
 // ---------------------------------------------------------------------
 
-func ExampleJob_Err() {
+func ExampleJob_Error() {
 	s := gocron.NewScheduler(time.UTC)
 	s.Every(1).Day().At("bad time")
 	j := s.Jobs()[0]
-	fmt.Println(j.Err())
+	fmt.Println(j.Error())
 	// Output:
 	// the given time format is not supported
 }
@@ -46,14 +46,6 @@ func ExampleJob_NextRun() {
 			time.Sleep(time.Second)
 		}
 	}()
-	s.StartAsync()
-}
-
-func ExampleJob_RemoveAfterLastRun() {
-	s := gocron.NewScheduler(time.UTC)
-	job, _ := s.Every(1).Second().Do(task)
-	job.LimitRunsTo(1)
-	job.RemoveAfterLastRun()
 	s.StartAsync()
 }
 
@@ -358,19 +350,6 @@ func ExampleScheduler_Remove() {
 	s.Remove(task)
 	fmt.Println(s.Len())
 	// Output:
-	// 0
-}
-
-func ExampleScheduler_RemoveAfterLastRun() {
-	s := gocron.NewScheduler(time.UTC)
-
-	j, _ := s.Every(1).Second().LimitRunsTo(1).RemoveAfterLastRun().Do(task)
-	s.StartAsync()
-	s.Stop()
-	fmt.Println(j.RunCount())
-	fmt.Println(s.Len())
-	// Output:
-	// 1
 	// 0
 }
 

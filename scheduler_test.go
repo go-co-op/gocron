@@ -793,7 +793,6 @@ func TestRunJobsWithLimit(t *testing.T) {
 		})
 		require.NoError(t, err)
 		j.LimitRunsTo(1)
-		j.RemoveAfterLastRun()
 
 		s.StartAsync()
 		time.Sleep(2 * time.Second)
@@ -1031,32 +1030,6 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			assert.Equal(t, tc.expectedRuns, counter)
 		})
 	}
-}
-
-func TestScheduler_RemoveAfterLastRun(t *testing.T) {
-	t.Run("job removed after the last run", func(t *testing.T) {
-		semaphore := make(chan bool)
-
-		s := NewScheduler(time.UTC)
-
-		_, err := s.Every(1).Second().LimitRunsTo(1).RemoveAfterLastRun().Do(func() {
-			semaphore <- true
-		})
-		require.NoError(t, err)
-
-		s.StartAsync()
-		time.Sleep(2 * time.Second)
-
-		var counter int
-		select {
-		case <-time.After(2 * time.Second):
-			assert.Equal(t, 1, counter)
-			assert.Zero(t, s.Len())
-		case <-semaphore:
-			counter++
-			require.LessOrEqual(t, counter, 1)
-		}
-	})
 }
 
 func TestScheduler_TagsUnique(t *testing.T) {
