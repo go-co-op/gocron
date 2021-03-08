@@ -572,7 +572,7 @@ func (s *Scheduler) Tag(t ...string) *Scheduler {
 	if s.tags != nil {
 		for _, tag := range t {
 			if _, ok := s.tags[tag]; ok {
-				job.err = wrapOrError(job.err, ErrTagsUnique(tag))
+				job.error = wrapOrError(job.error, ErrTagsUnique(tag))
 				return s
 			}
 			s.tags[tag] = struct{}{}
