@@ -26,6 +26,8 @@ type Scheduler struct {
 
 	time     timeWrapper // wrapper around time.Time
 	executor *executor   // executes jobs passed via chan
+
+	tags map[string]struct{} // for storing tags when unique tags is set
 }
 
 // NewScheduler creates a new Scheduler
@@ -566,6 +568,17 @@ func (s *Scheduler) At(i interface{}) *Scheduler {
 // Tag will add a tag when creating a job.
 func (s *Scheduler) Tag(t ...string) *Scheduler {
 	job := s.getCurrentJob()
+
+	if s.tags != nil {
+		for _, tag := range t {
+			if _, ok := s.tags[tag]; ok {
+				job.err = wrapOrError(job.err, ErrTagsUnique(tag))
+				return s
+			}
+			s.tags[tag] = struct{}{}
+		}
+	}
+
 	job.tags = t
 	return s
 }
@@ -725,4 +738,12 @@ func (s *Scheduler) getCurrentJob() *Job {
 
 func (s *Scheduler) now() time.Time {
 	return s.time.Now(s.Location())
+}
+
+// TagsUnique forces job tags to be unique across the scheduler
+// when adding tags with (s *Scheduler) Tag().
+// This does not enforce uniqueness on tags added via
+// (j *Job) Tag()
+func (s *Scheduler) TagsUnique() {
+	s.tags = make(map[string]struct{})
 }

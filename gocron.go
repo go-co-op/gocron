@@ -26,7 +26,9 @@ var (
 	ErrInvalidIntervalUnitsSelection = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
 
 	ErrAtTimeNotSupported  = errors.New("the At() method is not supported for this time unit")
-	ErrWeekdayNotSupported = errors.New("weekday is not supported for time unit")
+	ErrWeekdayNotSupported           = errors.New("weekday is not supported for time unit")
+	ErrTagsUnique                    = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
+
 )
 
 func wrapOrError(toWrap error, err error) error {

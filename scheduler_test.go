@@ -1031,3 +1031,30 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_TagsUnique(t *testing.T) {
+	const (
+		foo = "foo"
+		bar = "bar"
+		baz = "baz"
+	)
+
+	s := NewScheduler(time.UTC)
+	s.TagsUnique()
+
+	j, err := s.Every("1s").Tag(foo, bar).Do(func() {})
+	require.NoError(t, err)
+
+	// uniqueness not enforced on jobs tagged with job.Tag()
+	// thus tagging the job here is allowed
+	j.Tag(baz)
+	_, err = s.Every("1s").Tag(baz).Do(func() {})
+	require.NoError(t, err)
+
+	_, err = s.Every("1s").Tag(foo).Do(func() {})
+	assert.EqualError(t, err, ErrTagsUnique(foo).Error())
+
+	_, err = s.Every("1s").Tag(bar).Do(func() {})
+	assert.EqualError(t, err, ErrTagsUnique(bar).Error())
+
+}
