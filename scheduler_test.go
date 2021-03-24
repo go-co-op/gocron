@@ -1058,3 +1058,31 @@ func TestScheduler_TagsUnique(t *testing.T) {
 	assert.EqualError(t, err, ErrTagsUnique(bar).Error())
 
 }
+
+func TestScheduler_LessParamsThanExpected(t *testing.T) {
+
+	s := NewScheduler(time.UTC)
+
+	f := func(s1, s2 string) {
+		fmt.Println("ok")
+	}
+
+	p := []interface{}{"p1"}
+	_, err := s.Every(1).Days().StartAt(time.Now().UTC().Add(time.Second*10)).Do(f, p...)
+	assert.EqualError(t, err, ErrWrongParams.Error())
+
+}
+
+func TestScheduler_MoreParamsThanExpected(t *testing.T) {
+
+	s := NewScheduler(time.UTC)
+
+	f := func(s1, s2 string) {
+		fmt.Println("ok")
+	}
+
+	p := []interface{}{"p1", "p2", "p3"}
+	_, err := s.Every(1).Days().StartAt(time.Now().UTC().Add(time.Second*10)).Do(f, p...)
+	assert.EqualError(t, err, ErrWrongParams.Error())
+
+}

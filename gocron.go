@@ -28,6 +28,7 @@ var (
 	ErrAtTimeNotSupported  = errors.New("the At() method is not supported for this time unit")
 	ErrWeekdayNotSupported = errors.New("weekday is not supported for time unit")
 	ErrTagsUnique          = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
+	ErrWrongParams         = errors.New("wrong list of params")
 )
 
 func wrapOrError(toWrap error, err error) error {

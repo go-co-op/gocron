@@ -529,6 +529,12 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		return nil, ErrNotAFunction
 	}
 
+	f := reflect.ValueOf(jobFun)
+	if len(params) != f.Type().NumIn() {
+		s.RemoveByReference(job)
+		return nil, ErrWrongParams
+	}
+
 	fname := getFunctionName(jobFun)
 	job.functions[fname] = jobFun
 	job.params[fname] = params
