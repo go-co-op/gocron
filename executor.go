@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -45,6 +46,7 @@ func (e *executor) start() {
 	for {
 		select {
 		case f := <-e.jobFunctions:
+			log.Println("running task")
 			wg.Add(1)
 			go func() {
 				defer wg.Done()

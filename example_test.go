@@ -545,6 +545,17 @@ func ExampleScheduler_Tuesday() {
 	// Tuesday
 }
 
+func ExampleScheduler_Update() {
+	s := gocron.NewScheduler(time.UTC)
+	j, _ := s.Every("1s").Do(func() {})
+
+	time.Sleep(10 * time.Second)
+	j, _ = s.Job(j).Every("10m").Update()
+
+	time.Sleep(30 * time.Minute)
+	j, _ = s.Job(j).Every(1).Day().At("02:00").Update()
+}
+
 func ExampleScheduler_Wednesday() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every(1).Day().Wednesday().Do(task)

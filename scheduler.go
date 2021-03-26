@@ -28,6 +28,8 @@ type Scheduler struct {
 	executor *executor   // executes jobs passed via chan
 
 	tags map[string]struct{} // for storing tags when unique tags is set
+
+	updateJob bool // so the scheduler knows to create a new job or update the current
 }
 
 // NewScheduler creates a new Scheduler
@@ -111,10 +113,10 @@ func (s *Scheduler) Len() int {
 
 // Swap places each job into the other job's position given
 // the provided job indexes.
-func (s *Scheduler) Swap(i, job int) {
+func (s *Scheduler) Swap(i, j int) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()
-	s.jobs[i], s.jobs[job] = s.jobs[job], s.jobs[i]
+	s.jobs[i], s.jobs[j] = s.jobs[j], s.jobs[i]
 }
 
 // Less compares the next run of jobs based on their index.
@@ -324,32 +326,56 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 // parses with time.ParseDuration().
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 func (s *Scheduler) Every(interval interface{}) *Scheduler {
+	job := &Job{}
+	if s.updateJob {
+		job = s.getCurrentJob()
+	}
+
 	switch interval := interval.(type) {
 	case int:
-		job := NewJob(interval)
+		if !s.updateJob {
+			job = NewJob(interval)
+		} else {
+			job.interval = interval
+		}
 		if interval <= 0 {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
-		s.setJobs(append(s.Jobs(), job))
 	case time.Duration:
-		job := NewJob(0)
+		if !s.updateJob {
+			job = NewJob(0)
+		} else {
+			job.interval = 0
+		}
 		job.duration = interval
 		job.unit = duration
-		s.setJobs(append(s.Jobs(), job))
 	case string:
-		job := NewJob(0)
+		if !s.updateJob {
+			job = NewJob(0)
+		} else {
+			job.interval = 0
+		}
 		d, err := time.ParseDuration(interval)
 		if err != nil {
 			job.error = wrapOrError(job.error, err)
 		}
 		job.duration = d
 		job.unit = duration
-		s.setJobs(append(s.Jobs(), job))
 	default:
-		job := NewJob(0)
+		if !s.updateJob {
+			job = NewJob(0)
+		} else {
+			job.interval = 0
+		}
 		job.error = wrapOrError(job.error, ErrInvalidIntervalType)
+	}
+
+	if s.updateJob {
+		s.setJobs(append(s.Jobs()[:len(s.Jobs())-1], job))
+	} else {
 		s.setJobs(append(s.Jobs(), job))
 	}
+
 	return s
 }
 
@@ -406,8 +432,7 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 		if !shouldRemove(job) {
 			retainedJobs = append(retainedJobs, job)
 		} else {
-			job.stopTimer()
-			job.cancel()
+			job.stop()
 		}
 	}
 	s.setJobs(retainedJobs)
@@ -420,8 +445,7 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 		return err
 	}
 	// Remove job if job index is valid
-	s.jobs[index].stopTimer()
-	s.jobs[index].cancel()
+	s.jobs[index].stop()
 	s.setJobs(removeAtIndex(s.jobs, index))
 	return nil
 }
@@ -486,7 +510,7 @@ func (s *Scheduler) jobPresent(j *Job) bool {
 // Clear clear all Jobs from this scheduler
 func (s *Scheduler) Clear() {
 	for _, j := range s.Jobs() {
-		j.stopTimer()
+		j.stop()
 	}
 	s.setJobs(make([]*Job, 0))
 }
@@ -740,7 +764,7 @@ func (s *Scheduler) Sunday() *Scheduler {
 }
 
 func (s *Scheduler) getCurrentJob() *Job {
-	return s.Jobs()[len(s.jobs)-1]
+	return s.Jobs()[len(s.Jobs())-1]
 }
 
 func (s *Scheduler) now() time.Time {
@@ -753,4 +777,22 @@ func (s *Scheduler) now() time.Time {
 // (j *Job) Tag()
 func (s *Scheduler) TagsUnique() {
 	s.tags = make(map[string]struct{})
+}
+
+func (s *Scheduler) Job(j *Job) *Scheduler {
+	jobs := s.Jobs()
+	for index, job := range jobs {
+		if job == j {
+			// the current job is always last, so put this job there
+			s.Swap(len(jobs)-1, index)
+		}
+	}
+	s.updateJob = true
+	return s
+}
+
+func (s *Scheduler) Update() (*Job, error) {
+	j := s.getCurrentJob()
+	j.stop()
+	return s.Do(j.functions[j.name], j.params)
 }

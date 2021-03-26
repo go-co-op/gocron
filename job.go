@@ -221,10 +221,11 @@ func (j *Job) RunCount() int {
 	return j.runCount
 }
 
-func (j *Job) stopTimer() {
+func (j *Job) stop() {
 	j.Lock()
 	defer j.Unlock()
 	if j.timer != nil {
 		j.timer.Stop()
 	}
+	j.cancel()
 }
