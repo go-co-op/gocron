@@ -794,5 +794,5 @@ func (s *Scheduler) Job(j *Job) *Scheduler {
 func (s *Scheduler) Update() (*Job, error) {
 	j := s.getCurrentJob()
 	j.stop()
-	return s.Do(j.functions[j.name], j.params)
+	return s.Do(j.functions[j.name], j.params[j.name]...)
 }

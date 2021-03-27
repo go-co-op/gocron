@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1079,4 +1080,44 @@ func TestScheduler_DoParameterValidation(t *testing.T) {
 			assert.EqualError(t, err, ErrWrongParams.Error())
 		})
 	}
+}
+
+func TestScheduler_Job(t *testing.T) {
+	s := NewScheduler(time.UTC)
+
+	j1, err := s.Every("1s").Do(func() { log.Println("one") })
+	require.NoError(t, err)
+	assert.Equal(t, j1, s.getCurrentJob())
+
+	j2, err := s.Every("1s").Do(func() { log.Println("two") })
+	require.NoError(t, err)
+	assert.Equal(t, j2, s.getCurrentJob())
+
+	s.Job(j1)
+	assert.Equal(t, j1, s.getCurrentJob())
+
+	s.Job(j2)
+	assert.Equal(t, j2, s.getCurrentJob())
+}
+
+func TestScheduler_Update(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	counter := 0
+
+	j, err := s.Every("1s").Do(func() { counter++ })
+	require.NoError(t, err)
+
+	s.StartAsync()
+
+	time.Sleep(1500 * time.Millisecond)
+	j, err = s.Job(j).Every("2s").Update()
+	require.NoError(t, err)
+
+	time.Sleep(2500 * time.Millisecond)
+	_, err = s.Job(j).Every("3s").Update()
+	require.NoError(t, err)
+
+	time.Sleep(3500 * time.Millisecond)
+	s.Stop()
+	assert.Equal(t, 4, counter)
 }

@@ -553,7 +553,7 @@ func ExampleScheduler_Update() {
 	j, _ = s.Job(j).Every("10m").Update()
 
 	time.Sleep(30 * time.Minute)
-	j, _ = s.Job(j).Every(1).Day().At("02:00").Update()
+	_, _ = s.Job(j).Every(1).Day().At("02:00").Update()
 }
 
 func ExampleScheduler_Wednesday() {
