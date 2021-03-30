@@ -32,7 +32,7 @@ type Job struct {
 type jobFunction struct {
 	function   interface{}         // task's function
 	parameters []interface{}       // task's function parameters
-	name       string              // the function name to run
+	name       string              //nolint the function name to run
 	runConfig  runConfig           // configuration for how many times to run the job
 	limiter    *singleflight.Group // limits inflight runs of job to one
 	ctx        context.Context     // for cancellation
