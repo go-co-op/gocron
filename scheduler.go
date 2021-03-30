@@ -561,9 +561,9 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	}
 
 	fname := getFunctionName(jobFun)
-	if _, ok := job.functions[fname]; !ok {
-		job.functions[fname] = jobFun
-		job.params[fname] = params
+	if job.name != fname {
+		job.function = jobFun
+		job.parameters = params
 		job.name = fname
 	}
 
@@ -806,5 +806,5 @@ func (s *Scheduler) Update() (*Job, error) {
 		return j, wrapOrError(j.error, ErrUpdateCalledWithoutJob)
 	}
 	j.stop()
-	return s.Do(j.functions[j.name], j.params[j.name]...)
+	return s.Do(j.function, j.parameters)
 }
