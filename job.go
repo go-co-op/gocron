@@ -109,6 +109,30 @@ func (j *Job) setStartAtTime(t time.Time) {
 	j.startAtTime = t
 }
 
+func (j *Job) getUnit() timeUnit {
+	j.RLock()
+	defer j.RUnlock()
+	return j.unit
+}
+
+func (j *Job) setUnit(t timeUnit) {
+	j.Lock()
+	defer j.Unlock()
+	j.unit = t
+}
+
+func (j *Job) getDuration() time.Duration {
+	j.RLock()
+	defer j.RUnlock()
+	return j.duration
+}
+
+func (j *Job) setDuration(t time.Duration) {
+	j.Lock()
+	defer j.Unlock()
+	j.duration = t
+}
+
 // Error returns an error if one occurred while creating the Job.
 // If multiple errors occurred, they will be wrapped and can be
 // checked using the standard unwrap options.

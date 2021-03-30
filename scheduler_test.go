@@ -1101,23 +1101,39 @@ func TestScheduler_Job(t *testing.T) {
 }
 
 func TestScheduler_Update(t *testing.T) {
-	s := NewScheduler(time.UTC)
-	counter := 0
+	t.Run("happy path", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
 
-	j, err := s.Every("1s").Do(func() { counter++ })
-	require.NoError(t, err)
+		var counterMutex sync.RWMutex
+		counter := 0
 
-	s.StartAsync()
+		j, err := s.Every(1).Day().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		require.NoError(t, err)
 
-	time.Sleep(1500 * time.Millisecond)
-	j, err = s.Job(j).Every("2s").Update()
-	require.NoError(t, err)
+		s.StartAsync()
 
-	time.Sleep(2500 * time.Millisecond)
-	_, err = s.Job(j).Every("3s").Update()
-	require.NoError(t, err)
+		time.Sleep(300 * time.Millisecond)
+		_, err = s.Job(j).Every("500ms").Update()
+		require.NoError(t, err)
 
-	time.Sleep(3500 * time.Millisecond)
-	s.Stop()
-	assert.Equal(t, 4, counter)
+		time.Sleep(550 * time.Millisecond)
+		_, err = s.Job(j).Every("750ms").Update()
+		require.NoError(t, err)
+
+		time.Sleep(800 * time.Millisecond)
+		s.Stop()
+
+		counterMutex.RLock()
+		defer counterMutex.RUnlock()
+		assert.Equal(t, 3, counter)
+	})
+
+	t.Run("update called with job call", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		_, err := s.Every("1s").Do(func() {})
+		require.NoError(t, err)
+
+		_, err = s.Update()
+		assert.EqualError(t, err, ErrUpdateCalledWithoutJob.Error())
+	})
 }

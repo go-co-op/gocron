@@ -181,7 +181,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	}
 
 	var d time.Duration
-	switch job.unit {
+	switch job.getUnit() {
 	case milliseconds, seconds, minutes, hours:
 		d = s.calculateDuration(job)
 	case days:
@@ -195,7 +195,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	case months:
 		d = s.calculateMonths(job, lastRun)
 	case duration:
-		d = job.duration
+		d = job.getDuration()
 	}
 	return d
 }
@@ -281,7 +281,7 @@ func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	}
 
 	interval := job.interval
-	switch job.unit {
+	switch job.getUnit() {
 	case milliseconds:
 		return time.Duration(interval) * time.Millisecond
 	case seconds:
@@ -347,8 +347,8 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		} else {
 			job.interval = 0
 		}
-		job.duration = interval
-		job.unit = duration
+		job.setDuration(interval)
+		job.setUnit(duration)
 	case string:
 		if !s.updateJob {
 			job = NewJob(0)
@@ -359,8 +359,8 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		if err != nil {
 			job.error = wrapOrError(job.error, err)
 		}
-		job.duration = d
-		job.unit = duration
+		job.setDuration(d)
+		job.setUnit(duration)
 	default:
 		if !s.updateJob {
 			job = NewJob(0)
@@ -531,11 +531,11 @@ func (s *Scheduler) stop() {
 func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
 	job := s.getCurrentJob()
 
-	if job.atTime != 0 && job.unit <= hours {
+	if job.atTime != 0 && job.getUnit() <= hours {
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
-	if job.scheduledWeekday != nil && job.unit != weeks {
+	if job.scheduledWeekday != nil && job.getUnit() != weeks {
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
@@ -561,9 +561,11 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	}
 
 	fname := getFunctionName(jobFun)
-	job.functions[fname] = jobFun
-	job.params[fname] = params
-	job.name = fname
+	if _, ok := job.functions[fname]; !ok {
+		job.functions[fname] = jobFun
+		job.params[fname] = params
+		job.name = fname
+	}
 
 	// we should not schedule if not running since we cant foresee how long it will take for the scheduler to start
 	if s.IsRunning() {
@@ -626,10 +628,10 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 // setUnit sets the unit type
 func (s *Scheduler) setUnit(unit timeUnit) {
 	job := s.getCurrentJob()
-	if job.unit == duration {
+	if job.getUnit() == duration {
 		job.error = wrapOrError(job.error, ErrInvalidIntervalUnitsSelection)
 	}
-	job.unit = unit
+	job.setUnit(unit)
 }
 
 // Second sets the unit with seconds
@@ -779,6 +781,9 @@ func (s *Scheduler) TagsUnique() {
 	s.tags = make(map[string]struct{})
 }
 
+// Job puts the provided job in focus for the purpose
+// of making changes to the job with the scheduler chain
+// and finalized by calling Update()
 func (s *Scheduler) Job(j *Job) *Scheduler {
 	jobs := s.Jobs()
 	for index, job := range jobs {
@@ -791,8 +796,15 @@ func (s *Scheduler) Job(j *Job) *Scheduler {
 	return s
 }
 
+// Update stops the job (if running) and starts it with any updates
+// that were made to the job in the scheduler chain. Job() must be
+// called first to put the given job in focus.
 func (s *Scheduler) Update() (*Job, error) {
 	j := s.getCurrentJob()
+
+	if !s.updateJob {
+		return j, wrapOrError(j.error, ErrUpdateCalledWithoutJob)
+	}
 	j.stop()
 	return s.Do(j.functions[j.name], j.params[j.name]...)
 }

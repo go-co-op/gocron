@@ -241,6 +241,18 @@ func ExampleScheduler_IsRunning() {
 	// true
 }
 
+func ExampleScheduler_Job() {
+	s := gocron.NewScheduler(time.UTC)
+	j, _ := s.Every("1s").Do(func() {})
+	s.StartAsync()
+
+	time.Sleep(10 * time.Second)
+	_, _ = s.Job(j).Every("10m").Update()
+
+	time.Sleep(30 * time.Minute)
+	_, _ = s.Job(j).Every(1).Day().At("02:00").Update()
+}
+
 func ExampleScheduler_Jobs() {
 	s := gocron.NewScheduler(time.UTC)
 
@@ -290,6 +302,24 @@ func ExampleScheduler_Location() {
 	fmt.Println(s.Location())
 	// Output:
 	// UTC
+}
+
+func ExampleScheduler_Millisecond() {
+	s := gocron.NewScheduler(time.UTC)
+
+	_, _ = s.Every(1).Millisecond().Do(task)
+	_, _ = s.Every(1).Milliseconds().Do(task)
+	_, _ = s.Every("1ms").Seconds().Do(task)
+	_, _ = s.Every(time.Millisecond).Seconds().Do(task)
+}
+
+func ExampleScheduler_Milliseconds() {
+	s := gocron.NewScheduler(time.UTC)
+
+	_, _ = s.Every(1).Millisecond().Do(task)
+	_, _ = s.Every(1).Milliseconds().Do(task)
+	_, _ = s.Every("1ms").Seconds().Do(task)
+	_, _ = s.Every(time.Millisecond).Seconds().Do(task)
 }
 
 func ExampleScheduler_Minute() {
@@ -548,9 +578,10 @@ func ExampleScheduler_Tuesday() {
 func ExampleScheduler_Update() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every("1s").Do(func() {})
+	s.StartAsync()
 
 	time.Sleep(10 * time.Second)
-	j, _ = s.Job(j).Every("10m").Update()
+	_, _ = s.Job(j).Every("10m").Update()
 
 	time.Sleep(30 * time.Minute)
 	_, _ = s.Job(j).Every(1).Day().At("02:00").Update()
