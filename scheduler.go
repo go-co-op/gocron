@@ -806,5 +806,5 @@ func (s *Scheduler) Update() (*Job, error) {
 		return j, wrapOrError(j.error, ErrUpdateCalledWithoutJob)
 	}
 	j.stop()
-	return s.Do(j.function, j.parameters)
+	return s.Do(j.function, j.parameters...)
 }
