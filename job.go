@@ -26,17 +26,17 @@ type Job struct {
 	dayOfTheMonth     int           // Specific day of the month to run the job
 	tags              []string      // allow the user to tag Jobs with certain labels
 	runCount          int           // number of times the job ran
-	timer             *time.Timer
+	timer             *time.Timer   // handles running tasks at specific time
 }
 
 type jobFunction struct {
-	functions map[string]interface{}   // Map for the function task store
-	params    map[string][]interface{} // Map for function and params of function
-	name      string                   // the Job name to run, func[jobFunc]
-	runConfig runConfig                // configuration for how many times to run the job
-	limiter   *singleflight.Group      // limits inflight runs of job to one
-	ctx       context.Context          // for cancellation
-	cancel    context.CancelFunc       // for cancellation
+	function   interface{}         // task's function
+	parameters []interface{}       // task's function parameters
+	name       string              //nolint the function name to run
+	runConfig  runConfig           // configuration for how many times to run the job
+	limiter    *singleflight.Group // limits inflight runs of job to one
+	ctx        context.Context     // for cancellation
+	cancel     context.CancelFunc  // for cancellation
 }
 
 type runConfig struct {
@@ -65,10 +65,8 @@ func NewJob(interval int) *Job {
 		lastRun:  time.Time{},
 		nextRun:  time.Time{},
 		jobFunction: jobFunction{
-			functions: make(map[string]interface{}),
-			params:    make(map[string][]interface{}),
-			ctx:       ctx,
-			cancel:    cancel,
+			ctx:    ctx,
+			cancel: cancel,
 		},
 		tags:              []string{},
 		startsImmediately: true,
@@ -107,6 +105,30 @@ func (j *Job) getStartAtTime() time.Time {
 
 func (j *Job) setStartAtTime(t time.Time) {
 	j.startAtTime = t
+}
+
+func (j *Job) getUnit() timeUnit {
+	j.RLock()
+	defer j.RUnlock()
+	return j.unit
+}
+
+func (j *Job) setUnit(t timeUnit) {
+	j.Lock()
+	defer j.Unlock()
+	j.unit = t
+}
+
+func (j *Job) getDuration() time.Duration {
+	j.RLock()
+	defer j.RUnlock()
+	return j.duration
+}
+
+func (j *Job) setDuration(t time.Duration) {
+	j.Lock()
+	defer j.Unlock()
+	j.duration = t
 }
 
 // Error returns an error if one occurred while creating the Job.
@@ -221,10 +243,11 @@ func (j *Job) RunCount() int {
 	return j.runCount
 }
 
-func (j *Job) stopTimer() {
+func (j *Job) stop() {
 	j.Lock()
 	defer j.Unlock()
 	if j.timer != nil {
 		j.timer.Stop()
 	}
+	j.cancel()
 }

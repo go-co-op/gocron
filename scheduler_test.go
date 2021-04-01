@@ -2,7 +2,7 @@ package gocron
 
 import (
 	"fmt"
-	"strings"
+	"log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -55,7 +55,7 @@ func TestImmediateExecution(t *testing.T) {
 
 }
 
-func TestInvalidEveryInterval(t *testing.T) {
+func TestScheduler_Every_InvalidInterval(t *testing.T) {
 	testCases := []struct {
 		description   string
 		interval      interface{}
@@ -63,7 +63,7 @@ func TestInvalidEveryInterval(t *testing.T) {
 	}{
 		{"zero", 0, ErrInvalidInterval.Error()},
 		{"negative", -1, ErrInvalidInterval.Error()},
-		{"invalid string duration", "bad", "time: invalid duration"},
+		{"invalid string duration", "bad", "time: invalid duration \"bad\""},
 	}
 
 	s := NewScheduler(time.UTC)
@@ -72,9 +72,7 @@ func TestInvalidEveryInterval(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, err := s.Every(tc.interval).Do(func() {})
 			require.Error(t, err)
-			// wonky way to assert on the error message, but between go 1.14
-			// and go 1.15 the error value was wrapped in quotes
-			assert.True(t, strings.HasPrefix(err.Error(), tc.expectedError))
+			assert.EqualError(t, err, tc.expectedError)
 		})
 	}
 
@@ -108,7 +106,7 @@ func TestScheduler_Every(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		_, err := s.Every(1).Second().Do(func() {
+		_, err := s.Every(100).Milliseconds().Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -118,7 +116,7 @@ func TestScheduler_Every(t *testing.T) {
 		var counter int
 
 		now := time.Now()
-		for time.Now().Before(now.Add(1 * time.Second)) {
+		for time.Now().Before(now.Add(100 * time.Millisecond)) {
 			if <-semaphore {
 				counter++
 			}
@@ -131,7 +129,7 @@ func TestScheduler_Every(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		_, err := s.Every("1s").Do(func() {
+		_, err := s.Every("100ms").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -141,7 +139,7 @@ func TestScheduler_Every(t *testing.T) {
 		var counter int
 
 		now := time.Now()
-		for time.Now().Before(now.Add(1 * time.Second)) {
+		for time.Now().Before(now.Add(100 * time.Millisecond)) {
 			if <-semaphore {
 				counter++
 			}
@@ -149,6 +147,7 @@ func TestScheduler_Every(t *testing.T) {
 		s.Stop()
 		assert.Equal(t, 2, counter)
 	})
+
 }
 
 func TestExecutionSeconds(t *testing.T) {
@@ -157,12 +156,12 @@ func TestExecutionSeconds(t *testing.T) {
 
 	var (
 		executions         []int64
-		interval           = 2
-		expectedExecutions = 4
+		interval           = 1
+		expectedExecutions = 2
 		mu                 sync.RWMutex
 	)
 
-	runTime := 6 * time.Second
+	runTime := 1 * time.Second
 	startTime := time.Now()
 
 	// default unit is seconds
@@ -347,17 +346,17 @@ func TestScheduler_Remove(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		j, err := s.Every(1).Seconds().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+		j, err := s.Every("100ms").StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
 
 		s.StartAsync()
 
-		s.Remove(j.functions[j.name])
+		s.Remove(j.function)
 
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			// test passed
 		case <-semaphore:
 			t.Fatal("job ran after being removed")
@@ -381,7 +380,7 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		j, err := s.Every(1).Seconds().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+		j, err := s.Every("100ms").StartAt(s.time.Now(s.location).Add(100 * time.Millisecond)).Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -391,7 +390,7 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 		s.RemoveByReference(j)
 
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			// test passed
 		case <-semaphore:
 			t.Fatal("job ran after being removed")
@@ -487,7 +486,7 @@ func TestClear(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	semaphore := make(chan bool)
 
-	_, err := s.Every(1).Second().Do(func() {
+	_, err := s.Every("100ms").Do(func() {
 		semaphore <- true
 	})
 	require.NoError(t, err)
@@ -499,7 +498,7 @@ func TestClear(t *testing.T) {
 
 	var counter int
 	now := time.Now()
-	for time.Now().Before(now.Add(1 * time.Second)) {
+	for time.Now().Before(now.Add(200 * time.Millisecond)) {
 		select {
 		case <-semaphore:
 			counter++
@@ -591,14 +590,14 @@ func TestScheduler_StartAt(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		s.Every(1).Day().StartAt(s.time.Now(s.location).Add(time.Second)).Do(func() {
+		s.Every(1).Day().StartAt(s.time.Now(s.location).Add(100 * time.Millisecond)).Do(func() {
 			semaphore <- true
 		})
 
 		s.StartAsync()
 
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			t.Fatal("job did not run at 1 second")
 		case <-semaphore:
 			// test passed
@@ -761,18 +760,18 @@ func TestRunJobsWithLimit(t *testing.T) {
 
 		s := NewScheduler(time.UTC)
 
-		j, err := s.Every(1).Second().Do(func() {
+		j, err := s.Every("100ms").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
 		j.LimitRunsTo(1)
 
 		s.StartAsync()
-		time.Sleep(2 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 
 		var counter int
 		now := time.Now()
-		for time.Now().Before(now.Add(2 * time.Second)) {
+		for time.Now().Before(now.Add(200 * time.Millisecond)) {
 			select {
 			case <-semaphore:
 				counter++
@@ -788,18 +787,18 @@ func TestRunJobsWithLimit(t *testing.T) {
 
 		s := NewScheduler(time.UTC)
 
-		j, err := s.Every(1).Second().Do(func() {
+		j, err := s.Every("100ms").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
 		j.LimitRunsTo(1)
 
 		s.StartAsync()
-		time.Sleep(2 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 
 		var counter int
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			assert.Equal(t, 0, s.Len())
 		case <-semaphore:
 			counter++
@@ -840,21 +839,21 @@ func TestScheduler_SingletonMode(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			var trigger int32
 
-			j, err := s.Every(1).Second().SingletonMode().Do(func() {
+			j, err := s.Every("100ms").SingletonMode().Do(func() {
 				if atomic.LoadInt32(&trigger) == 1 {
 					t.Fatal("Restart should not occur")
 				}
 				atomic.AddInt32(&trigger, 1)
-				time.Sleep(3 * time.Second)
+				time.Sleep(300 * time.Millisecond)
 			})
 			require.NoError(t, err)
 
 			s.StartAsync()
-			time.Sleep(2 * time.Second)
+			time.Sleep(200 * time.Millisecond)
 
 			if tc.removeJob {
 				s.RemoveByReference(j)
-				time.Sleep(3 * time.Second)
+				time.Sleep(300 * time.Millisecond)
 			}
 			s.Stop()
 		})
@@ -868,17 +867,17 @@ func TestScheduler_LimitRunsTo(t *testing.T) {
 
 		s := NewScheduler(time.UTC)
 
-		_, err := s.Every(1).Second().LimitRunsTo(1).Do(func() {
+		_, err := s.Every("100ms").LimitRunsTo(1).Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
 
 		s.StartAsync()
-		time.Sleep(2 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 
 		var counter int
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			assert.Equal(t, 1, counter)
 		case <-semaphore:
 			counter++
@@ -892,16 +891,16 @@ func TestScheduler_LimitRunsTo(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.StartAsync()
 
-		_, err := s.Every(1).Second().LimitRunsTo(1).Do(func() {
+		_, err := s.Every("100ms").LimitRunsTo(1).Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 
 		var counter int
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			assert.Equal(t, 1, counter)
 		case <-semaphore:
 			counter++
@@ -915,17 +914,17 @@ func TestScheduler_LimitRunsTo(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.StartAsync()
 
-		j, err := s.Every(1).Second().Do(func() {
+		j, err := s.Every("100ms").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
 		j.LimitRunsTo(1)
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(200 * time.Millisecond)
 
 		var counter int
 		select {
-		case <-time.After(2 * time.Second):
+		case <-time.After(200 * time.Millisecond):
 			assert.Equal(t, 2, counter)
 		case <-semaphore:
 			counter++
@@ -953,7 +952,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		{"reschedule mode", 2, RescheduleMode, 4, false,
 			func() {
 				semaphore <- true
-				time.Sleep(2 * time.Second)
+				time.Sleep(200 * time.Millisecond)
 			},
 		},
 
@@ -965,7 +964,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		{"wait mode", 2, WaitMode, 8, false,
 			func() {
 				semaphore <- true
-				time.Sleep(1 * time.Second)
+				time.Sleep(100 * time.Millisecond)
 			},
 		},
 
@@ -973,7 +972,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		{"wait mode - with job removal", 2, WaitMode, 8, true,
 			func() {
 				semaphore <- true
-				time.Sleep(1 * time.Second)
+				time.Sleep(100 * time.Millisecond)
 			},
 		},
 	}
@@ -984,13 +983,13 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.SetMaxConcurrentJobs(tc.maxConcurrentJobs, tc.mode)
 
-			j1, err := s.Every(1).Second().Do(tc.f)
+			j1, err := s.Every("100ms").Do(tc.f)
 			require.NoError(t, err)
 
-			j2, err := s.Every(2).Second().Do(tc.f)
+			j2, err := s.Every("200ms").Do(tc.f)
 			require.NoError(t, err)
 
-			j3, err := s.Every(3).Second().Do(tc.f)
+			j3, err := s.Every("300ms").Do(tc.f)
 			require.NoError(t, err)
 
 			s.StartAsync()
@@ -998,7 +997,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			var counter int
 
 			now := time.Now()
-			for time.Now().Before(now.Add(4 * time.Second)) {
+			for time.Now().Before(now.Add(400 * time.Millisecond)) {
 				select {
 				case <-semaphore:
 					counter++
@@ -1019,7 +1018,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			// or job should be properly stopped
 
 			now = time.Now()
-			for time.Now().Before(now.Add(1 * time.Second)) {
+			for time.Now().Before(now.Add(200 * time.Millisecond)) {
 				select {
 				case <-semaphore:
 					counter++
@@ -1079,4 +1078,60 @@ func TestScheduler_DoParameterValidation(t *testing.T) {
 			assert.EqualError(t, err, ErrWrongParams.Error())
 		})
 	}
+}
+
+func TestScheduler_Job(t *testing.T) {
+	s := NewScheduler(time.UTC)
+
+	j1, err := s.Every("1s").Do(func() { log.Println("one") })
+	require.NoError(t, err)
+	assert.Equal(t, j1, s.getCurrentJob())
+
+	j2, err := s.Every("1s").Do(func() { log.Println("two") })
+	require.NoError(t, err)
+	assert.Equal(t, j2, s.getCurrentJob())
+
+	s.Job(j1)
+	assert.Equal(t, j1, s.getCurrentJob())
+
+	s.Job(j2)
+	assert.Equal(t, j2, s.getCurrentJob())
+}
+
+func TestScheduler_Update(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		var counterMutex sync.RWMutex
+		counter := 0
+
+		j, err := s.Every(1).Day().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		time.Sleep(300 * time.Millisecond)
+		_, err = s.Job(j).Every("500ms").Update()
+		require.NoError(t, err)
+
+		time.Sleep(550 * time.Millisecond)
+		_, err = s.Job(j).Every("750ms").Update()
+		require.NoError(t, err)
+
+		time.Sleep(800 * time.Millisecond)
+		s.Stop()
+
+		counterMutex.RLock()
+		defer counterMutex.RUnlock()
+		assert.Equal(t, 3, counter)
+	})
+
+	t.Run("update called with job call", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		_, err := s.Every("1s").Do(func() {})
+		require.NoError(t, err)
+
+		_, err = s.Update()
+		assert.EqualError(t, err, ErrUpdateCalledWithoutJob.Error())
+	})
 }

@@ -77,7 +77,7 @@ func (e *executor) start() {
 
 				switch f.runConfig.mode {
 				case defaultMode:
-					callJobFuncWithParams(f.functions[f.name], f.params[f.name])
+					callJobFuncWithParams(f.function, f.parameters)
 				case singletonMode:
 					_, _, _ = f.limiter.Do("main", func() (interface{}, error) {
 						select {
@@ -87,7 +87,7 @@ func (e *executor) start() {
 							return nil, nil
 						default:
 						}
-						callJobFuncWithParams(f.functions[f.name], f.params[f.name])
+						callJobFuncWithParams(f.function, f.parameters)
 						return nil, nil
 					})
 				}

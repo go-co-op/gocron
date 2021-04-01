@@ -28,6 +28,8 @@ type Scheduler struct {
 	executor *executor   // executes jobs passed via chan
 
 	tags map[string]struct{} // for storing tags when unique tags is set
+
+	updateJob bool // so the scheduler knows to create a new job or update the current
 }
 
 // NewScheduler creates a new Scheduler
@@ -111,10 +113,10 @@ func (s *Scheduler) Len() int {
 
 // Swap places each job into the other job's position given
 // the provided job indexes.
-func (s *Scheduler) Swap(i, job int) {
+func (s *Scheduler) Swap(i, j int) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()
-	s.jobs[i], s.jobs[job] = s.jobs[job], s.jobs[i]
+	s.jobs[i], s.jobs[j] = s.jobs[j], s.jobs[i]
 }
 
 // Less compares the next run of jobs based on their index.
@@ -179,7 +181,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	}
 
 	var d time.Duration
-	switch job.unit {
+	switch job.getUnit() {
 	case milliseconds, seconds, minutes, hours:
 		d = s.calculateDuration(job)
 	case days:
@@ -193,7 +195,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	case months:
 		d = s.calculateMonths(job, lastRun)
 	case duration:
-		d = job.duration
+		d = job.getDuration()
 	}
 	return d
 }
@@ -279,7 +281,7 @@ func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	}
 
 	interval := job.interval
-	switch job.unit {
+	switch job.getUnit() {
 	case milliseconds:
 		return time.Duration(interval) * time.Millisecond
 	case seconds:
@@ -324,32 +326,56 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 // parses with time.ParseDuration().
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 func (s *Scheduler) Every(interval interface{}) *Scheduler {
+	job := &Job{}
+	if s.updateJob {
+		job = s.getCurrentJob()
+	}
+
 	switch interval := interval.(type) {
 	case int:
-		job := NewJob(interval)
+		if !s.updateJob {
+			job = NewJob(interval)
+		} else {
+			job.interval = interval
+		}
 		if interval <= 0 {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
-		s.setJobs(append(s.Jobs(), job))
 	case time.Duration:
-		job := NewJob(0)
-		job.duration = interval
-		job.unit = duration
-		s.setJobs(append(s.Jobs(), job))
+		if !s.updateJob {
+			job = NewJob(0)
+		} else {
+			job.interval = 0
+		}
+		job.setDuration(interval)
+		job.setUnit(duration)
 	case string:
-		job := NewJob(0)
+		if !s.updateJob {
+			job = NewJob(0)
+		} else {
+			job.interval = 0
+		}
 		d, err := time.ParseDuration(interval)
 		if err != nil {
 			job.error = wrapOrError(job.error, err)
 		}
-		job.duration = d
-		job.unit = duration
-		s.setJobs(append(s.Jobs(), job))
+		job.setDuration(d)
+		job.setUnit(duration)
 	default:
-		job := NewJob(0)
+		if !s.updateJob {
+			job = NewJob(0)
+		} else {
+			job.interval = 0
+		}
 		job.error = wrapOrError(job.error, ErrInvalidIntervalType)
+	}
+
+	if s.updateJob {
+		s.setJobs(append(s.Jobs()[:len(s.Jobs())-1], job))
+	} else {
 		s.setJobs(append(s.Jobs(), job))
 	}
+
 	return s
 }
 
@@ -406,8 +432,7 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 		if !shouldRemove(job) {
 			retainedJobs = append(retainedJobs, job)
 		} else {
-			job.stopTimer()
-			job.cancel()
+			job.stop()
 		}
 	}
 	s.setJobs(retainedJobs)
@@ -420,8 +445,7 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 		return err
 	}
 	// Remove job if job index is valid
-	s.jobs[index].stopTimer()
-	s.jobs[index].cancel()
+	s.jobs[index].stop()
 	s.setJobs(removeAtIndex(s.jobs, index))
 	return nil
 }
@@ -486,7 +510,7 @@ func (s *Scheduler) jobPresent(j *Job) bool {
 // Clear clear all Jobs from this scheduler
 func (s *Scheduler) Clear() {
 	for _, j := range s.Jobs() {
-		j.stopTimer()
+		j.stop()
 	}
 	s.setJobs(make([]*Job, 0))
 }
@@ -507,11 +531,11 @@ func (s *Scheduler) stop() {
 func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
 	job := s.getCurrentJob()
 
-	if job.atTime != 0 && job.unit <= hours {
+	if job.atTime != 0 && job.getUnit() <= hours {
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
-	if job.scheduledWeekday != nil && job.unit != weeks {
+	if job.scheduledWeekday != nil && job.getUnit() != weeks {
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
@@ -537,9 +561,11 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	}
 
 	fname := getFunctionName(jobFun)
-	job.functions[fname] = jobFun
-	job.params[fname] = params
-	job.name = fname
+	if job.name != fname {
+		job.function = jobFun
+		job.parameters = params
+		job.name = fname
+	}
 
 	// we should not schedule if not running since we cant foresee how long it will take for the scheduler to start
 	if s.IsRunning() {
@@ -602,10 +628,10 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 // setUnit sets the unit type
 func (s *Scheduler) setUnit(unit timeUnit) {
 	job := s.getCurrentJob()
-	if job.unit == duration {
+	if job.getUnit() == duration {
 		job.error = wrapOrError(job.error, ErrInvalidIntervalUnitsSelection)
 	}
-	job.unit = unit
+	job.setUnit(unit)
 }
 
 // Second sets the unit with seconds
@@ -740,7 +766,7 @@ func (s *Scheduler) Sunday() *Scheduler {
 }
 
 func (s *Scheduler) getCurrentJob() *Job {
-	return s.Jobs()[len(s.jobs)-1]
+	return s.Jobs()[len(s.Jobs())-1]
 }
 
 func (s *Scheduler) now() time.Time {
@@ -753,4 +779,32 @@ func (s *Scheduler) now() time.Time {
 // (j *Job) Tag()
 func (s *Scheduler) TagsUnique() {
 	s.tags = make(map[string]struct{})
+}
+
+// Job puts the provided job in focus for the purpose
+// of making changes to the job with the scheduler chain
+// and finalized by calling Update()
+func (s *Scheduler) Job(j *Job) *Scheduler {
+	jobs := s.Jobs()
+	for index, job := range jobs {
+		if job == j {
+			// the current job is always last, so put this job there
+			s.Swap(len(jobs)-1, index)
+		}
+	}
+	s.updateJob = true
+	return s
+}
+
+// Update stops the job (if running) and starts it with any updates
+// that were made to the job in the scheduler chain. Job() must be
+// called first to put the given job in focus.
+func (s *Scheduler) Update() (*Job, error) {
+	j := s.getCurrentJob()
+
+	if !s.updateJob {
+		return j, wrapOrError(j.error, ErrUpdateCalledWithoutJob)
+	}
+	j.stop()
+	return s.Do(j.function, j.parameters...)
 }
