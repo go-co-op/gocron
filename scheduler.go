@@ -404,7 +404,27 @@ func (s *Scheduler) RunAllWithDelay(d time.Duration) {
 	}
 }
 
-// Remove specific Job job by function
+// RunByTag runs all the jobs containing a specific tag
+// regardless of whether they are scheduled to run or not
+func (s *Scheduler) RunByTag(tag string) error {
+	return s.RunByTagWithDelay(tag, 0)
+}
+
+// RunByTagWithDelay is same as RunByTag but introduces a delay between
+// each job execution
+func (s *Scheduler) RunByTagWithDelay(tag string, d time.Duration) error {
+	jobs, err := s.findJobsByTag(tag)
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		s.run(job)
+		s.time.Sleep(d)
+	}
+	return nil
+}
+
+// Remove specific Job by function
 //
 // Removing a job stops that job's timer. However, if a job has already
 // been started by by the job's timer before being removed, there is no way to stop
@@ -417,7 +437,7 @@ func (s *Scheduler) Remove(job interface{}) {
 	})
 }
 
-// RemoveByReference removes specific Job job by reference
+// RemoveByReference removes specific Job by reference
 func (s *Scheduler) RemoveByReference(job *Job) {
 	s.removeByCondition(func(someJob *Job) bool {
 		job.RLock()
@@ -440,32 +460,27 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 
 // RemoveByTag will remove a job by a given tag.
 func (s *Scheduler) RemoveByTag(tag string) error {
-	index, err := s.findJobsIndexByTag(tag)
+	jobs, err := s.findJobsByTag(tag)
 	if err != nil {
 		return err
 	}
-	// Remove job if job index is valid
-	s.jobs[index].stop()
-	s.setJobs(removeAtIndex(s.jobs, index))
+	for _, job := range jobs {
+		s.RemoveByReference(job)
+	}
 	return nil
 }
 
-// Find first job index by given string
-func (s *Scheduler) findJobsIndexByTag(tag string) (int, error) {
-	for i, job := range s.Jobs() {
+func (s *Scheduler) findJobsByTag(tag string) ([]*Job, error) {
+	jobs := []*Job{}
+	for _, job := range s.Jobs() {
 		if strings.Contains(strings.Join(job.Tags(), " "), tag) {
-			return i, nil
+			jobs = append(jobs, job)
 		}
 	}
-	return -1, ErrJobNotFoundWithTag
-}
-
-func removeAtIndex(jobs []*Job, i int) []*Job {
-	if i == len(jobs)-1 {
-		return jobs[:i]
+	if len(jobs) > 0 {
+		return jobs, nil
 	}
-	jobs = append(jobs[:i], jobs[i+1:]...)
-	return jobs
+	return nil, ErrJobNotFoundWithTag
 }
 
 // LimitRunsTo limits the number of executions of this job to n.
