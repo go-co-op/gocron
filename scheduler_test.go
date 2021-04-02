@@ -1135,3 +1135,23 @@ func TestScheduler_Update(t *testing.T) {
 		assert.EqualError(t, err, ErrUpdateCalledWithoutJob.Error())
 	})
 }
+
+func TestScheduler_RunByTag(t *testing.T) {
+	var (
+		s     = NewScheduler(time.Local)
+		count = 0
+		wg    sync.WaitGroup
+	)
+
+	s.Every(1).Day().StartAt(time.Now().Add(time.Hour)).Tag("tag").Do(func() {
+		count++
+		wg.Done()
+	})
+	wg.Add(1)
+	s.StartAsync()
+	assert.NoError(t, s.RunByTag("tag"))
+
+	wg.Wait()
+	assert.Equal(t, 1, count)
+	assert.Error(t, s.RunByTag("wrong-tag"))
+}

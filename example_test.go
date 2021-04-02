@@ -617,3 +617,19 @@ func ExampleScheduler_Weeks() {
 	_, _ = s.Every(1).Week().Do(task)
 	_, _ = s.Every(1).Weeks().Do(task)
 }
+
+func ExampleScheduler_RunByTag() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Day().At("10:00").Do(task)
+	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
+	s.StartAsync()
+	s.RunByTag("tag")
+}
+
+func ExampleScheduler_RunByTagWithDelay() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Day().Tag("tag").At("10:00").Do(task)
+	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
+	s.StartAsync()
+	s.RunByTagWithDelay("tag", 2*time.Second)
+}
