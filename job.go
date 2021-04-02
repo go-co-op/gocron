@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -13,20 +14,21 @@ import (
 type Job struct {
 	sync.RWMutex
 	jobFunction
-	interval          int           // pause interval * unit between runs
-	duration          time.Duration // time duration between runs
-	unit              timeUnit      // time units, ,e.g. 'minutes', 'hours'...
-	startsImmediately bool          // if the Job should run upon scheduler start
-	atTime            time.Duration // optional time at which this Job runs when interval is day
-	startAtTime       time.Time     // optional time at which the Job starts
-	error             error         // error related to Job
-	lastRun           time.Time     // datetime of last run
-	nextRun           time.Time     // datetime of next run
-	scheduledWeekday  *time.Weekday // Specific day of the week to start on
-	dayOfTheMonth     int           // Specific day of the month to run the job
-	tags              []string      // allow the user to tag Jobs with certain labels
-	runCount          int           // number of times the job ran
-	timer             *time.Timer   // handles running tasks at specific time
+	interval          int            // pause interval * unit between runs
+	duration          time.Duration  // time duration between runs
+	unit              schedulingUnit // time units, ,e.g. 'minutes', 'hours'...
+	startsImmediately bool           // if the Job should run upon scheduler start
+	atTime            time.Duration  // optional time at which this Job runs when interval is day
+	startAtTime       time.Time      // optional time at which the Job starts
+	error             error          // error related to Job
+	lastRun           time.Time      // datetime of last run
+	nextRun           time.Time      // datetime of next run
+	scheduledWeekday  *time.Weekday  // Specific day of the week to start on
+	dayOfTheMonth     int            // Specific day of the month to run the job
+	tags              []string       // allow the user to tag Jobs with certain labels
+	runCount          int            // number of times the job ran
+	timer             *time.Timer    // handles running tasks at specific time
+	cronSchedule      cron.Schedule  // stores the schedule when a task uses cron
 }
 
 type jobFunction struct {
@@ -107,13 +109,13 @@ func (j *Job) setStartAtTime(t time.Time) {
 	j.startAtTime = t
 }
 
-func (j *Job) getUnit() timeUnit {
+func (j *Job) getUnit() schedulingUnit {
 	j.RLock()
 	defer j.RUnlock()
 	return j.unit
 }
 
-func (j *Job) setUnit(t timeUnit) {
+func (j *Job) setUnit(t schedulingUnit) {
 	j.Lock()
 	defer j.Unlock()
 	j.unit = t
@@ -163,6 +165,8 @@ func (j *Job) Tags() []string {
 
 // ScheduledTime returns the time of the Job's next scheduled run
 func (j *Job) ScheduledTime() time.Time {
+	j.RLock()
+	defer j.RUnlock()
 	return j.nextRun
 }
 
