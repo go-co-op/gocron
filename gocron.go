@@ -23,13 +23,14 @@ var (
 	ErrUnsupportedTimeFormat         = errors.New("the given time format is not supported")
 	ErrInvalidInterval               = errors.New(".Every() interval must be greater than 0")
 	ErrInvalidIntervalType           = errors.New(".Every() interval must be int, time.Duration, or string")
-	ErrInvalidIntervalUnitsSelection = errors.New("an .Every() duration interval cannot be used with units (e.g. .Seconds())")
+	ErrInvalidIntervalUnitsSelection = errors.New(".Every(time.Duration) and .Cron() cannot be used with units (e.g. .Seconds())")
 
 	ErrAtTimeNotSupported     = errors.New("the At() method is not supported for this time unit")
 	ErrWeekdayNotSupported    = errors.New("weekday is not supported for time unit")
 	ErrTagsUnique             = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
 	ErrWrongParams            = errors.New("wrong list of params")
 	ErrUpdateCalledWithoutJob = errors.New("a call to Scheduler.Update() requires a call to Scheduler.Job() first")
+	ErrCronParseFailure       = errors.New("cron expression failed to be parsed")
 )
 
 func wrapOrError(toWrap error, err error) error {
@@ -48,11 +49,11 @@ var (
 	timeWithoutSeconds = regexp.MustCompile(`(?m)^\d{1,2}:\d\d$`)
 )
 
-type timeUnit int
+type schedulingUnit int
 
 const (
 	// default unit is seconds
-	milliseconds timeUnit = iota
+	milliseconds schedulingUnit = iota
 	seconds
 	minutes
 	hours
@@ -60,6 +61,7 @@ const (
 	weeks
 	months
 	duration
+	crontab
 )
 
 func callJobFuncWithParams(jobFunc interface{}, params []interface{}) {
