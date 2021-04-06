@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robfig/cron/v3"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -196,6 +197,8 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 		d = s.calculateMonths(job, lastRun)
 	case duration:
 		d = job.getDuration()
+	case crontab:
+		d = job.cronSchedule.Next(lastRun).Sub(lastRun)
 	}
 	return d
 }
@@ -524,8 +527,8 @@ func (s *Scheduler) jobPresent(j *Job) bool {
 
 // Clear clear all Jobs from this scheduler
 func (s *Scheduler) Clear() {
-	for _, j := range s.Jobs() {
-		j.stop()
+	for _, job := range s.Jobs() {
+		job.stop()
 	}
 	s.setJobs(make([]*Job, 0))
 }
@@ -546,11 +549,12 @@ func (s *Scheduler) stop() {
 func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
 	job := s.getCurrentJob()
 
-	if job.atTime != 0 && job.getUnit() <= hours {
+	jobUnit := job.getUnit()
+	if job.atTime != 0 && (jobUnit <= hours || jobUnit >= duration) {
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
-	if job.scheduledWeekday != nil && job.getUnit() != weeks {
+	if job.scheduledWeekday != nil && jobUnit != weeks {
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
@@ -641,10 +645,12 @@ func (s *Scheduler) StartAt(t time.Time) *Scheduler {
 }
 
 // setUnit sets the unit type
-func (s *Scheduler) setUnit(unit timeUnit) {
+func (s *Scheduler) setUnit(unit schedulingUnit) {
 	job := s.getCurrentJob()
-	if job.getUnit() == duration {
+	currentUnit := job.getUnit()
+	if currentUnit == duration || currentUnit == crontab {
 		job.error = wrapOrError(job.error, ErrInvalidIntervalUnitsSelection)
+		return
 	}
 	job.setUnit(unit)
 }
@@ -815,11 +821,26 @@ func (s *Scheduler) Job(j *Job) *Scheduler {
 // that were made to the job in the scheduler chain. Job() must be
 // called first to put the given job in focus.
 func (s *Scheduler) Update() (*Job, error) {
-	j := s.getCurrentJob()
+	job := s.getCurrentJob()
 
 	if !s.updateJob {
-		return j, wrapOrError(j.error, ErrUpdateCalledWithoutJob)
+		return job, wrapOrError(job.error, ErrUpdateCalledWithoutJob)
 	}
-	j.stop()
-	return s.Do(j.function, j.parameters...)
+	job.stop()
+	return s.Do(job.function, job.parameters...)
+}
+
+func (s *Scheduler) Cron(c string) *Scheduler {
+	job := NewJob(0)
+
+	cronSchedule, err := cron.ParseStandard(c)
+	if err != nil {
+		job.error = wrapOrError(err, ErrCronParseFailure)
+	}
+
+	job.cronSchedule = cronSchedule
+	job.unit = crontab
+
+	s.setJobs(append(s.Jobs(), job))
+	return s
 }

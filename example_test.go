@@ -172,6 +172,14 @@ func ExampleScheduler_Clear() {
 	// 0
 }
 
+func ExampleScheduler_Cron() {
+	s := gocron.NewScheduler(time.UTC)
+
+	_, _ = s.Cron("*/1 * * * *").Do(task) // every minute
+	_, _ = s.Cron("0 1 * * *").Do(task)   // every day at 1 am
+	_, _ = s.Cron("0 0 * * 6,0").Do(task) // weekends only
+}
+
 func ExampleScheduler_Day() {
 	s := gocron.NewScheduler(time.UTC)
 

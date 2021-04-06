@@ -30,6 +30,9 @@ s.Every(5).Seconds().Do(func(){ ... })
 s.Every("5m").Do(func(){ ... })
 
 s.Every(5).Days().Do(func(){ ... })
+
+// cron expressions supported
+s.Cron("*/1 * * * *").Do(task) // every minute
 ```
 
 For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
@@ -55,6 +58,27 @@ Default |  | jobs are rescheduled at every interval
 Job singleton | `SingletonMode()` | a long running job will not be rescheduled until the current run is completed
 Scheduler limit | `SetMaxConcurrentJobs()` | set a collective maximum number of concurrent jobs running across the scheduler
 
+## Tags
+
+Jobs may have arbitrary tags added which can be useful when tracking many jobs.
+The scheduler supports both enforcing tags to be unique and when not unique,
+running all jobs with a given tag.
+
+```golang
+s := gocron.NewScheduler(time.UTC)
+s.TagsUnique()
+
+_, _ = s.Every(1).Week().Tag("foo").Do(task)
+_, err := s.Every(1).Week().Tag("foo").Do(task)
+// error!!!
+
+s := gocron.NewScheduler(time.UTC)
+
+s.Every(2).Day().Tag("tag").At("10:00").Do(task)
+s.Every(1).Minute().Tag("tag").Do(task)
+s.RunByTag("tag")
+// both jobs will run
+```
 
 ## FAQ
 
