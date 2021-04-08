@@ -151,6 +151,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 
 	if job.getStartsImmediately() {
 		s.run(job)
+		lastRun = now
 		job.setStartsImmediately(false)
 	}
 
@@ -840,6 +841,7 @@ func (s *Scheduler) Cron(c string) *Scheduler {
 
 	job.cronSchedule = cronSchedule
 	job.unit = crontab
+	job.startsImmediately = false
 
 	s.setJobs(append(s.Jobs(), job))
 	return s

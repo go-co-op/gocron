@@ -1158,6 +1158,7 @@ func TestScheduler_RunByTag(t *testing.T) {
 
 func TestScheduler_Cron(t *testing.T) {
 	ft := fakeTime{onNow: func(l *time.Location) time.Time {
+		// January 1st, 12 noon, Thursday, 1970
 		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
 	}}
 
@@ -1175,6 +1176,8 @@ func TestScheduler_Cron(t *testing.T) {
 		{"every day 1am", "0 1 * * *", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
 		{"weekends only", "0 0 * * 6,0", ft.onNow(time.UTC).Add(36 * time.Hour), nil},
 		{"at time monday thru friday", "0 22 * * 1-5", ft.onNow(time.UTC).Add(10 * time.Hour), nil},
+		{"every minute in range, monday thru friday", "15-30 * * * 1-5", ft.onNow(time.UTC).Add(15 * time.Minute), nil},
+		{"at every minute past every hour from 1 through 5 on every day-of-week from Monday through Friday.", "* 1-5 * * 1-5", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
 		{"hourly", "@hourly", ft.onNow(time.UTC).Add(1 * time.Hour), nil},
 		{"bad expression", "bad", time.Time{}, wrapOrError(fmt.Errorf("expected exactly 5 fields, found 1: [bad]"), ErrCronParseFailure)},
 	}
