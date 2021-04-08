@@ -1207,3 +1207,57 @@ func TestScheduler_Cron(t *testing.T) {
 		assert.EqualError(t, err, wrapOrError(ErrInvalidIntervalUnitsSelection, ErrWeekdayNotSupported).Error())
 	})
 }
+
+func TestScheduler_CronWithSeconds(t *testing.T) {
+	ft := fakeTime{onNow: func(l *time.Location) time.Time {
+		// January 1st, 12 noon, Thursday, 1970
+		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+	}}
+
+	s := NewScheduler(time.UTC)
+	s.time = ft
+
+	testCases := []struct {
+		description     string
+		cronTab         string
+		expectedNextRun time.Time
+		expectedError   error
+	}{
+		// https://crontab.guru/
+		{"every second", "*/1 * * * * *", ft.onNow(time.UTC).Add(1 * time.Second), nil},
+		{"every second from 0-30", "0-30 * * * * *", ft.onNow(time.UTC).Add(1 * time.Second), nil},
+		{"every minute", "0 */1 * * * *", ft.onNow(time.UTC).Add(1 * time.Minute), nil},
+		{"every day 1am", "* 0 1 * * *", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
+		{"weekends only", "* 0 0 * * 6,0", ft.onNow(time.UTC).Add(36 * time.Hour), nil},
+		{"at time monday thru friday", "* 0 22 * * 1-5", ft.onNow(time.UTC).Add(10 * time.Hour), nil},
+		{"every minute in range, monday thru friday", "* 15-30 * * * 1-5", ft.onNow(time.UTC).Add(15 * time.Minute), nil},
+		{"at every minute past every hour from 1 through 5 on every day-of-week from Monday through Friday.", "* * 1-5 * * 1-5", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
+		{"hourly", "@hourly", ft.onNow(time.UTC).Add(1 * time.Hour), nil},
+		{"bad expression", "bad", time.Time{}, wrapOrError(fmt.Errorf("expected exactly 6 fields, found 1: [bad]"), ErrCronParseFailure)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			j, err := s.CronWithSeconds(tc.cronTab).Do(func() {})
+			if tc.expectedError == nil {
+				require.NoError(t, err)
+
+				s.scheduleNextRun(j)
+
+				assert.Exactly(t, tc.expectedNextRun, j.NextRun())
+			} else {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			}
+		})
+	}
+
+	t.Run("error At() called with Cron()", func(t *testing.T) {
+		_, err := s.Cron("@hourly").At("1:00").Do(func() {})
+		assert.EqualError(t, err, ErrAtTimeNotSupported.Error())
+	})
+
+	t.Run("error Weekday() called with Cron()", func(t *testing.T) {
+		_, err := s.Cron("@hourly").Sunday().Do(func() {})
+		assert.EqualError(t, err, wrapOrError(ErrInvalidIntervalUnitsSelection, ErrWeekdayNotSupported).Error())
+	})
+}
