@@ -257,12 +257,12 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 }
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) time.Duration {
-	// handle occasional occurrence of job running to quickly / too early such that last run was within a second of now
-	lastRunUnix, nowUnix := job.LastRun().Unix(), s.time.Now(s.location).Unix()
 
 	if job.interval == 1 {
 		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 
+		// handle occasional occurrence of job running to quickly / too early such that last run was within a second of now
+		lastRunUnix, nowUnix := job.LastRun().Unix(), s.time.Now(s.location).Unix()
 		if lastRunUnix == nowUnix || lastRunUnix == nowUnix-1 || lastRunUnix == nowUnix+1 {
 			lastRun = lastRunDayPlusJobAtTime
 		}
