@@ -175,9 +175,20 @@ func ExampleScheduler_Clear() {
 func ExampleScheduler_Cron() {
 	s := gocron.NewScheduler(time.UTC)
 
+	// parsing handled by https://pkg.go.dev/github.com/robfig/cron/v3
+	// which follows https://en.wikipedia.org/wiki/Cron
 	_, _ = s.Cron("*/1 * * * *").Do(task) // every minute
 	_, _ = s.Cron("0 1 * * *").Do(task)   // every day at 1 am
 	_, _ = s.Cron("0 0 * * 6,0").Do(task) // weekends only
+}
+
+func ExampleScheduler_CronWithSeconds() {
+	s := gocron.NewScheduler(time.UTC)
+
+	// parsing handled by https://pkg.go.dev/github.com/robfig/cron/v3
+	// which follows https://en.wikipedia.org/wiki/Cron
+	_, _ = s.CronWithSeconds("*/1 * * * * *").Do(task)  // every second
+	_, _ = s.CronWithSeconds("0-30 * * * * *").Do(task) // every second 0-30
 }
 
 func ExampleScheduler_Day() {
