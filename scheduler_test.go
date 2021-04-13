@@ -1134,6 +1134,33 @@ func TestScheduler_Update(t *testing.T) {
 		assert.Equal(t, 3, counter)
 	})
 
+	t.Run("happy singleton mode", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		var counterMutex sync.RWMutex
+		counter := 0
+
+		j, err := s.Every(1).Day().SingletonMode().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		time.Sleep(300 * time.Millisecond)
+		_, err = s.Job(j).Every("500ms").Update()
+		require.NoError(t, err)
+
+		time.Sleep(550 * time.Millisecond)
+		_, err = s.Job(j).Every("750ms").Update()
+		require.NoError(t, err)
+
+		time.Sleep(800 * time.Millisecond)
+		s.Stop()
+
+		counterMutex.RLock()
+		defer counterMutex.RUnlock()
+		assert.Equal(t, 3, counter)
+	})
+
 	t.Run("update called with job call", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		_, err := s.Every("1s").Do(func() {})

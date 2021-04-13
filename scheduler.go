@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"reflect"
@@ -837,6 +838,7 @@ func (s *Scheduler) Update() (*Job, error) {
 		return job, wrapOrError(job.error, ErrUpdateCalledWithoutJob)
 	}
 	job.stop()
+	job.ctx, job.cancel = context.WithCancel(context.Background())
 	return s.Do(job.function, job.parameters...)
 }
 
