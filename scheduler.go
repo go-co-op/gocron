@@ -258,18 +258,21 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) time.Duration {
 	// handle occasional occurrence of job running to quickly / too early such that last run was within a second of now
-	if lastRunUnix, nowUnix := lastRun.Unix(), s.time.Now(s.location).Unix(); lastRunUnix == nowUnix || lastRunUnix == nowUnix-1 || lastRunUnix == nowUnix+1 {
-		lastRun = time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
-	}
+	lastRunUnix, nowUnix := job.LastRun().Unix(), s.time.Now(s.location).Unix()
 
 	if job.interval == 1 {
 		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
+
+		if lastRunUnix == nowUnix || lastRunUnix == nowUnix-1 || lastRunUnix == nowUnix+1 {
+			lastRun = lastRunDayPlusJobAtTime
+		}
+
 		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
 			return until(lastRun, s.roundToMidnight(lastRun).Add(job.getAtTime()))
 		}
 	}
 
-	nextRunAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, int(job.interval)).In(s.Location())
+	nextRunAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, job.interval).In(s.Location())
 	return until(lastRun, nextRunAtTime)
 }
 
