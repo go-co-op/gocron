@@ -618,6 +618,10 @@ func TestScheduler_StartAt(t *testing.T) {
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
+	ft := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+	}}
+
 	day := time.Hour * 24
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
@@ -649,6 +653,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM", job: &Job{interval: 1, unit: days, atTime: 8*time.Hour + 30*time.Minute, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: 3 * time.Hour},
 		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{interval: 2, unit: days, atTime: 8*time.Hour + 30*time.Minute, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: (2 * day) + 3*time.Hour},
 		{name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{interval: 2, unit: days, atTime: 8*time.Hour + 30*time.Minute, lastRun: januaryFirst2020At(8, 30, 0)}, wantTimeUntilNextRun: 2 * day},
+		{name: "daily, last run was 1 second ago", job: &Job{interval: 1, unit: days, atTime: 12 * time.Hour, lastRun: ft.Now(time.UTC).Add(-time.Second)}, wantTimeUntilNextRun: 1 * day},
 		//// WEEKS
 		{name: "every week should run in 7 days", job: &Job{interval: 1, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 7 * day},
 		{name: "every week with .At time rule should run respect .At time rule", job: &Job{interval: 1, atTime: _getHours(9) + _getMinutes(30), unit: weeks, lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 7 * day},
@@ -679,6 +684,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
+			s.time = ft
 			got := s.durationToNextRun(tc.job.LastRun(), tc.job)
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})

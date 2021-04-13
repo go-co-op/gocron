@@ -213,31 +213,31 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 		daysDifference := int(math.Abs(lastRun.Sub(jobDay).Hours()) / 24)
 		nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime())
 		if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
-			nextRun = nextRun.AddDate(0, int(job.interval), -daysDifference)
+			nextRun = nextRun.AddDate(0, job.interval, -daysDifference)
 		} else {
 			if job.interval == 1 { // every month counts current month
-				nextRun = nextRun.AddDate(0, int(job.interval)-1, daysDifference)
+				nextRun = nextRun.AddDate(0, job.interval-1, daysDifference)
 			} else { // should run next month interval
-				nextRun = nextRun.AddDate(0, int(job.interval), daysDifference)
+				nextRun = nextRun.AddDate(0, job.interval, daysDifference)
 			}
 		}
-		return s.until(lastRun, nextRun)
+		return until(lastRun, nextRun)
 	}
-	nextRun := lastRunRoundedMidnight.Add(job.getAtTime()).AddDate(0, int(job.interval), 0)
-	return s.until(lastRunRoundedMidnight, nextRun)
+	nextRun := lastRunRoundedMidnight.Add(job.getAtTime()).AddDate(0, job.interval, 0)
+	return until(lastRunRoundedMidnight, nextRun)
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) time.Duration {
 	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), *job.scheduledWeekday)
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
-	return s.until(lastRun, nextRun)
+	return until(lastRun, nextRun)
 }
 
 func (s *Scheduler) calculateWeeks(job *Job, lastRun time.Time) time.Duration {
 	totalDaysDifference := int(job.interval) * 7
 	nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
-	return s.until(lastRun, nextRun)
+	return until(lastRun, nextRun)
 }
 
 func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekday int, job *Job) int {
@@ -257,18 +257,23 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 }
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) time.Duration {
+	// handle occasional occurrence of job running to quickly / too early such that last run was within a second of now
+	if lastRunUnix, nowUnix := lastRun.Unix(), s.time.Now(s.location).Unix(); lastRunUnix == nowUnix || lastRunUnix == nowUnix-1 || lastRunUnix == nowUnix+1 {
+		lastRun = time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
+	}
+
 	if job.interval == 1 {
 		lastRunDayPlusJobAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
-			return s.until(lastRun, s.roundToMidnight(lastRun).Add(job.getAtTime()))
+			return until(lastRun, s.roundToMidnight(lastRun).Add(job.getAtTime()))
 		}
 	}
 
 	nextRunAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, int(job.interval)).In(s.Location())
-	return s.until(lastRun, nextRunAtTime)
+	return until(lastRun, nextRunAtTime)
 }
 
-func (s *Scheduler) until(from time.Time, until time.Time) time.Duration {
+func until(from time.Time, until time.Time) time.Duration {
 	return until.Sub(from)
 }
 
@@ -476,7 +481,7 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 }
 
 func (s *Scheduler) findJobsByTag(tag string) ([]*Job, error) {
-	jobs := []*Job{}
+	var jobs []*Job
 	for _, job := range s.Jobs() {
 		if strings.Contains(strings.Join(job.Tags(), " "), tag) {
 			jobs = append(jobs, job)
@@ -657,12 +662,12 @@ func (s *Scheduler) setUnit(unit schedulingUnit) {
 	job.setUnit(unit)
 }
 
-// Second sets the unit with seconds
+// Millisecond sets the unit with seconds
 func (s *Scheduler) Millisecond() *Scheduler {
 	return s.Milliseconds()
 }
 
-// Seconds sets the unit with seconds
+// Milliseconds sets the unit with seconds
 func (s *Scheduler) Milliseconds() *Scheduler {
 	s.setUnit(milliseconds)
 	return s
