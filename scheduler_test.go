@@ -1296,3 +1296,40 @@ func TestScheduler_CronWithSeconds(t *testing.T) {
 		assert.EqualError(t, err, wrapOrError(ErrInvalidIntervalUnitsSelection, ErrWeekdayNotSupported).Error())
 	})
 }
+
+func TestScheduler_WaitForSchedule(t *testing.T) {
+	s := NewScheduler(time.UTC)
+
+	var counterMutex sync.RWMutex
+	counter := 0
+
+	_, err := s.Every("100ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	require.NoError(t, err)
+	s.StartAsync()
+
+	time.Sleep(350 * time.Millisecond)
+	s.Stop()
+
+	counterMutex.RLock()
+	defer counterMutex.RUnlock()
+	assert.Equal(t, 3, counter)
+}
+
+func TestScheduler_WaitForSchedules(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	s.WaitForSchedules()
+
+	var counterMutex sync.RWMutex
+	counter := 0
+
+	_, err := s.Every("100ms").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	require.NoError(t, err)
+	s.StartAsync()
+
+	time.Sleep(350 * time.Millisecond)
+	s.Stop()
+
+	counterMutex.RLock()
+	defer counterMutex.RUnlock()
+	assert.Equal(t, 3, counter)
+}

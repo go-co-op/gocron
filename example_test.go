@@ -596,7 +596,7 @@ func ExampleScheduler_Tuesday() {
 
 func ExampleScheduler_Update() {
 	s := gocron.NewScheduler(time.UTC)
-	j, _ := s.Every("1s").Do(func() {})
+	j, _ := s.Every("1s").Do(task)
 	s.StartAsync()
 
 	time.Sleep(10 * time.Second)
@@ -604,6 +604,27 @@ func ExampleScheduler_Update() {
 
 	time.Sleep(30 * time.Minute)
 	_, _ = s.Job(j).Every(1).Day().At("02:00").Update()
+}
+
+func ExampleScheduler_WaitForSchedule() {
+	s := gocron.NewScheduler(time.UTC)
+
+	// job will run 5 minutes from the scheduler starting
+	_, _ = s.Every("5m").WaitForSchedule().Do(task)
+
+	// job will run immediately and 5 minutes from the scheduler starting
+	_, _ = s.Every("5m").Do(task)
+	s.StartAsync()
+}
+
+func ExampleScheduler_WaitForSchedules() {
+	s := gocron.NewScheduler(time.UTC)
+	s.WaitForSchedules()
+
+	// all jobs will run 5 minutes from the scheduler starting
+	_, _ = s.Every("5m").Do(task)
+	_, _ = s.Every("5m").Do(task)
+	s.StartAsync()
 }
 
 func ExampleScheduler_Wednesday() {

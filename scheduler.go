@@ -32,7 +32,8 @@ type Scheduler struct {
 
 	tags map[string]struct{} // for storing tags when unique tags is set
 
-	updateJob bool // so the scheduler knows to create a new job or update the current
+	updateJob       bool // so the scheduler knows to create a new job or update the current
+	waitForInterval bool // defaults jobs to waiting for first interval to start
 }
 
 // NewScheduler creates a new Scheduler
@@ -348,7 +349,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	switch interval := interval.(type) {
 	case int:
 		if !s.updateJob {
-			job = NewJob(interval)
+			job = s.newJob(interval)
 		} else {
 			job.interval = interval
 		}
@@ -357,7 +358,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		}
 	case time.Duration:
 		if !s.updateJob {
-			job = NewJob(0)
+			job = s.newJob(0)
 		} else {
 			job.interval = 0
 		}
@@ -365,7 +366,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job.setUnit(duration)
 	case string:
 		if !s.updateJob {
-			job = NewJob(0)
+			job = s.newJob(0)
 		} else {
 			job.interval = 0
 		}
@@ -377,7 +378,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job.setUnit(duration)
 	default:
 		if !s.updateJob {
-			job = NewJob(0)
+			job = s.newJob(0)
 		} else {
 			job.interval = 0
 		}
@@ -851,7 +852,7 @@ func (s *Scheduler) CronWithSeconds(cronExpression string) *Scheduler {
 }
 
 func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
-	job := NewJob(0)
+	job := s.newJob(0)
 
 	withLocation := fmt.Sprintf("CRON_TZ=%s %s", s.location.String(), cronExpression)
 
@@ -876,5 +877,28 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 	job.startsImmediately = false
 
 	s.setJobs(append(s.Jobs(), job))
+	return s
+}
+
+func (s *Scheduler) newJob(interval int) *Job {
+	if s.waitForInterval {
+		return newJob(interval, false)
+	}
+	return newJob(interval, true)
+}
+
+// WaitForSchedules defaults the scheduler to create all
+// new jobs with the WaitForSchedule option as true.
+// The jobs will not start immediately but rather will
+// wait until their first scheduled interval.
+func (s *Scheduler) WaitForSchedules() {
+	s.waitForInterval = true
+}
+
+// WaitForSchedule sets the job to not start immediately
+// but rather wait until the first scheduled interval.
+func (s *Scheduler) WaitForSchedule() *Scheduler {
+	job := s.getCurrentJob()
+	job.startsImmediately = false
 	return s
 }
