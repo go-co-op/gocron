@@ -617,7 +617,7 @@ func ExampleScheduler_WaitForSchedule() {
 	s.StartAsync()
 }
 
-func ExampleScheduler_WaitForSchedules() {
+func ExampleScheduler_WaitForScheduleAll() {
 	s := gocron.NewScheduler(time.UTC)
 	s.WaitForScheduleAll()
 
