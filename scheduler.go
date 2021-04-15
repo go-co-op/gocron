@@ -881,10 +881,7 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 }
 
 func (s *Scheduler) newJob(interval int) *Job {
-	if s.waitForInterval {
-		return newJob(interval, false)
-	}
-	return newJob(interval, true)
+	return newJob(interval, !s.waitForInterval)
 }
 
 // WaitForSchedules defaults the scheduler to create all
