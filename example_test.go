@@ -619,7 +619,7 @@ func ExampleScheduler_WaitForSchedule() {
 
 func ExampleScheduler_WaitForSchedules() {
 	s := gocron.NewScheduler(time.UTC)
-	s.WaitForSchedules()
+	s.WaitForScheduleAll()
 
 	// all jobs will run 5 minutes from the scheduler starting
 	_, _ = s.Every("5m").Do(task)

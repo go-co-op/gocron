@@ -884,11 +884,11 @@ func (s *Scheduler) newJob(interval int) *Job {
 	return newJob(interval, !s.waitForInterval)
 }
 
-// WaitForSchedules defaults the scheduler to create all
+// WaitForScheduleAll defaults the scheduler to create all
 // new jobs with the WaitForSchedule option as true.
 // The jobs will not start immediately but rather will
 // wait until their first scheduled interval.
-func (s *Scheduler) WaitForSchedules() {
+func (s *Scheduler) WaitForScheduleAll() {
 	s.waitForInterval = true
 }
 

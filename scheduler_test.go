@@ -1317,7 +1317,7 @@ func TestScheduler_WaitForSchedule(t *testing.T) {
 
 func TestScheduler_WaitForSchedules(t *testing.T) {
 	s := NewScheduler(time.UTC)
-	s.WaitForSchedules()
+	s.WaitForScheduleAll()
 
 	var counterMutex sync.RWMutex
 	counter := 0
