@@ -58,8 +58,8 @@ const (
 	singletonMode
 )
 
-// NewJob creates a new Job with the provided interval
-func NewJob(interval int) *Job {
+// newJob creates a new Job with the provided interval
+func newJob(interval int, startImmediately bool) *Job {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Job{
 		interval: interval,
@@ -71,7 +71,7 @@ func NewJob(interval int) *Job {
 			cancel: cancel,
 		},
 		tags:              []string{},
-		startsImmediately: true,
+		startsImmediately: startImmediately,
 	}
 }
 
