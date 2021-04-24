@@ -147,7 +147,6 @@ func (s *Scheduler) Location() *time.Location {
 func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
 	lastRun := job.LastRun()
-
 	if !s.jobPresent(job) {
 		return
 	}
@@ -172,6 +171,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}
 
 	durationToNextRun := s.durationToNextRun(lastRun, job)
+
 	job.setNextRun(lastRun.Add(durationToNextRun))
 	job.setTimer(time.AfterFunc(durationToNextRun, func() {
 		s.run(job)
@@ -179,6 +179,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}))
 }
 
+// durationToNextRun calculate how much time to the next run, dependind on unit
 func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration {
 	// job can be scheduled with .StartAt()
 	if job.getStartAtTime().After(lastRun) {
@@ -230,7 +231,8 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) time.Duration {
-	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), *job.scheduledWeekday)
+	jobWeekDay, _ := job.Weekday()
+	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), jobWeekDay)
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
 	return until(lastRun, nextRun)
@@ -757,7 +759,27 @@ func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
 // Weekday sets the start with a specific weekday weekday
 func (s *Scheduler) Weekday(startDay time.Weekday) *Scheduler {
 	job := s.getCurrentJob()
-	job.scheduledWeekday = &startDay
+
+	if len(job.scheduledWeekday) == 0 {
+		job.scheduledWeekday = append(job.scheduledWeekday, &startDay)
+	} else {
+		for index, scheduleweek := range job.scheduledWeekday {
+
+			if int(*scheduleweek) == int(startDay) {
+				break
+			}
+			if int(*scheduleweek) < int(startDay) {
+				a := append(job.scheduledWeekday[:index+1], job.scheduledWeekday[index:]...)
+				a[index] = &startDay
+				job.scheduledWeekday = a
+				break
+			} else {
+				job.scheduledWeekday = append(job.scheduledWeekday, &startDay)
+				break
+			}
+
+		}
+	}
 	job.startsImmediately = false
 	s.setUnit(weeks)
 	return s
