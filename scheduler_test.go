@@ -675,12 +675,12 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day", job: &Job{interval: 2, unit: months, dayOfTheMonth: 1, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 30*day + 29*day}, // 2020 january and february
 		{name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day", job: &Job{interval: 13, unit: months, dayOfTheMonth: 1, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0))},
 		//// WEEKDAYS
-		{name: "every weekday starting on one day before it should run this weekday", job: &Job{interval: 1, unit: weeks, scheduledWeekday: _tuesdayWeekday(), lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every weekday starting on same weekday should run on same immediately", job: &Job{interval: 1, unit: weeks, scheduledWeekday: _tuesdayWeekday(), lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 0},
-		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: &Job{interval: 2, unit: weeks, scheduledWeekday: _tuesdayWeekday(), lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 8 * day},
-		{name: "every weekday starting on one day after should count days remaining", job: &Job{interval: 1, unit: weeks, scheduledWeekday: _tuesdayWeekday(), lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 2)}, wantTimeUntilNextRun: 6 * day},
-		{name: "every weekday starting before jobs .At() time should run at same day at time", job: &Job{interval: 1, unit: weeks, atTime: _getHours(9) + _getMinutes(30), scheduledWeekday: _tuesdayWeekday(), lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
-		{name: "every weekday starting at same day at time that already passed should run at next week at time", job: &Job{interval: 1, unit: weeks, atTime: _getHours(9) + _getMinutes(30), scheduledWeekday: _tuesdayWeekday(), lastRun: mondayAt(10, 30, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0)},
+		{name: "every weekday starting on one day before it should run this weekday", job: &Job{interval: 1, unit: weeks, scheduledWeekday: []*time.Weekday{_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
+		{name: "every weekday starting on same weekday should run on same immediately", job: &Job{interval: 1, unit: weeks, scheduledWeekday: []*time.Weekday{_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 0},
+		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: &Job{interval: 2, unit: weeks, scheduledWeekday: []*time.Weekday{_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 8 * day},
+		{name: "every weekday starting on one day after should count days remaining", job: &Job{interval: 1, unit: weeks, scheduledWeekday: []*time.Weekday{_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 2)}, wantTimeUntilNextRun: 6 * day},
+		{name: "every weekday starting before jobs .At() time should run at same day at time", job: &Job{interval: 1, unit: weeks, atTime: _getHours(9) + _getMinutes(30), scheduledWeekday: []*time.Weekday{_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
+		{name: "every weekday starting at same day at time that already passed should run at next week at time", job: &Job{interval: 1, unit: weeks, atTime: _getHours(9) + _getMinutes(30), scheduledWeekday: []*time.Weekday{_tuesdayWeekday()}, lastRun: mondayAt(10, 30, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0)},
 	}
 
 	for _, tc := range testCases {
@@ -1332,4 +1332,70 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	counterMutex.RLock()
 	defer counterMutex.RUnlock()
 	assert.Equal(t, 3, counter)
+}
+
+func TestScheduler_LenWeekDays(t *testing.T) {
+	t.Run("no week day", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		job, err := s.Every(1).Week().Do(func() {})
+		require.NoError(t, err)
+
+		assert.Equal(t, len(job.scheduledWeekday), 0)
+	})
+
+	t.Run("equal week day", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		job, err := s.Every(1).Week().Friday().Friday().Friday().Do(func() {})
+		require.NoError(t, err)
+
+		assert.Equal(t, len(job.scheduledWeekday), 1)
+	})
+
+	t.Run("more than one week day", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		job, err := s.Every(1).Week().Friday().Sunday().Saturday().Do(func() {})
+		require.NoError(t, err)
+
+		assert.Equal(t, len(job.scheduledWeekday), 3)
+	})
+
+}
+
+func TestScheduler_CallNextWeekDay(t *testing.T) {
+	januaryFirst2020At := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
+	}
+	day := time.Hour * 24
+
+	t.Run("week days not in order", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		lastRun := januaryFirst2020At(0, 0, 0)
+		job, err := s.Every(1).Week().Monday().Friday().Do(func() {})
+
+		require.NoError(t, err)
+
+		job.lastRun = lastRun
+		wantTimeUntilNextRun := 2 * day
+
+		got := s.durationToNextRun(lastRun, job)
+		assert.Equal(t, wantTimeUntilNextRun, got)
+	})
+
+	t.Run("wweks day in order", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		lastRun := januaryFirst2020At(0, 0, 0)
+		job, err := s.Every(1).Week().Friday().Monday().Do(func() {})
+
+		require.NoError(t, err)
+
+		job.lastRun = lastRun
+		wantTimeUntilNextRun := 2 * day
+
+		got := s.durationToNextRun(lastRun, job)
+		assert.Equal(t, wantTimeUntilNextRun, got)
+	})
+
 }
