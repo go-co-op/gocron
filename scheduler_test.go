@@ -1415,7 +1415,7 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 	t.Run("check slice next run", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		lastRun := januaryFirst2020At(23, 59, 59)
-		lastRun2 := januarySecont2020At(0, 0, 0)
+		secondLastRun := januarySecont2020At(0, 0, 0)
 
 		job, err := s.Every(1).Week().Friday().Thursday().Do(func() {})
 		require.NoError(t, err)
@@ -1428,8 +1428,8 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 		s.StartAsync()
 		time.Sleep(1 * time.Second)
 
-		job.lastRun = lastRun2
-		gotSecond := s.durationToNextRun(lastRun2, job)
+		job.lastRun = secondLastRun
+		gotSecond := s.durationToNextRun(secondLastRun, job)
 		assert.Equal(t, wantTimeUntilNextSecondRun, gotSecond)
 
 	})
