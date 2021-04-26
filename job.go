@@ -23,7 +23,7 @@ type Job struct {
 	error             error           // error related to Job
 	lastRun           time.Time       // datetime of last run
 	nextRun           time.Time       // datetime of next run
-	scheduledWeekday  []*time.Weekday // Specific the days of the week to start on
+	scheduledWeekday  []*time.Weekday // Specific days of the week to start on
 	dayOfTheMonth     int             // Specific day of the month to run the job
 	tags              []string        // allow the user to tag Jobs with certain labels
 	runCount          int             // number of times the job ran
@@ -177,7 +177,16 @@ func (j *Job) ScheduledAtTime() string {
 
 // Weekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
-func (j *Job) Weekday() ([]time.Weekday, error) {
+func (j *Job) Weekday() (time.Weekday, error) {
+	if j.scheduledWeekday == nil {
+		return time.Sunday, ErrNotScheduledWeekday
+	}
+	return *j.scheduledWeekday[0], nil
+}
+
+// Weekdays returns a slice of time.Weekday that the Job will run in a week and
+// will return an error fi the Job is not shceduled weekly
+func (j *Job) Weekdays() ([]time.Weekday, error) {
 	var jobWeekDays []time.Weekday
 
 	if j.scheduledWeekday == nil {
