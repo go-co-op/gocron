@@ -1335,32 +1335,29 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 }
 
 func TestScheduler_LenWeekDays(t *testing.T) {
-	t.Run("no week day", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
 
-		job, err := s.Every(1).Week().Do(func() {})
-		require.NoError(t, err)
+	testCases := []struct {
+		description string
+		weekDays    []time.Weekday
+		finalLen    int
+	}{
+		{"no week day", []time.Weekday{}, 0},
+		{"equal week day", []time.Weekday{time.Friday, time.Friday, time.Friday}, 1},
+		{"more than one week day", []time.Weekday{time.Friday, time.Saturday, time.Sunday}, 3},
+	}
 
-		assert.Equal(t, len(job.scheduledWeekday), 0)
-	})
-
-	t.Run("equal week day", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-
-		job, err := s.Every(1).Week().Friday().Friday().Friday().Do(func() {})
-		require.NoError(t, err)
-
-		assert.Equal(t, len(job.scheduledWeekday), 1)
-	})
-
-	t.Run("more than one week day", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-
-		job, err := s.Every(1).Week().Friday().Sunday().Saturday().Do(func() {})
-		require.NoError(t, err)
-
-		assert.Equal(t, len(job.scheduledWeekday), 3)
-	})
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			s = s.Every(1)
+			for _, weekDay := range tc.weekDays {
+				s = s.Weekday(weekDay)
+			}
+			j, err := s.Do(func() {})
+			require.NoError(t, err)
+			assert.Equal(t, len(j.scheduledWeekday), tc.finalLen)
+		})
+	}
 
 }
 
@@ -1368,34 +1365,72 @@ func TestScheduler_CallNextWeekDay(t *testing.T) {
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
 	}
-	day := time.Hour * 24
 
-	t.Run("week days not in order", func(t *testing.T) {
+	const wantTimeUntilNextRun = time.Hour * 24 * 2
+	var lastRun = januaryFirst2020At(0, 0, 0)
+
+	testCases := []struct {
+		description string
+		weekDays    []time.Weekday
+	}{
+		{"week days not in order", []time.Weekday{time.Monday, time.Friday}},
+		{"week days in order", []time.Weekday{time.Friday, time.Monday}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			s := NewScheduler(time.UTC)
+			s.Every(1)
+
+			for _, weekDay := range tc.weekDays {
+				s.Weekday(weekDay)
+			}
+
+			job, err := s.Do(func() {})
+			require.NoError(t, err)
+			job.lastRun = lastRun
+
+			got := s.durationToNextRun(lastRun, job)
+			assert.Equal(t, wantTimeUntilNextRun, got)
+
+		})
+	}
+
+}
+
+func TestScheduler_CheckNextWeekDay(t *testing.T) {
+	januaryFirst2020At := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
+	}
+	januarySecont2020At := func(hour, minute, second int) time.Time {
+		return time.Date(2020, time.January, 2, hour, minute, second, 0, time.UTC)
+	}
+	const (
+		wantTimeUntilNextFirstRun = 1 * time.Second
+		// all day long
+		wantTimeUntilNextSecondRun = 24 * time.Hour
+	)
+
+	t.Run("check slice next run", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		lastRun := januaryFirst2020At(0, 0, 0)
-		job, err := s.Every(1).Week().Monday().Friday().Do(func() {})
+		lastRun := januaryFirst2020At(23, 59, 59)
+		lastRun2 := januarySecont2020At(0, 0, 0)
 
+		job, err := s.Every(1).Week().Friday().Thursday().Do(func() {})
 		require.NoError(t, err)
-
 		job.lastRun = lastRun
-		wantTimeUntilNextRun := 2 * day
 
-		got := s.durationToNextRun(lastRun, job)
-		assert.Equal(t, wantTimeUntilNextRun, got)
+		wantTimeUntilNextFirstRun := 1 * time.Second
+		gotFirst := s.durationToNextRun(lastRun, job)
+		assert.Equal(t, wantTimeUntilNextFirstRun, gotFirst)
+
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
+
+		job.lastRun = lastRun2
+		gotSecond := s.durationToNextRun(lastRun2, job)
+		assert.Equal(t, wantTimeUntilNextSecondRun, gotSecond)
+
 	})
-
-	t.Run("wweks day in order", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-		lastRun := januaryFirst2020At(0, 0, 0)
-		job, err := s.Every(1).Week().Friday().Monday().Do(func() {})
-
-		require.NoError(t, err)
-
-		job.lastRun = lastRun
-		wantTimeUntilNextRun := 2 * day
-
-		got := s.durationToNextRun(lastRun, job)
-		assert.Equal(t, wantTimeUntilNextRun, got)
-	})
-
 }
