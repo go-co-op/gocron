@@ -178,17 +178,17 @@ func (j *Job) ScheduledAtTime() string {
 // Weekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
 func (j *Job) Weekday() ([]time.Weekday, error) {
-	var jobWeekDay []time.Weekday
+	var jobWeekDays []time.Weekday
 
 	if j.scheduledWeekday == nil {
-		jobWeekDay = append(jobWeekDay, time.Sunday)
-		return jobWeekDay, ErrNotScheduledWeekday
+		jobWeekDays = append(jobWeekDays, time.Sunday)
+		return jobWeekDays, ErrNotScheduledWeekday
 	}
 
 	for _, weekDay := range j.scheduledWeekday {
-		jobWeekDay = append(jobWeekDay, *weekDay)
+		jobWeekDays = append(jobWeekDays, *weekDay)
 	}
-	return jobWeekDay, nil
+	return jobWeekDays, nil
 }
 
 // LimitRunsTo limits the number of executions of this job to n.
