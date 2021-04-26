@@ -131,10 +131,6 @@ func ExampleJob_Weekday() {
 	// Output:
 	// Monday
 	// job not scheduled weekly on a weekday
-
-	secondWeeklyJob, _ := s.Every(1).Week().Monday().Friday().Do(task)
-	weeldays, _ := secondWeeklyJob.Weekday()
-	fmt.Println(weeldays)
 }
 
 // ---------------------------------------------------------------------
