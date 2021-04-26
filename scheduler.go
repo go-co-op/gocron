@@ -231,7 +231,7 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) time.Duration {
-	jobWeekDay, err := job.Weekday()
+	jobWeekDay, err := job.Weekdays()
 	if err != nil {
 		job.error = wrapOrError(job.error, ErrInvalidInterval)
 	}
