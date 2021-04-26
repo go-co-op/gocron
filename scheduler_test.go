@@ -1421,7 +1421,6 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 		require.NoError(t, err)
 		job.lastRun = lastRun
 
-		wantTimeUntilNextFirstRun := 1 * time.Second
 		gotFirst := s.durationToNextRun(lastRun, job)
 		assert.Equal(t, wantTimeUntilNextFirstRun, gotFirst)
 
