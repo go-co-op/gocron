@@ -186,18 +186,18 @@ func (j *Job) Weekday() (time.Weekday, error) {
 
 // Weekdays returns a slice of time.Weekday that the Job will run in a week and
 // will return an error if the Job is not scheduled weekly
-func (j *Job) Weekdays() ([]time.Weekday, error) {
+func (j *Job) Weekdays() []time.Weekday {
 	var jobWeekDays []time.Weekday
 
 	if len(j.scheduledWeekday) == 0 {
 		jobWeekDays = append(jobWeekDays, time.Sunday)
-		return jobWeekDays, ErrNotScheduledWeekday
+		return jobWeekDays
 	}
 
 	for _, weekDay := range j.scheduledWeekday {
 		jobWeekDays = append(jobWeekDays, weekDay)
 	}
-	return jobWeekDays, nil
+	return jobWeekDays
 }
 
 // LimitRunsTo limits the number of executions of this job to n.

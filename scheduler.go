@@ -231,12 +231,8 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) time.Duration {
-	jobWeekDay, err := job.Weekdays()
-	if err != nil {
-		job.error = wrapOrError(job.error, ErrInvalidInterval)
-	}
 
-	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), jobWeekDay)
+	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), job.Weekdays())
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
 	return until(lastRun, nextRun)
