@@ -193,7 +193,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	case days:
 		d = s.calculateDays(job, lastRun)
 	case weeks:
-		if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
+		if len(job.scheduledWeekday) != 0 { // weekday selected, Every().Monday(), for example
 			d = s.calculateWeekday(job, lastRun)
 		} else {
 			d = s.calculateWeeks(job, lastRun)
@@ -590,7 +590,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
-	if job.scheduledWeekday != nil && jobUnit != weeks {
+	if len(job.scheduledWeekday) != 0 && jobUnit != weeks {
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
