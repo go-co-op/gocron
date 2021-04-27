@@ -783,13 +783,13 @@ func (s *Scheduler) Weekday(startDay time.Weekday) *Scheduler {
 	job := s.getCurrentJob()
 
 	if len(job.scheduledWeekday) == 0 {
-		job.scheduledWeekday = append(job.scheduledWeekday, &startDay)
+		job.scheduledWeekday = append(job.scheduledWeekday, startDay)
 	} else {
 		for _, scheduleweek := range job.scheduledWeekday {
-			if int(*scheduleweek) == int(startDay) {
+			if int(scheduleweek) == int(startDay) {
 				break
 			} else {
-				job.scheduledWeekday = append(job.scheduledWeekday, &startDay)
+				job.scheduledWeekday = append(job.scheduledWeekday, startDay)
 				break
 			}
 		}
