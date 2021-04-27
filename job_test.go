@@ -46,7 +46,7 @@ func TestGetWeekday(t *testing.T) {
 		expectedWeekday time.Weekday
 		expectedError   error
 	}{
-		{"success", weedayJob, time.Wednesday, nil},
+		{"success", weedayJob, wednesday, nil},
 		{"fail - not set for weekday", nonWeekdayJob, time.Sunday, ErrNotScheduledWeekday},
 	}
 
