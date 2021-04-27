@@ -344,7 +344,7 @@ func remainingDaysToWeekday(from time.Weekday, weekDays []time.Weekday) int {
 
 			// checking only if is smaller than max cause there is no way to be equals
 			if differenceBetweenDays > 0 && differenceBetweenDays < daysUntilScheduledDay {
-				to, daysUntilScheduledDay = day, differenceBetweenDays
+				daysUntilScheduledDay = differenceBetweenDays
 			}
 		}
 	}
@@ -789,7 +789,7 @@ func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
 func (s *Scheduler) Weekday(weekDay time.Weekday) *Scheduler {
 	job := s.getCurrentJob()
 
-	if in := in(job.scheduledWeekday, weekDay); in == false {
+	if in := in(job.scheduledWeekday, weekDay); !in {
 		job.scheduledWeekday = append(job.scheduledWeekday, weekDay)
 	}
 

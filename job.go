@@ -187,8 +187,6 @@ func (j *Job) Weekday() (time.Weekday, error) {
 // Weekdays returns a slice of time.Weekday that the Job will run in a week and
 // will return an error if the Job is not scheduled weekly
 func (j *Job) Weekdays() []time.Weekday {
-	j.Lock()
-	defer j.Unlock()
 	// appending on j.scheduledWeekday may cause a side effect
 	if len(j.scheduledWeekday) == 0 {
 		return []time.Weekday{time.Sunday}
