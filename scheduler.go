@@ -147,7 +147,6 @@ func (s *Scheduler) Location() *time.Location {
 func (s *Scheduler) scheduleNextRun(job *Job) {
 	now := s.now()
 	lastRun := job.LastRun()
-
 	if !s.jobPresent(job) {
 		return
 	}
@@ -172,6 +171,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}
 
 	durationToNextRun := s.durationToNextRun(lastRun, job)
+
 	job.setNextRun(lastRun.Add(durationToNextRun))
 	job.setTimer(time.AfterFunc(durationToNextRun, func() {
 		s.run(job)
@@ -179,6 +179,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}))
 }
 
+// durationToNextRun calculate how much time to the next run, depending on unit
 func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration {
 	// job can be scheduled with .StartAt()
 	if job.getStartAtTime().After(lastRun) {
@@ -192,7 +193,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration
 	case days:
 		d = s.calculateDays(job, lastRun)
 	case weeks:
-		if job.scheduledWeekday != nil { // weekday selected, Every().Monday(), for example
+		if len(job.scheduledWeekday) != 0 { // weekday selected, Every().Monday(), for example
 			d = s.calculateWeekday(job, lastRun)
 		} else {
 			d = s.calculateWeeks(job, lastRun)
@@ -230,7 +231,7 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) time.Duration {
-	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), *job.scheduledWeekday)
+	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), job.Weekdays())
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
 	return until(lastRun, nextRun)
@@ -286,6 +287,18 @@ func shouldRunToday(lastRun time.Time, atTime time.Time) bool {
 	return lastRun.Before(atTime)
 }
 
+func in(scheduleWeekdays []time.Weekday, weekday time.Weekday) bool {
+	in := false
+
+	for _, weekdayInSchedule := range scheduleWeekdays {
+		if int(weekdayInSchedule) == int(weekday) {
+			in = true
+			break
+		}
+	}
+	return in
+}
+
 func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	lastRun := job.LastRun()
 	if job.neverRan() && shouldRunAtSpecificTime(job) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
@@ -312,10 +325,28 @@ func shouldRunAtSpecificTime(job *Job) bool {
 	return job.getAtTime() != 0
 }
 
-func remainingDaysToWeekday(from time.Weekday, to time.Weekday) int {
-	daysUntilScheduledDay := int(to) - int(from)
-	if daysUntilScheduledDay < 0 {
-		daysUntilScheduledDay += 7
+func remainingDaysToWeekday(from time.Weekday, weekDays []time.Weekday) int {
+	var (
+		to                    time.Weekday
+		daysUntilScheduledDay int
+	)
+	if len(weekDays) == 1 {
+		to = weekDays[0]
+
+		daysUntilScheduledDay = int(to) - int(from)
+		if daysUntilScheduledDay < 0 {
+			daysUntilScheduledDay += 7
+		}
+	} else {
+		daysUntilScheduledDay = 8
+		for _, day := range weekDays {
+			differenceBetweenDays := int(day) - int(from)
+
+			// checking only if is smaller than max cause there is no way to be equals
+			if differenceBetweenDays > 0 && differenceBetweenDays < daysUntilScheduledDay {
+				daysUntilScheduledDay = differenceBetweenDays
+			}
+		}
 	}
 	return daysUntilScheduledDay
 }
@@ -566,7 +597,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
-	if job.scheduledWeekday != nil && jobUnit != weeks {
+	if len(job.scheduledWeekday) != 0 && jobUnit != weeks {
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
@@ -754,10 +785,14 @@ func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
 // spill over to the next month. Similarly, if it's less than 0,
 // it will go back to the month before
 
-// Weekday sets the start with a specific weekday weekday
-func (s *Scheduler) Weekday(startDay time.Weekday) *Scheduler {
+// Weekday sets the scheduledWeekday with a specifics weekdays
+func (s *Scheduler) Weekday(weekDay time.Weekday) *Scheduler {
 	job := s.getCurrentJob()
-	job.scheduledWeekday = &startDay
+
+	if in := in(job.scheduledWeekday, weekDay); !in {
+		job.scheduledWeekday = append(job.scheduledWeekday, weekDay)
+	}
+
 	job.startsImmediately = false
 	s.setUnit(weeks)
 	return s
