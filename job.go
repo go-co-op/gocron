@@ -14,21 +14,21 @@ import (
 type Job struct {
 	sync.RWMutex
 	jobFunction
-	interval          int             // pause interval * unit between runs
-	duration          time.Duration   // time duration between runs
-	unit              schedulingUnit  // time units, ,e.g. 'minutes', 'hours'...
-	startsImmediately bool            // if the Job should run upon scheduler start
-	atTime            time.Duration   // optional time at which this Job runs when interval is day
-	startAtTime       time.Time       // optional time at which the Job starts
-	error             error           // error related to Job
-	lastRun           time.Time       // datetime of last run
-	nextRun           time.Time       // datetime of next run
-	scheduledWeekday  []*time.Weekday // Specific days of the week to start on
-	dayOfTheMonth     int             // Specific day of the month to run the job
-	tags              []string        // allow the user to tag Jobs with certain labels
-	runCount          int             // number of times the job ran
-	timer             *time.Timer     // handles running tasks at specific time
-	cronSchedule      cron.Schedule   // stores the schedule when a task uses cron
+	interval          int            // pause interval * unit between runs
+	duration          time.Duration  // time duration between runs
+	unit              schedulingUnit // time units, ,e.g. 'minutes', 'hours'...
+	startsImmediately bool           // if the Job should run upon scheduler start
+	atTime            time.Duration  // optional time at which this Job runs when interval is day
+	startAtTime       time.Time      // optional time at which the Job starts
+	error             error          // error related to Job
+	lastRun           time.Time      // datetime of last run
+	nextRun           time.Time      // datetime of next run
+	scheduledWeekday  []time.Weekday // Specific days of the week to start on
+	dayOfTheMonth     int            // Specific day of the month to run the job
+	tags              []string       // allow the user to tag Jobs with certain labels
+	runCount          int            // number of times the job ran
+	timer             *time.Timer    // handles running tasks at specific time
+	cronSchedule      cron.Schedule  // stores the schedule when a task uses cron
 }
 
 type jobFunction struct {
@@ -178,24 +178,24 @@ func (j *Job) ScheduledAtTime() string {
 // Weekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
 func (j *Job) Weekday() (time.Weekday, error) {
-	if j.scheduledWeekday == nil {
+	if len(j.scheduledWeekday) == 0 {
 		return time.Sunday, ErrNotScheduledWeekday
 	}
-	return *j.scheduledWeekday[0], nil
+	return j.scheduledWeekday[0], nil
 }
 
 // Weekdays returns a slice of time.Weekday that the Job will run in a week and
-// will return an error fi the Job is not shceduled weekly
+// will return an error if the Job is not scheduled weekly
 func (j *Job) Weekdays() ([]time.Weekday, error) {
 	var jobWeekDays []time.Weekday
 
-	if j.scheduledWeekday == nil {
+	if len(j.scheduledWeekday) == 0 {
 		jobWeekDays = append(jobWeekDays, time.Sunday)
 		return jobWeekDays, ErrNotScheduledWeekday
 	}
 
 	for _, weekDay := range j.scheduledWeekday {
-		jobWeekDays = append(jobWeekDays, *weekDay)
+		jobWeekDays = append(jobWeekDays, weekDay)
 	}
 	return jobWeekDays, nil
 }
