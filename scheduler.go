@@ -179,7 +179,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 	}))
 }
 
-// durationToNextRun calculate how much time to the next run, dependind on unit
+// durationToNextRun calculate how much time to the next run, depending on unit
 func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) time.Duration {
 	// job can be scheduled with .StartAt()
 	if job.getStartAtTime().After(lastRun) {
