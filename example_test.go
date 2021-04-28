@@ -133,6 +133,14 @@ func ExampleJob_Weekday() {
 	// job not scheduled weekly on a weekday
 }
 
+func ExampleJob_Weekdays() {
+	s := gocron.NewScheduler(time.UTC)
+	j, _ := s.Every(1).Week().Monday().Wednesday().Friday().Do(task)
+	fmt.Println(j.Weekdays())
+	// Output:
+	// [Monday Wednesday Friday]
+}
+
 // ---------------------------------------------------------------------
 // -------------------SCHEDULER-FUNCTIONS-------------------------------
 // ---------------------------------------------------------------------
@@ -642,13 +650,15 @@ func ExampleScheduler_Week() {
 
 	_, _ = s.Every(1).Week().Do(task)
 	_, _ = s.Every(1).Weeks().Do(task)
+
+	_, _ = s.Every(1).Week().Monday().Wednesday().Friday().Do(task)
 }
 
 func ExampleScheduler_Weekday() {
 	s := gocron.NewScheduler(time.UTC)
 
 	_, _ = s.Every(1).Week().Weekday(time.Monday).Do(task)
-	_, _ = s.Every(1).Weeks().Weekday(time.Tuesday).Do(task)
+	_, _ = s.Every(1).Weeks().Weekday(time.Tuesday).Weekday(time.Friday).Do(task)
 }
 
 func ExampleScheduler_Weeks() {
@@ -656,6 +666,8 @@ func ExampleScheduler_Weeks() {
 
 	_, _ = s.Every(1).Week().Do(task)
 	_, _ = s.Every(1).Weeks().Do(task)
+
+	_, _ = s.Every(2).Weeks().Monday().Wednesday().Friday().Do(task)
 }
 
 func ExampleScheduler_RunByTag() {
@@ -663,7 +675,7 @@ func ExampleScheduler_RunByTag() {
 	_, _ = s.Every(1).Day().At("10:00").Do(task)
 	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
 	s.StartAsync()
-	s.RunByTag("tag")
+	_ = s.RunByTag("tag")
 }
 
 func ExampleScheduler_RunByTagWithDelay() {
@@ -671,5 +683,5 @@ func ExampleScheduler_RunByTagWithDelay() {
 	_, _ = s.Every(1).Day().Tag("tag").At("10:00").Do(task)
 	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
 	s.StartAsync()
-	s.RunByTagWithDelay("tag", 2*time.Second)
+	_ = s.RunByTagWithDelay("tag", 2*time.Second)
 }
