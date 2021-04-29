@@ -1433,3 +1433,7 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 
 	})
 }
+
+func TestScheduler_CheckEveryHigherThanOne(t *testing.T) {
+
+}
