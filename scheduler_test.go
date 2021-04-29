@@ -1424,9 +1424,6 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 		gotFirst := s.durationToNextRun(lastRun, job)
 		assert.Equal(t, wantTimeUntilNextFirstRun, gotFirst)
 
-		s.StartAsync()
-		time.Sleep(1 * time.Second)
-
 		job.lastRun = secondLastRun
 		gotSecond := s.durationToNextRun(secondLastRun, job)
 		assert.Equal(t, wantTimeUntilNextSecondRun, gotSecond)
