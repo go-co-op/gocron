@@ -36,6 +36,9 @@ type Scheduler struct {
 	waitForInterval bool // defaults jobs to waiting for first interval to start
 }
 
+// days in a week
+const allWeekDays = 7
+
 // NewScheduler creates a new Scheduler
 func NewScheduler(loc *time.Location) *Scheduler {
 	executor := newExecutor()
@@ -247,7 +250,10 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 	if job.interval > 1 && job.RunCount() < len(job.Weekdays()) { // just count weeks after the first jobs were done
 		return daysToWeekday
 	} else if job.interval > 1 && job.RunCount() >= len(job.Weekdays()) { // every N weeks counts rest of this week and full N-1 weeks
-		return daysToWeekday + int(job.interval-1)*7
+		if daysToWeekday > 0 {
+			return int(job.interval)*7 - (allWeekDays - daysToWeekday)
+		}
+		return int(job.interval) * 7
 	}
 
 	if daysToWeekday == 0 { // today, at future time or already passed
@@ -257,7 +263,6 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 		}
 		return 7
 	}
-
 	return daysToWeekday
 }
 
@@ -329,26 +334,28 @@ func shouldRunAtSpecificTime(job *Job) bool {
 
 func remainingDaysToWeekday(from time.Weekday, weekDays []time.Weekday) int {
 	var (
-		to                    time.Weekday
-		daysUntilScheduledDay int
+		daysUntilScheduledDay         int
+		daysUntilScheduledDayPositive = allWeekDays
+		daysUntilScheduledDayNegative = 0
 	)
-	if len(weekDays) == 1 {
-		to = weekDays[0]
 
-		daysUntilScheduledDay = int(to) - int(from)
-		if daysUntilScheduledDay < 0 {
-			daysUntilScheduledDay += 7
+	for _, day := range weekDays {
+		differenceBetweenDays := int(day) - int(from)
+		// checking only if is smaller than max cause there is no way to be equals
+		if differenceBetweenDays > 0 && differenceBetweenDays < daysUntilScheduledDayPositive {
+			daysUntilScheduledDayPositive = differenceBetweenDays
 		}
-	} else {
-		daysUntilScheduledDay = 8
-		for _, day := range weekDays {
-			differenceBetweenDays := int(day) - int(from)
 
-			// checking only if is smaller than max cause there is no way to be equals
-			if differenceBetweenDays > 0 && differenceBetweenDays < daysUntilScheduledDay {
-				daysUntilScheduledDay = differenceBetweenDays
-			}
+		// mapping negative days to repeat jobs
+		if differenceBetweenDays < 0 && differenceBetweenDays < daysUntilScheduledDayNegative {
+			daysUntilScheduledDayNegative = differenceBetweenDays
 		}
+	}
+
+	if daysUntilScheduledDayPositive > 0 && daysUntilScheduledDayPositive != allWeekDays {
+		daysUntilScheduledDay = daysUntilScheduledDayPositive
+	} else if daysUntilScheduledDayNegative < 0 {
+		daysUntilScheduledDay = allWeekDays + daysUntilScheduledDayNegative
 	}
 	return daysUntilScheduledDay
 }
