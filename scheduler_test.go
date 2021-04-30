@@ -1431,6 +1431,65 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 	})
 }
 
-func TestScheduler_CheckEveryHigherThanOne(t *testing.T) {
+func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
+	januaryDay2020At := func(day int) time.Time {
+		return time.Date(2020, time.January, day, 0, 0, 0, 0, time.UTC)
+	}
+
+	testCases := []struct {
+		description string
+		interval    int
+		weekDays    []time.Weekday
+		daysToTest  []int
+		caseTest    int
+	}{
+		{description: "every two weeks after run the first scheduled task", interval: 2, weekDays: []time.Weekday{time.Thursday}, daysToTest: []int{1, 2}, caseTest: 1},
+		{description: "every three weeks after run the first scheduled task", interval: 3, weekDays: []time.Weekday{time.Thursday}, daysToTest: []int{1, 2}, caseTest: 2},
+		{description: "every two weeks after run the first 2 scheduled tasks", interval: 2, weekDays: []time.Weekday{time.Thursday, time.Friday}, daysToTest: []int{1, 2, 3}, caseTest: 3},
+	}
+
+	const (
+		wantTimeUntilNextRunOneDay = 24 * time.Hour
+		// two weeks difference
+		wantTimeUntilNextRunTwoWeeks = 24 * time.Hour * 14
+		// three weeks difference
+		wantTimeUntilNextRunThreeWeeks = 24 * time.Hour * 21
+		// two weeks difference less one day
+		wantTimeUntilNextRunTwoWeeksLessOneDay = 24 * time.Hour * (14 - 1)
+	)
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			s.Every(tc.interval)
+
+			for _, weekDay := range tc.weekDays {
+				s.Weekday(weekDay)
+			}
+			job, err := s.Do(func() {})
+			require.NoError(t, err)
+			for numJob, day := range tc.daysToTest {
+				lastRun := januaryDay2020At(day)
+
+				job.lastRun = lastRun
+				got := s.durationToNextRun(lastRun, job)
+
+				if numJob < len(tc.weekDays) {
+					assert.Equal(t, wantTimeUntilNextRunOneDay, got)
+				} else {
+					if tc.caseTest == 1 {
+						assert.Equal(t, wantTimeUntilNextRunTwoWeeks, got)
+					} else if tc.caseTest == 2 {
+						assert.Equal(t, wantTimeUntilNextRunThreeWeeks, got)
+					} else if tc.caseTest == 3 {
+						assert.Equal(t, wantTimeUntilNextRunTwoWeeksLessOneDay, got)
+					}
+
+				}
+				job.runCount++
+			}
+
+		})
+	}
 
 }
