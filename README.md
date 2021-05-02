@@ -34,8 +34,10 @@ s.Every(5).Days().Do(func(){ ... })
 // cron expressions supported
 s.Cron("*/1 * * * *").Do(task) // every minute
 
-// start the scheduler
+// you can start running the scheduler in two different ways:
+// starts the scheduler asynchronously
 s.StartAsync()
+// starts the scheduler and blocks current execution path 
 s.StartBlocking()
 ```
 
