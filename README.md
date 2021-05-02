@@ -33,6 +33,10 @@ s.Every(5).Days().Do(func(){ ... })
 
 // cron expressions supported
 s.Cron("*/1 * * * *").Do(task) // every minute
+
+// start the scheduler
+s.StartAsync()
+s.StartBlocking()
 ```
 
 For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
