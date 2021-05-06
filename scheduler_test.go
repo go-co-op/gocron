@@ -831,6 +831,48 @@ func TestCalculateMonths(t *testing.T) {
 	assert.Equal(t, s.time.Now(s.location).AddDate(0, 1, 0).Month(), job.nextRun.Month())
 }
 
+func TestCalculateMonths2(t *testing.T) {
+	maySecond2021At0200 := time.Date(2021, 5, 2, 2, 0, 0, 0, time.UTC)
+
+	maySecond2021At0800 := time.Date(2021, 5, 2, 8, 0, 0, 0, time.UTC)
+
+	maySixth2021At0200 := time.Date(2021, 5, 6, 2, 0, 0, 0, time.UTC)
+
+	maySixth2021At0500 := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(2021, 5, 6, 5, 0, 0, 0, l)
+	}}
+
+	maySixth2021At0800 := time.Date(2021, 5, 6, 8, 0, 0, 0, time.UTC)
+
+	mayTenth2021At0200 := time.Date(2021, 5, 10, 2, 0, 0, 0, time.UTC)
+
+	mayTenth2021At0800 := time.Date(2021, 5, 10, 8, 0, 0, 0, time.UTC)
+
+	day := time.Hour * 24
+
+	testCases := []struct {
+		description          string
+		job                  *Job
+		wantTimeUntilNextRun time.Duration
+	}{
+		{description: "day before current and before current time, should run next month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 2, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0200)},
+		{description: "day before current and after current time, should run next month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 2, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0800)},
+		{description: "current day and before current time, should run next month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 6, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySixth2021At0200)},
+		{description: "current day and after current time, should run on current day", job: &Job{interval: 1, unit: months, dayOfTheMonth: 6, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: maySixth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day after current and before current time, should run on current month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 10, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0200.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day after current and after current time, should run on current month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 10, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			s.time = maySixth2021At0500
+			got := s.durationToNextRun(tc.job.LastRun(), tc.job)
+			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
+		})
+	}
+}
+
 func TestScheduler_SingletonMode(t *testing.T) {
 
 	testCases := []struct {
