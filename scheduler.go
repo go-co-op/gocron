@@ -3,7 +3,6 @@ package gocron
 import (
 	"context"
 	"fmt"
-	"math"
 	"reflect"
 	"sort"
 	"strings"
@@ -216,16 +215,18 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) time.Duration {
 
 	if job.dayOfTheMonth > 0 { // calculate days to job.dayOfTheMonth
 		jobDay := time.Date(lastRun.Year(), lastRun.Month(), job.dayOfTheMonth, 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
-		daysDifference := int(math.Abs(lastRun.Sub(jobDay).Hours()) / 24)
-		nextRun := s.roundToMidnight(lastRun).Add(job.getAtTime())
+		difference := absDuration(lastRun.Sub(jobDay))
+		nextRun := lastRun
 		if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
-			nextRun = nextRun.AddDate(0, job.interval, -daysDifference)
+			nextRun = nextRun.AddDate(0, job.interval, -0)
+			nextRun = nextRun.Add(-difference)
 		} else {
 			if job.interval == 1 { // every month counts current month
-				nextRun = nextRun.AddDate(0, job.interval-1, daysDifference)
+				nextRun = nextRun.AddDate(0, job.interval-1, 0)
 			} else { // should run next month interval
-				nextRun = nextRun.AddDate(0, job.interval, daysDifference)
+				nextRun = nextRun.AddDate(0, job.interval, 0)
 			}
+			nextRun = nextRun.Add(difference)
 		}
 		return until(lastRun, nextRun)
 	}
@@ -358,6 +359,14 @@ func remainingDaysToWeekday(from time.Weekday, weekDays []time.Weekday) int {
 		daysUntilScheduledDay = allWeekDays + daysUntilScheduledDayNegative
 	}
 	return daysUntilScheduledDay
+}
+
+// absDuration returns the abs time difference
+func absDuration(a time.Duration) time.Duration {
+	if a >= 0 {
+		return a
+	}
+	return -a
 }
 
 // roundToMidnight truncates time to midnight
