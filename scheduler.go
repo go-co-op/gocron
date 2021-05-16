@@ -516,6 +516,8 @@ func (s *Scheduler) SingletonMode() *Scheduler {
 
 // TaskPresent checks if specific job's function was added to the scheduler.
 func (s *Scheduler) TaskPresent(j interface{}) bool {
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
 	for _, job := range s.Jobs() {
 		if job.name == getFunctionName(j) {
 			return true
