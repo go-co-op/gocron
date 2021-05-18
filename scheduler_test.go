@@ -401,29 +401,51 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 }
 
 func TestScheduler_RemoveByTag(t *testing.T) {
-	s := NewScheduler(time.UTC)
+	t.Run("non unique tags", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
 
-	// Creating 2 Jobs with Unique tags
-	tag1 := "tag one"
-	tag2 := "tag two"
-	_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
-	require.NoError(t, err)
-	_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
-	require.NoError(t, err)
+		// Creating 2 Jobs with different tags
+		tag1 := "tag one"
+		tag2 := "tag two"
+		_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
+		require.NoError(t, err)
+		_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
+		require.NoError(t, err)
 
-	// check Jobs()[0] tags is equal with tag "tag one" (tag1)
-	assert.Equal(t, s.Jobs()[0].Tags()[0], tag1, "Job With Tag 'tag one' is removed from index 0")
+		// check Jobs()[0] tags is equal with tag "tag one" (tag1)
+		assert.Equal(t, s.Jobs()[0].Tags()[0], tag1, "Job With Tag 'tag one' is removed from index 0")
 
-	err = s.RemoveByTag("tag one")
-	require.NoError(t, err)
-	assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
+		err = s.RemoveByTag("tag one")
+		require.NoError(t, err)
+		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
-	// check Jobs()[0] tags is equal with tag "tag two" (tag2) after removing "tag one"
-	assert.Equal(t, s.Jobs()[0].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
+		// check Jobs()[0] tags is equal with tag "tag two" (tag2) after removing "tag one"
+		assert.Equal(t, s.Jobs()[0].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
 
-	// Removing Non Existent Job with "tag one" because already removed above (will not removing any jobs because tag not match)
-	err = s.RemoveByTag("tag one")
-	assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
+		// Removing Non Existent Job with "tag one" because already removed above (will not removing any jobs because tag not match)
+		err = s.RemoveByTag("tag one")
+		assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
+	})
+
+	t.Run("unique tags", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		s.TagsUnique()
+
+		// Creating 2 Jobs with unique tags
+		tag1 := "tag one"
+		tag2 := "tag two"
+		_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
+		require.NoError(t, err)
+		_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
+		require.NoError(t, err)
+
+		err = s.RemoveByTag("tag one")
+		require.NoError(t, err)
+
+		// Adding job with tag after removing by tag, assuming the unique tag has been removed as well
+		_, err = s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello")
+		assert.Equal(t, err, nil, "Unique tag is not deleted when removing by tag")
+	})
 }
 
 func TestScheduler_Jobs(t *testing.T) {

@@ -528,6 +528,10 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 	if err != nil {
 		return err
 	}
+
+	// Remove unique tag when exists
+	delete(s.tags, tag)
+
 	for _, job := range jobs {
 		s.RemoveByReference(job)
 	}
