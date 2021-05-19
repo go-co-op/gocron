@@ -444,7 +444,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 
 		// Adding job with tag after removing by tag, assuming the unique tag has been removed as well
 		_, err = s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello")
-		assert.Equal(t, err, nil, "Unique tag is not deleted when removing by tag")
+		assert.Nil(t, err, "Unique tag is not deleted when removing by tag")
 	})
 }
 
