@@ -573,13 +573,21 @@ func (s *Scheduler) TaskPresent(j interface{}) bool {
 	return false
 }
 
-func (s *Scheduler) jobPresent(j *Job) bool {
-	for _, job := range s.Jobs() {
+// To avoid the recursive read lock on s.Jobs() and this function,
+// creating this new function and distributing the lock between jobPresent, _jobPresent
+func (s *Scheduler) _jobPresent(j *Job, jobs []*Job) bool {
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
+	for _, job := range jobs {
 		if job == j {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *Scheduler) jobPresent(j *Job) bool {
+	return s._jobPresent(j, s.Jobs())
 }
 
 // Clear clear all Jobs from this scheduler
