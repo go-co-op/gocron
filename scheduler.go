@@ -600,6 +600,9 @@ func (s *Scheduler) Clear() {
 		job.stop()
 	}
 	s.setJobs(make([]*Job, 0))
+	if s.tags != nil {
+		s.TagsUnique()
+	}
 }
 
 // Stop stops the scheduler. This is a no-op if the scheduler is already stopped .
