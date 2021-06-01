@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -540,11 +539,18 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 
 func (s *Scheduler) findJobsByTag(tag string) ([]*Job, error) {
 	var jobs []*Job
+
+Jobs:
 	for _, job := range s.Jobs() {
-		if strings.Contains(strings.Join(job.Tags(), " "), tag) {
-			jobs = append(jobs, job)
+		tags := job.Tags()
+		for _, t := range tags {
+			if t == tag {
+				jobs = append(jobs, job)
+				continue Jobs
+			}
 		}
 	}
+
 	if len(jobs) > 0 {
 		return jobs, nil
 	}
