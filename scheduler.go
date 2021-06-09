@@ -933,6 +933,9 @@ func (s *Scheduler) CronWithSeconds(cronExpression string) *Scheduler {
 
 func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 	job := s.newJob(0)
+	if s.updateJob {
+		job = s.getCurrentJob()
+	}
 
 	withLocation := fmt.Sprintf("CRON_TZ=%s %s", s.location.String(), cronExpression)
 
@@ -956,7 +959,11 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 	job.unit = crontab
 	job.startsImmediately = false
 
-	s.setJobs(append(s.Jobs(), job))
+	if s.updateJob {
+		s.setJobs(append(s.Jobs()[:len(s.Jobs())-1], job))
+	} else {
+		s.setJobs(append(s.Jobs(), job))
+	}
 	return s
 }
 

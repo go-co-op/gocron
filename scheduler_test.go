@@ -1191,11 +1191,15 @@ func TestScheduler_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		time.Sleep(800 * time.Millisecond)
+		_, err = s.Job(j).CronWithSeconds("*/1 * * * * *").Update()
+		require.NoError(t, err)
+
+		time.Sleep(time.Second)
 		s.Stop()
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 3, counter)
+		assert.Equal(t, 4, counter)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
@@ -1225,7 +1229,7 @@ func TestScheduler_Update(t *testing.T) {
 		assert.Equal(t, 3, counter)
 	})
 
-	t.Run("update called with job call", func(t *testing.T) {
+	t.Run("update called without job call", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		_, err := s.Every("1s").Do(func() {})
 		require.NoError(t, err)
