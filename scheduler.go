@@ -918,6 +918,7 @@ func (s *Scheduler) Update() (*Job, error) {
 	if !s.updateJob {
 		return job, wrapOrError(job.error, ErrUpdateCalledWithoutJob)
 	}
+	s.updateJob = false
 	job.stop()
 	job.ctx, job.cancel = context.WithCancel(context.Background())
 	return s.Do(job.function, job.parameters...)
