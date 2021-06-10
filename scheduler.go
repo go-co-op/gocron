@@ -957,7 +957,6 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 
 	job.cronSchedule = cronSchedule
 	job.setUnit(crontab)
-	job.startsImmediately = false
 
 	if s.updateJob {
 		s.setJobs(append(s.Jobs()[:len(s.Jobs())-1], job))

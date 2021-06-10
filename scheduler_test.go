@@ -1390,16 +1390,19 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	var counterMutex sync.RWMutex
 	counter := 0
 
-	_, err := s.Every("100ms").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	require.NoError(t, err)
+
+	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 	require.NoError(t, err)
 	s.StartAsync()
 
-	time.Sleep(350 * time.Millisecond)
+	time.Sleep(1100 * time.Millisecond)
 	s.Stop()
 
 	counterMutex.RLock()
 	defer counterMutex.RUnlock()
-	assert.Equal(t, 3, counter)
+	assert.Equal(t, 2, counter)
 }
 
 func TestScheduler_LenWeekDays(t *testing.T) {
