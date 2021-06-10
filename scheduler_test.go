@@ -1391,6 +1391,8 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	counter := 0
 
 	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	require.NoError(t, err)
+
 	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 	require.NoError(t, err)
 	s.StartAsync()
