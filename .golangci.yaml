@@ -18,7 +18,7 @@ linters:
     - deadcode
     - errcheck
     - gofmt
-    - golint
+    - revive
     - gosec
     - gosimple
     - govet
