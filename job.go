@@ -195,10 +195,9 @@ func (j *Job) Weekdays() []time.Weekday {
 	return j.scheduledWeekday
 }
 
-// 	return j.scheduledWeekday
-// }
 // LimitRunsTo limits the number of executions of this job to n.
-// The job will remain in the scheduler.
+// Upon reaching the limit, the job is removed from the scheduler.
+//
 // Note: If a job is added to a running scheduler and this method is then used
 // you may see the job run more than the set limit as job is scheduled immediately
 // by default upon being added to the scheduler. It is recommended to use the
