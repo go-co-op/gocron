@@ -328,7 +328,8 @@ func TestScheduler_Remove(t *testing.T) {
 
 	t.Run("remove from non-running", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
-		_, err := s.Every(1).Minute().Do(task)
+		s.TagsUnique()
+		_, err := s.Every(1).Minute().Tag("tag1").Do(task)
 		require.NoError(t, err)
 		_, err = s.Every(1).Minute().Do(taskWithParams, 1, "hello")
 		require.NoError(t, err)
@@ -342,6 +343,8 @@ func TestScheduler_Remove(t *testing.T) {
 
 		s.Remove(task)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing non-existent job")
+
+		assert.Zero(t, len(s.tags))
 	})
 
 	t.Run("remove from running scheduler", func(t *testing.T) {
@@ -380,9 +383,10 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 
 	t.Run("remove from running scheduler", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
+		s.TagsUnique()
 		semaphore := make(chan bool)
 
-		j, err := s.Every("100ms").StartAt(s.time.Now(s.location).Add(100 * time.Millisecond)).Do(func() {
+		j, err := s.Every("100ms").StartAt(s.time.Now(s.location).Add(100 * time.Millisecond)).Tag("tag1").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -397,6 +401,8 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 		case <-semaphore:
 			t.Fatal("job ran after being removed")
 		}
+
+		assert.Zero(t, len(s.tags))
 	})
 }
 
@@ -834,6 +840,33 @@ func TestRunJobsWithLimit(t *testing.T) {
 			counter++
 			require.LessOrEqual(t, counter, 1)
 		}
+	})
+
+	t.Run("remove unique tags also", func(t *testing.T) {
+		semaphore := make(chan bool)
+
+		s := NewScheduler(time.UTC)
+		s.TagsUnique()
+
+		j, err := s.Every("100ms").Tag("tag1", "tag2", "tag3").Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+		j.LimitRunsTo(1)
+
+		s.StartAsync()
+		time.Sleep(200 * time.Millisecond)
+
+		var counter int
+		select {
+		case <-time.After(200 * time.Millisecond):
+			assert.Equal(t, 0, s.Len())
+		case <-semaphore:
+			counter++
+			require.LessOrEqual(t, counter, 1)
+		}
+
+		assert.Zero(t, len(s.tags))
 	})
 }
 
