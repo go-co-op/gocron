@@ -505,18 +505,42 @@ func (s *Scheduler) RunByTagWithDelay(tag string, d time.Duration) error {
 // The job function would need to have implemented a means of
 // stopping, e.g. using a context.WithCancel().
 func (s *Scheduler) Remove(job interface{}) {
+	fName := getFunctionName(job)
+	j := s.findJobByTaskName(fName)
+	s.removeJobsUniqueTags(j)
 	s.removeByCondition(func(someJob *Job) bool {
-		return someJob.name == getFunctionName(job)
+		return someJob.name == fName
 	})
 }
 
 // RemoveByReference removes specific Job by reference
 func (s *Scheduler) RemoveByReference(job *Job) {
+	s.removeJobsUniqueTags(job)
 	s.removeByCondition(func(someJob *Job) bool {
 		job.RLock()
 		defer job.RUnlock()
 		return someJob == job
 	})
+}
+
+func (s *Scheduler) findJobByTaskName(name string) *Job {
+	for _, job := range s.Jobs() {
+		if job.name == name {
+			return job
+		}
+	}
+	return nil
+}
+
+func (s *Scheduler) removeJobsUniqueTags(job *Job) {
+	if job == nil {
+		return
+	}
+	if s.tags != nil && len(job.tags) > 0 {
+		for _, tag := range job.tags {
+			delete(s.tags, tag)
+		}
+	}
 }
 
 func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
@@ -537,9 +561,6 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 	if err != nil {
 		return err
 	}
-
-	// Remove unique tag when exists
-	delete(s.tags, tag)
 
 	for _, job := range jobs {
 		s.RemoveByReference(job)
@@ -610,7 +631,7 @@ func (s *Scheduler) jobPresent(j *Job) bool {
 	return s._jobPresent(j, s.Jobs())
 }
 
-// Clear clear all Jobs from this scheduler
+// Clear clears all Jobs from this scheduler
 func (s *Scheduler) Clear() {
 	for _, job := range s.Jobs() {
 		job.stop()
