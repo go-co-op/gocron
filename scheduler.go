@@ -538,7 +538,7 @@ func (s *Scheduler) removeJobsUniqueTags(job *Job) {
 	if job == nil {
 		return
 	}
-	if len(job.tags) > 0 {
+	if s.tagsUnique && len(job.tags) > 0 {
 		for _, tag := range job.tags {
 			s.tags.Delete(tag)
 		}
