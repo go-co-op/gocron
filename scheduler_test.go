@@ -343,8 +343,6 @@ func TestScheduler_Remove(t *testing.T) {
 
 		s.Remove(task)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing non-existent job")
-
-		assert.Zero(t, len(s.tags))
 	})
 
 	t.Run("remove from running scheduler", func(t *testing.T) {
@@ -402,7 +400,8 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 			t.Fatal("job ran after being removed")
 		}
 
-		assert.Zero(t, len(s.tags))
+		_, ok := s.tags.Load("tag1")
+		assert.False(t, ok)
 	})
 }
 
@@ -866,7 +865,10 @@ func TestRunJobsWithLimit(t *testing.T) {
 			require.LessOrEqual(t, counter, 1)
 		}
 
-		assert.Zero(t, len(s.tags))
+		s.tags.Range(func(key, value interface{}) bool {
+			assert.FailNow(t, "map should be empty")
+			return true
+		})
 	})
 }
 
