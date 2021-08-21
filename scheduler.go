@@ -639,7 +639,13 @@ func (s *Scheduler) Clear() {
 		job.stop()
 	}
 	s.setJobs(make([]*Job, 0))
-	s.TagsUnique()
+	// If unique tags was enabled, delete all the keys
+	if s.tagsUnique {
+		s.tags.Range(func(key interface{}, value interface{}) bool {
+			s.tags.Delete(key)
+			return true
+		})
+	}
 }
 
 // Stop stops the scheduler. This is a no-op if the scheduler is already stopped .

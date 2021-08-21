@@ -540,6 +540,41 @@ func TestClear(t *testing.T) {
 	assert.Equal(t, 1, counter)
 }
 
+func TestClearUnique(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	s.TagsUnique()
+	semaphore := make(chan bool)
+
+	_, err := s.Every("100ms").Tag("tag1").Do(func() {
+		semaphore <- true
+	})
+	require.NoError(t, err)
+
+	s.StartAsync()
+
+	s.Clear()
+	assert.Equal(t, 0, s.Len())
+
+	var counter int
+	now := time.Now()
+	for time.Now().Before(now.Add(200 * time.Millisecond)) {
+		select {
+		case <-semaphore:
+			counter++
+		default:
+		}
+	}
+
+	// job should run only once - immediately and then
+	// be stopped on s.Clear()
+	assert.Equal(t, 1, counter)
+
+	s.tags.Range(func(key, value interface{}) bool {
+		assert.FailNow(t, "map should be empty")
+		return true
+	})
+}
+
 func TestSetUnit(t *testing.T) {
 
 	testCases := []struct {
