@@ -639,7 +639,7 @@ func (s *Scheduler) Clear() {
 		job.stop()
 	}
 	s.setJobs(make([]*Job, 0))
-	// If unique tags was enabled, delete all the keys
+	// If unique tags was enabled, delete all the tags loaded in the tags sync.Map
 	if s.tagsUnique {
 		s.tags.Range(func(key interface{}, value interface{}) bool {
 			s.tags.Delete(key)
