@@ -28,8 +28,9 @@ type Scheduler struct {
 	time     timeWrapper // wrapper around time.Time
 	executor *executor   // executes jobs passed via chan
 
-	tags map[string]struct{} // for storing tags when unique tags is set
+	tags sync.Map // for storing tags when unique tags is set
 
+	tagsUnique      bool // defines whether tags should be unique
 	updateJob       bool // so the scheduler knows to create a new job or update the current
 	waitForInterval bool // defaults jobs to waiting for first interval to start
 }
@@ -42,11 +43,12 @@ func NewScheduler(loc *time.Location) *Scheduler {
 	executor := newExecutor()
 
 	return &Scheduler{
-		jobs:     make([]*Job, 0),
-		location: loc,
-		running:  false,
-		time:     &trueTime{},
-		executor: &executor,
+		jobs:       make([]*Job, 0),
+		location:   loc,
+		running:    false,
+		time:       &trueTime{},
+		executor:   &executor,
+		tagsUnique: false,
 	}
 }
 
@@ -536,9 +538,9 @@ func (s *Scheduler) removeJobsUniqueTags(job *Job) {
 	if job == nil {
 		return
 	}
-	if s.tags != nil && len(job.tags) > 0 {
+	if s.tagsUnique && len(job.tags) > 0 {
 		for _, tag := range job.tags {
-			delete(s.tags, tag)
+			s.tags.Delete(tag)
 		}
 	}
 }
@@ -637,8 +639,12 @@ func (s *Scheduler) Clear() {
 		job.stop()
 	}
 	s.setJobs(make([]*Job, 0))
-	if s.tags != nil {
-		s.TagsUnique()
+	// If unique tags was enabled, delete all the tags loaded in the tags sync.Map
+	if s.tagsUnique {
+		s.tags.Range(func(key interface{}, value interface{}) bool {
+			s.tags.Delete(key)
+			return true
+		})
 	}
 }
 
@@ -730,13 +736,13 @@ func (s *Scheduler) At(i interface{}) *Scheduler {
 func (s *Scheduler) Tag(t ...string) *Scheduler {
 	job := s.getCurrentJob()
 
-	if s.tags != nil {
+	if s.tagsUnique {
 		for _, tag := range t {
-			if _, ok := s.tags[tag]; ok {
+			if _, ok := s.tags.Load(tag); ok {
 				job.error = wrapOrError(job.error, ErrTagsUnique(tag))
 				return s
 			}
-			s.tags[tag] = struct{}{}
+			s.tags.Store(tag, struct{}{})
 		}
 	}
 
@@ -912,7 +918,7 @@ func (s *Scheduler) now() time.Time {
 // This does not enforce uniqueness on tags added via
 // (j *Job) Tag()
 func (s *Scheduler) TagsUnique() {
-	s.tags = make(map[string]struct{})
+	s.tagsUnique = true
 }
 
 // Job puts the provided job in focus for the purpose
