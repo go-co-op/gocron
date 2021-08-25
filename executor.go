@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	// default is that if a limit on maximum concurrent jobs is set
-	// and the limit is reached, a job will skip it's run and try
-	// again on the next occurrence in the schedule
+	// RescheduleMode - the default is that if a limit on maximum
+	// concurrent jobs is set and the limit is reached, a job will
+	// skip it's run and try again on the next occurrence in the schedule
 	RescheduleMode limitMode = iota
 
-	// in wait mode if a limit on maximum concurrent jobs is set
+	// WaitMode - if a limit on maximum concurrent jobs is set
 	// and the limit is reached, a job will wait to try and run
 	// until a spot in the limit is freed up.
 	//

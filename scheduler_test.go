@@ -749,7 +749,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.time = ft
-			got := s.durationToNextRun(tc.job.LastRun(), tc.job)
+			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})
 	}
@@ -959,7 +959,7 @@ func TestCalculateMonths2(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.time = maySixth2021At0500
-			got := s.durationToNextRun(tc.job.LastRun(), tc.job)
+			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})
 	}
@@ -1493,10 +1493,10 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	var counterMutex sync.RWMutex
 	counter := 0
 
-	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++; log.Println("job 1") })
 	require.NoError(t, err)
 
-	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++; log.Println("job 2") })
 	require.NoError(t, err)
 	s.StartAsync()
 
@@ -1565,7 +1565,7 @@ func TestScheduler_CallNextWeekDay(t *testing.T) {
 			require.NoError(t, err)
 			job.lastRun = lastRun
 
-			got := s.durationToNextRun(lastRun, job)
+			got := s.durationToNextRun(lastRun, job).duration
 			assert.Equal(t, wantTimeUntilNextRun, got)
 
 		})
@@ -1595,11 +1595,11 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 		require.NoError(t, err)
 		job.lastRun = lastRun
 
-		gotFirst := s.durationToNextRun(lastRun, job)
+		gotFirst := s.durationToNextRun(lastRun, job).duration
 		assert.Equal(t, wantTimeUntilNextFirstRun, gotFirst)
 
 		job.lastRun = secondLastRun
-		gotSecond := s.durationToNextRun(secondLastRun, job)
+		gotSecond := s.durationToNextRun(secondLastRun, job).duration
 		assert.Equal(t, wantTimeUntilNextSecondRun, gotSecond)
 
 	})
@@ -1646,7 +1646,7 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 				lastRun := januaryDay2020At(day)
 
 				job.lastRun = lastRun
-				got := s.durationToNextRun(lastRun, job)
+				got := s.durationToNextRun(lastRun, job).duration
 
 				if numJob < len(tc.weekDays) {
 					assert.Equal(t, wantTimeUntilNextRunOneDay, got)
