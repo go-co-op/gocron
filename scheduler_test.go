@@ -1474,11 +1474,11 @@ func TestScheduler_WaitForSchedule(t *testing.T) {
 	var counterMutex sync.RWMutex
 	counter := 0
 
-	_, err := s.Every("100ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("500ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 	require.NoError(t, err)
 	s.StartAsync()
 
-	time.Sleep(350 * time.Millisecond)
+	time.Sleep(1800 * time.Millisecond)
 	s.Stop()
 
 	counterMutex.RLock()
