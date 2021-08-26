@@ -13,8 +13,12 @@ jobs:
       matrix:
         go-version:
           - 1.16
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
     name: lint and test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v1
