@@ -1194,10 +1194,10 @@ func TestScheduler_Update(t *testing.T) {
 		_, err = s.Job(j).CronWithSeconds("*/1 * * * * *").Update()
 		require.NoError(t, err)
 
-		sleepCounter(semaphore, 1*time.Second, &counter)
+		sleepCounter(semaphore, 1500*time.Millisecond, &counter)
 		s.Stop()
 
-		assert.Equal(t, 4, counter)
+		assert.Equal(t, 5, counter)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
