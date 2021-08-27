@@ -263,9 +263,23 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
+	atTime := job.getAtTime()
 	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), job.Weekdays())
+
+	// handle when it is the same weekday and a time in the past
+	if daysToWeekday == 0 && s.roundToMidnight(lastRun).Add(atTime).AddDate(0, 0, 0).Before(s.now()) {
+		runFrom := lastRun.Weekday()
+		if lastRun.Weekday() == time.Saturday {
+			runFrom = time.Sunday
+		} else {
+			runFrom += 1
+		}
+		daysToWeekday = remainingDaysToWeekday(runFrom, job.Weekdays())
+	}
+
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
-	next := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
+	next := s.roundToMidnight(lastRun).Add(atTime).AddDate(0, 0, totalDaysDifference)
+
 	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 

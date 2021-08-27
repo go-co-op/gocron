@@ -1635,6 +1635,15 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
+
+			tmp := 0
+			dayPtr := &tmp
+
+			ft := fakeTime{onNow: func(l *time.Location) time.Time {
+				return time.Date(2020, 1, *dayPtr, 0, 0, 0, 0, l)
+			}}
+
+			s.time = ft
 			s.Every(tc.interval)
 
 			for _, weekDay := range tc.weekDays {
@@ -1643,6 +1652,7 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 			job, err := s.Do(func() {})
 			require.NoError(t, err)
 			for numJob, day := range tc.daysToTest {
+				dayPtr = &day
 				lastRun := januaryDay2020At(day)
 
 				job.lastRun = lastRun
