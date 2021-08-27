@@ -91,15 +91,20 @@ func TestScheduler_Every(t *testing.T) {
 		s.StartAsync()
 
 		var counter int
+		var mu sync.Mutex
 
 		now := time.Now()
 		for time.Now().Before(now.Add(2400 * time.Millisecond)) {
 			if <-semaphore {
+				mu.Lock()
 				counter++
+				mu.Unlock()
 			}
 		}
 		s.Stop()
+		mu.Lock()
 		assert.Equal(t, 6, counter)
+		mu.Unlock()
 	})
 
 	t.Run("int", func(t *testing.T) {
@@ -114,15 +119,20 @@ func TestScheduler_Every(t *testing.T) {
 		s.StartAsync()
 
 		var counter int
+		var mu sync.Mutex
 
 		now := time.Now()
-		for time.Now().Before(now.Add(2400 * time.Millisecond)) {
+		for time.Now().Before(now.Add(2500 * time.Millisecond)) {
 			if <-semaphore {
+				mu.Lock()
 				counter++
+				mu.Unlock()
 			}
 		}
 		s.Stop()
-		assert.Equal(t, 2, counter)
+		mu.Lock()
+		assert.Equal(t, 6, counter)
+		mu.Unlock()
 	})
 
 	t.Run("string duration", func(t *testing.T) {
@@ -137,15 +147,20 @@ func TestScheduler_Every(t *testing.T) {
 		s.StartAsync()
 
 		var counter int
+		var mu sync.Mutex
 
 		now := time.Now()
 		for time.Now().Before(now.Add(500 * time.Millisecond)) {
 			if <-semaphore {
+				mu.Lock()
 				counter++
+				mu.Unlock()
 			}
 		}
 		s.Stop()
+		mu.Lock()
 		assert.Equal(t, 2, counter)
+		mu.Unlock()
 	})
 }
 
