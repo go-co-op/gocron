@@ -1297,15 +1297,15 @@ func TestScheduler_Update(t *testing.T) {
 
 		s.StartAsync()
 
-		time.Sleep(300 * time.Millisecond)
-		_, err = s.Job(j).Every("500ms").Update()
+		time.Sleep(1 * time.Second)
+		_, err = s.Job(j).Every("2s").Update()
 		require.NoError(t, err)
 
-		time.Sleep(550 * time.Millisecond)
-		_, err = s.Job(j).Every("750ms").Update()
+		time.Sleep(3 * time.Second)
+		_, err = s.Job(j).Every("3s").Update()
 		require.NoError(t, err)
 
-		time.Sleep(800 * time.Millisecond)
+		time.Sleep(4 * time.Second)
 		s.Stop()
 
 		counterMutex.RLock()
