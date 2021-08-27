@@ -31,9 +31,9 @@ func task() {
 	fmt.Println("I am a running job.")
 }
 
-func taskWithParams(a int, b string) {
-	fmt.Println(a, b)
-}
+//func taskWithParams(a int, b string) {
+//	fmt.Println(a, b)
+//}
 
 func sleepCounter(semaphore chan bool, dur time.Duration, counter *int) {
 	now := time.Now()
