@@ -83,7 +83,7 @@ func TestScheduler_Every(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		_, err := s.Every(500 * time.Millisecond).Do(func() {
+		_, err := s.Every(100 * time.Millisecond).Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -91,27 +91,24 @@ func TestScheduler_Every(t *testing.T) {
 		s.StartAsync()
 
 		var counter int
-		var mu sync.Mutex
 
 		now := time.Now()
-		for time.Now().Before(now.Add(2400 * time.Millisecond)) {
-			if <-semaphore {
-				mu.Lock()
+		for time.Now().Before(now.Add(550 * time.Millisecond)) {
+			select {
+			case <-semaphore:
 				counter++
-				mu.Unlock()
+			default:
 			}
 		}
 		s.Stop()
-		mu.Lock()
 		assert.Equal(t, 6, counter)
-		mu.Unlock()
 	})
 
 	t.Run("int", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		_, err := s.Every(500).Milliseconds().Do(func() {
+		_, err := s.Every(100).Milliseconds().Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -119,27 +116,24 @@ func TestScheduler_Every(t *testing.T) {
 		s.StartAsync()
 
 		var counter int
-		var mu sync.Mutex
 
 		now := time.Now()
-		for time.Now().Before(now.Add(2500 * time.Millisecond)) {
-			if <-semaphore {
-				mu.Lock()
+		for time.Now().Before(now.Add(150 * time.Millisecond)) {
+			select {
+			case <-semaphore:
 				counter++
-				mu.Unlock()
+			default:
 			}
 		}
 		s.Stop()
-		mu.Lock()
-		assert.Equal(t, 6, counter)
-		mu.Unlock()
+		assert.Equal(t, 2, counter)
 	})
 
 	t.Run("string duration", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		_, err := s.Every("500ms").Do(func() {
+		_, err := s.Every("100ms").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -147,20 +141,17 @@ func TestScheduler_Every(t *testing.T) {
 		s.StartAsync()
 
 		var counter int
-		var mu sync.Mutex
 
 		now := time.Now()
-		for time.Now().Before(now.Add(500 * time.Millisecond)) {
-			if <-semaphore {
-				mu.Lock()
+		for time.Now().Before(now.Add(150 * time.Millisecond)) {
+			select {
+			case <-semaphore:
 				counter++
-				mu.Unlock()
+			default:
 			}
 		}
 		s.Stop()
-		mu.Lock()
 		assert.Equal(t, 2, counter)
-		mu.Unlock()
 	})
 }
 
@@ -260,50 +251,65 @@ func TestAt(t *testing.T) {
 }
 
 func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n int, s *Scheduler) *Scheduler {
-	switch weekday {
-	case time.Monday:
-		if next {
-			s = s.Every(n).Tuesday()
-		} else {
-			s = s.Every(n).Sunday()
-		}
-	case time.Tuesday:
-		if next {
-			s = s.Every(n).Wednesday()
-		} else {
-			s = s.Every(n).Monday()
-		}
-	case time.Wednesday:
-		if next {
-			s = s.Every(n).Thursday()
-		} else {
-			s = s.Every(n).Tuesday()
-		}
-	case time.Thursday:
-		if next {
-			s = s.Every(n).Friday()
-		} else {
-			s = s.Every(n).Wednesday()
-		}
-	case time.Friday:
-		if next {
-			s = s.Every(n).Saturday()
-		} else {
-			s = s.Every(n).Thursday()
-		}
-	case time.Saturday:
-		if next {
+	if next {
+		if weekday == time.Saturday {
 			s = s.Every(n).Sunday()
 		} else {
-			s = s.Every(n).Friday()
+			s = s.Every(n).Weekday(weekday + 1)
 		}
-	case time.Sunday:
-		if next {
-			s = s.Every(n).Monday()
-		} else {
+
+	} else {
+		if weekday == time.Sunday {
 			s = s.Every(n).Saturday()
+		} else {
+			s = s.Every(n).Weekday(weekday - 1)
 		}
 	}
+
+	//switch weekday {
+	//case time.Monday:
+	//	if next {
+	//		s = s.Every(n).Tuesday()
+	//	} else {
+	//		s = s.Every(n).Sunday()
+	//	}
+	//case time.Tuesday:
+	//	if next {
+	//		s = s.Every(n).Wednesday()
+	//	} else {
+	//		s = s.Every(n).Monday()
+	//	}
+	//case time.Wednesday:
+	//	if next {
+	//		s = s.Every(n).Thursday()
+	//	} else {
+	//		s = s.Every(n).Tuesday()
+	//	}
+	//case time.Thursday:
+	//	if next {
+	//		s = s.Every(n).Friday()
+	//	} else {
+	//		s = s.Every(n).Wednesday()
+	//	}
+	//case time.Friday:
+	//	if next {
+	//		s = s.Every(n).Saturday()
+	//	} else {
+	//		s = s.Every(n).Thursday()
+	//	}
+	//case time.Saturday:
+	//	if next {
+	//		s = s.Every(n).Sunday()
+	//	} else {
+	//		s = s.Every(n).Friday()
+	//	}
+	//case time.Sunday:
+	//	if next {
+	//		s = s.Every(n).Monday()
+	//	} else {
+	//		s = s.Every(n).Saturday()
+	//	}
+	//}
 	return s
 }
 
@@ -1297,15 +1303,15 @@ func TestScheduler_Update(t *testing.T) {
 
 		s.StartAsync()
 
-		time.Sleep(1 * time.Second)
-		_, err = s.Job(j).Every("2s").Update()
+		time.Sleep(300 * time.Millisecond)
+		_, err = s.Job(j).Every("500ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(3 * time.Second)
-		_, err = s.Job(j).Every("3s").Update()
+		time.Sleep(550 * time.Millisecond)
+		_, err = s.Job(j).Every("750ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(4 * time.Second)
+		time.Sleep(800 * time.Millisecond)
 		s.Stop()
 
 		counterMutex.RLock()
@@ -1488,11 +1494,11 @@ func TestScheduler_WaitForSchedule(t *testing.T) {
 	var counterMutex sync.RWMutex
 	counter := 0
 
-	_, err := s.Every("500ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("100ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 	require.NoError(t, err)
 	s.StartAsync()
 
-	time.Sleep(1800 * time.Millisecond)
+	time.Sleep(350 * time.Millisecond)
 	s.Stop()
 
 	counterMutex.RLock()

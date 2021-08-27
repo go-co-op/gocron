@@ -9,7 +9,8 @@ on:
 name: test
 jobs:
   lint:
-    runs-on: ubunutu-latest
+    name: lint
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2    
@@ -18,6 +19,8 @@ jobs:
         with:
           version: v1.42.0
   test:
+    name: test
+    needs: lint
     strategy:
       matrix:
         go-version:
@@ -26,7 +29,6 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-    name: lint and test
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
