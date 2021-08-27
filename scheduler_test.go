@@ -38,6 +38,17 @@ func taskWithParams(a int, b string) {
 	fmt.Println(a, b)
 }
 
+func sleepCounter(semaphore chan bool, dur time.Duration, counter *int) {
+	now := time.Now()
+	for time.Now().Before(now.Add(dur)) {
+		select {
+		case <-semaphore:
+			*counter++
+		default:
+		}
+	}
+}
+
 func TestImmediateExecution(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	semaphore := make(chan bool)
@@ -92,14 +103,7 @@ func TestScheduler_Every(t *testing.T) {
 
 		var counter int
 
-		now := time.Now()
-		for time.Now().Before(now.Add(550 * time.Millisecond)) {
-			select {
-			case <-semaphore:
-				counter++
-			default:
-			}
-		}
+		sleepCounter(semaphore, 550*time.Millisecond, &counter)
 		s.Stop()
 		assert.Equal(t, 6, counter)
 	})
@@ -117,14 +121,7 @@ func TestScheduler_Every(t *testing.T) {
 
 		var counter int
 
-		now := time.Now()
-		for time.Now().Before(now.Add(150 * time.Millisecond)) {
-			select {
-			case <-semaphore:
-				counter++
-			default:
-			}
-		}
+		sleepCounter(semaphore, 150*time.Millisecond, &counter)
 		s.Stop()
 		assert.Equal(t, 2, counter)
 	})
@@ -142,14 +139,7 @@ func TestScheduler_Every(t *testing.T) {
 
 		var counter int
 
-		now := time.Now()
-		for time.Now().Before(now.Add(150 * time.Millisecond)) {
-			select {
-			case <-semaphore:
-				counter++
-			default:
-			}
-		}
+		sleepCounter(semaphore, 150*time.Millisecond, &counter)
 		s.Stop()
 		assert.Equal(t, 2, counter)
 	})
@@ -265,51 +255,6 @@ func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next boo
 			s = s.Every(n).Weekday(weekday - 1)
 		}
 	}
-
-	//switch weekday {
-	//case time.Monday:
-	//	if next {
-	//		s = s.Every(n).Tuesday()
-	//	} else {
-	//		s = s.Every(n).Sunday()
-	//	}
-	//case time.Tuesday:
-	//	if next {
-	//		s = s.Every(n).Wednesday()
-	//	} else {
-	//		s = s.Every(n).Monday()
-	//	}
-	//case time.Wednesday:
-	//	if next {
-	//		s = s.Every(n).Thursday()
-	//	} else {
-	//		s = s.Every(n).Tuesday()
-	//	}
-	//case time.Thursday:
-	//	if next {
-	//		s = s.Every(n).Friday()
-	//	} else {
-	//		s = s.Every(n).Wednesday()
-	//	}
-	//case time.Friday:
-	//	if next {
-	//		s = s.Every(n).Saturday()
-	//	} else {
-	//		s = s.Every(n).Thursday()
-	//	}
-	//case time.Saturday:
-	//	if next {
-	//		s = s.Every(n).Sunday()
-	//	} else {
-	//		s = s.Every(n).Friday()
-	//	}
-	//case time.Sunday:
-	//	if next {
-	//		s = s.Every(n).Monday()
-	//	} else {
-	//		s = s.Every(n).Saturday()
-	//	}
-	//}
 	return s
 }
 
@@ -546,14 +491,7 @@ func TestClear(t *testing.T) {
 	assert.Equal(t, 0, s.Len())
 
 	var counter int
-	now := time.Now()
-	for time.Now().Before(now.Add(200 * time.Millisecond)) {
-		select {
-		case <-semaphore:
-			counter++
-		default:
-		}
-	}
+	sleepCounter(semaphore, 200*time.Millisecond, &counter)
 
 	// job should run only once - immediately and then
 	// be stopped on s.Clear()
@@ -576,14 +514,7 @@ func TestClearUnique(t *testing.T) {
 	assert.Equal(t, 0, s.Len())
 
 	var counter int
-	now := time.Now()
-	for time.Now().Before(now.Add(200 * time.Millisecond)) {
-		select {
-		case <-semaphore:
-			counter++
-		default:
-		}
-	}
+	sleepCounter(semaphore, 200*time.Millisecond, &counter)
 
 	// job should run only once - immediately and then
 	// be stopped on s.Clear()
@@ -860,14 +791,7 @@ func TestRunJobsWithLimit(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 
 		var counter int
-		now := time.Now()
-		for time.Now().Before(now.Add(200 * time.Millisecond)) {
-			select {
-			case <-semaphore:
-				counter++
-			default:
-			}
-		}
+		sleepCounter(semaphore, 200*time.Millisecond, &counter)
 
 		assert.Equal(t, 1, counter)
 	})
@@ -1158,14 +1082,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 
 			var counter int
 
-			now := time.Now()
-			for time.Now().Before(now.Add(400 * time.Millisecond)) {
-				select {
-				case <-semaphore:
-					counter++
-				default:
-				}
-			}
+			sleepCounter(semaphore, 400*time.Millisecond, &counter)
 
 			if tc.removeJobs {
 				s.RemoveByReference(j1)
@@ -1179,14 +1096,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			// make sure no more jobs are run as the executor
 			// or job should be properly stopped
 
-			now = time.Now()
-			for time.Now().Before(now.Add(200 * time.Millisecond)) {
-				select {
-				case <-semaphore:
-					counter++
-				default:
-				}
-			}
+			sleepCounter(semaphore, 200*time.Millisecond, &counter)
 
 			assert.Equal(t, tc.expectedRuns, counter)
 		})
@@ -1264,58 +1174,57 @@ func TestScheduler_Update(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		var counterMutex sync.RWMutex
-		counter := 0
+		semaphore := make(chan bool)
+		var counter int
 
-		j, err := s.Every(1).Day().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		j, err := s.Every(5).Second().Do(func() { semaphore <- true })
 		require.NoError(t, err)
 
 		s.StartAsync()
 
-		time.Sleep(300 * time.Millisecond)
+		sleepCounter(semaphore, 300*time.Millisecond, &counter)
 		_, err = s.Job(j).Every("500ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(550 * time.Millisecond)
+		sleepCounter(semaphore, 750*time.Millisecond, &counter)
 		_, err = s.Job(j).Every("750ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(800 * time.Millisecond)
+		sleepCounter(semaphore, 1200*time.Millisecond, &counter)
 		_, err = s.Job(j).CronWithSeconds("*/1 * * * * *").Update()
 		require.NoError(t, err)
 
-		time.Sleep(time.Second)
+		sleepCounter(semaphore, 1*time.Second, &counter)
 		s.Stop()
 
-		counterMutex.RLock()
-		defer counterMutex.RUnlock()
 		assert.Equal(t, 4, counter)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		var counterMutex sync.RWMutex
-		counter := 0
+		semaphore := make(chan bool)
+		var counter int
 
-		j, err := s.Every(1).Day().SingletonMode().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+		j, err := s.Every(5).Seconds().SingletonMode().Do(func() { semaphore <- true })
 		require.NoError(t, err)
 
 		s.StartAsync()
 
-		time.Sleep(300 * time.Millisecond)
+		sleepCounter(semaphore, 300*time.Millisecond, &counter)
+
 		_, err = s.Job(j).Every("500ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(550 * time.Millisecond)
+		sleepCounter(semaphore, 750*time.Millisecond, &counter)
+
 		_, err = s.Job(j).Every("750ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(800 * time.Millisecond)
+		sleepCounter(semaphore, 1200*time.Millisecond, &counter)
 		s.Stop()
 
-		counterMutex.RLock()
-		defer counterMutex.RUnlock()
 		assert.Equal(t, 3, counter)
 	})
 
@@ -1331,33 +1240,31 @@ func TestScheduler_Update(t *testing.T) {
 	t.Run("update, delete, create", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		var counterMutex sync.RWMutex
-		counter := 0
+		semaphore := make(chan bool)
+		var counter int
 
-		j, err := s.Every(1).Day().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		j, err := s.Every(1).Day().Do(func() { semaphore <- true })
 		require.NoError(t, err)
 
 		s.StartAsync()
 
-		time.Sleep(300 * time.Millisecond)
+		sleepCounter(semaphore, 300*time.Millisecond, &counter)
 		_, err = s.Job(j).Every("500ms").Update()
 		require.NoError(t, err)
 
-		time.Sleep(550 * time.Millisecond)
+		sleepCounter(semaphore, 550*time.Millisecond, &counter)
 		s.RemoveByReference(j)
 
-		j, err = s.Every("750ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		j, err = s.Every("750ms").WaitForSchedule().Do(func() { semaphore <- true })
 		require.NoError(t, err)
 
-		time.Sleep(800 * time.Millisecond)
+		sleepCounter(semaphore, 800*time.Millisecond, &counter)
 		_, err = s.Job(j).CronWithSeconds("*/1 * * * * *").Update()
 		require.NoError(t, err)
 
-		time.Sleep(time.Second)
+		sleepCounter(semaphore, 1*time.Second, &counter)
 		s.Stop()
 
-		counterMutex.RLock()
-		defer counterMutex.RUnlock()
 		assert.Equal(t, 4, counter)
 	})
 }
@@ -1491,18 +1398,16 @@ func TestScheduler_CronWithSeconds(t *testing.T) {
 func TestScheduler_WaitForSchedule(t *testing.T) {
 	s := NewScheduler(time.UTC)
 
-	var counterMutex sync.RWMutex
-	counter := 0
+	semaphore := make(chan bool)
+	var counter int
 
-	_, err := s.Every("100ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("100ms").WaitForSchedule().Do(func() { semaphore <- true })
 	require.NoError(t, err)
 	s.StartAsync()
 
-	time.Sleep(350 * time.Millisecond)
+	sleepCounter(semaphore, 350*time.Millisecond, &counter)
 	s.Stop()
 
-	counterMutex.RLock()
-	defer counterMutex.RUnlock()
 	assert.Equal(t, 3, counter)
 }
 
@@ -1510,21 +1415,19 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	s.WaitForScheduleAll()
 
-	var counterMutex sync.RWMutex
-	counter := 0
+	semaphore := make(chan bool)
+	var counter int
 
-	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("1s").Do(func() { semaphore <- true })
 	require.NoError(t, err)
 
-	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { semaphore <- true })
 	require.NoError(t, err)
 	s.StartAsync()
 
-	time.Sleep(1100 * time.Millisecond)
+	sleepCounter(semaphore, 1100*time.Millisecond, &counter)
 	s.Stop()
 
-	counterMutex.RLock()
-	defer counterMutex.RUnlock()
 	assert.Equal(t, 2, counter)
 }
 
