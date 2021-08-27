@@ -907,23 +907,28 @@ func TestRunJobsWithLimit(t *testing.T) {
 	})
 }
 
-func TestCalculateMonths(t *testing.T) {
-	ft := fakeTime{onNow: func(l *time.Location) time.Time {
-		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
-	}}
-	s := NewScheduler(time.UTC)
-	s.time = ft
-	s.StartAsync()
-	job, err := s.Every(1).Month(1).At("10:00").Do(func() {
-		fmt.Println("hello task")
-	})
-	require.NoError(t, err)
-	s.Stop()
+func TestCalculateMonthsError(t *testing.T) {
+	testCases := []struct {
+		desc       string
+		dayOfMonth int
+	}{
+		{"invalid -1", -1},
+		{"invalid 29", 29},
+	}
 
-	assert.Equal(t, s.time.Now(s.location).AddDate(0, 1, 0).Month(), job.nextRun.Month())
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			job, err := s.Every(1).Month(tc.dayOfMonth).Do(func() {
+				fmt.Println("hello task")
+			})
+			require.Error(t, err)
+			require.Nil(t, job)
+		})
+	}
 }
 
-func TestCalculateMonths2(t *testing.T) {
+func TestCalculateMonths(t *testing.T) {
 	maySecond2021At0200 := time.Date(2021, 5, 2, 2, 0, 0, 0, time.UTC)
 
 	maySecond2021At0800 := time.Date(2021, 5, 2, 8, 0, 0, 0, time.UTC)
