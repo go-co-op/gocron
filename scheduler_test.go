@@ -83,7 +83,53 @@ func TestScheduler_Every(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		semaphore := make(chan bool)
 
-		_, err := s.Every(100 * time.Millisecond).Do(func() {
+		_, err := s.Every(500 * time.Millisecond).Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(2400 * time.Millisecond)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 6, counter)
+	})
+
+	t.Run("int", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every(500).Milliseconds().Do(func() {
+			semaphore <- true
+		})
+		require.NoError(t, err)
+
+		s.StartAsync()
+
+		var counter int
+
+		now := time.Now()
+		for time.Now().Before(now.Add(2400 * time.Millisecond)) {
+			if <-semaphore {
+				counter++
+			}
+		}
+		s.Stop()
+		assert.Equal(t, 2, counter)
+	})
+
+	t.Run("string duration", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		semaphore := make(chan bool)
+
+		_, err := s.Every("500ms").Do(func() {
 			semaphore <- true
 		})
 		require.NoError(t, err)
@@ -99,55 +145,8 @@ func TestScheduler_Every(t *testing.T) {
 			}
 		}
 		s.Stop()
-		assert.Equal(t, 6, counter)
-	})
-
-	t.Run("int", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-		semaphore := make(chan bool)
-
-		_, err := s.Every(100).Milliseconds().Do(func() {
-			semaphore <- true
-		})
-		require.NoError(t, err)
-
-		s.StartAsync()
-
-		var counter int
-
-		now := time.Now()
-		for time.Now().Before(now.Add(100 * time.Millisecond)) {
-			if <-semaphore {
-				counter++
-			}
-		}
-		s.Stop()
 		assert.Equal(t, 2, counter)
 	})
-
-	t.Run("string duration", func(t *testing.T) {
-		s := NewScheduler(time.UTC)
-		semaphore := make(chan bool)
-
-		_, err := s.Every("100ms").Do(func() {
-			semaphore <- true
-		})
-		require.NoError(t, err)
-
-		s.StartAsync()
-
-		var counter int
-
-		now := time.Now()
-		for time.Now().Before(now.Add(100 * time.Millisecond)) {
-			if <-semaphore {
-				counter++
-			}
-		}
-		s.Stop()
-		assert.Equal(t, 2, counter)
-	})
-
 }
 
 func TestExecutionSeconds(t *testing.T) {
