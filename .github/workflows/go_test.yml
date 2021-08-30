@@ -1,10 +1,10 @@
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 name: golangci-lint
 jobs:
@@ -23,7 +23,7 @@ jobs:
         with:
           version: v1.38.0
       - name: Install Go
-        uses: actions/setup-go@v2.1.3
+        uses: actions/setup-go@v2.1.4
         with:
           go-version: ${{ matrix.go-version }}
       - name: test
