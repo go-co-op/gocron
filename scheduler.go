@@ -272,7 +272,7 @@ func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
 		if lastRun.Weekday() == time.Saturday {
 			runFrom = time.Sunday
 		} else {
-			runFrom += 1
+			runFrom++
 		}
 		daysToWeekday = remainingDaysToWeekday(runFrom, job.Weekdays())
 	}
