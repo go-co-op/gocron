@@ -268,13 +268,19 @@ func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
 
 	// handle when it is the same weekday and a time in the past
 	if daysToWeekday == 0 && s.roundToMidnight(lastRun).Add(atTime).AddDate(0, 0, 0).Before(s.now()) {
-		runFrom := lastRun.Weekday()
-		if lastRun.Weekday() == time.Saturday {
-			runFrom = time.Sunday
+		if len(job.Weekdays()) > 1 {
+			// we're running on multiple days of the week, so just calculate again from the next day
+			runFrom := lastRun.Weekday()
+			if lastRun.Weekday() == time.Saturday {
+				runFrom = time.Sunday
+			} else {
+				runFrom++
+			}
+			daysToWeekday = remainingDaysToWeekday(runFrom, job.Weekdays())
 		} else {
-			runFrom++
+			// we're running one day a week, so set to 7, and it will be multiplied by interval in calculateTotalDaysDifference()
+			daysToWeekday += 7
 		}
-		daysToWeekday = remainingDaysToWeekday(runFrom, job.Weekdays())
 	}
 
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
@@ -291,12 +297,12 @@ func (s *Scheduler) calculateWeeks(job *Job, lastRun time.Time) nextRun {
 
 func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekday int, job *Job) int {
 	if job.interval > 1 && job.RunCount() < len(job.Weekdays()) { // just count weeks after the first jobs were done
-		return daysToWeekday
+		return daysToWeekday * job.interval
 	} else if job.interval > 1 && job.RunCount() >= len(job.Weekdays()) {
 		if daysToWeekday > 0 {
-			return int(job.interval)*7 - (allWeekDays - daysToWeekday)
+			return job.interval*7 - (allWeekDays - daysToWeekday)
 		}
-		return int(job.interval) * 7
+		return job.interval * 7
 	}
 
 	if daysToWeekday == 0 { // today, at future time or already passed
