@@ -856,13 +856,20 @@ func (s *Scheduler) Weeks() *Scheduler {
 }
 
 // Month sets the unit with months
+// Note: Only days 1 through 28 are allowed for monthly schedules
 func (s *Scheduler) Month(dayOfTheMonth int) *Scheduler {
 	return s.Months(dayOfTheMonth)
 }
 
 // Months sets the unit with months
+// Note: Only days 1 through 28 are allowed for monthly schedules
 func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
 	job := s.getCurrentJob()
+
+	if dayOfTheMonth < 1 || dayOfTheMonth > 28 {
+		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
+	}
+
 	job.dayOfTheMonth = dayOfTheMonth
 	job.startsImmediately = false
 	s.setUnit(months)
