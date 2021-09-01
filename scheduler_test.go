@@ -1586,9 +1586,8 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 		return time.Date(2020, time.January, 2, hour, minute, second, 0, time.UTC)
 	}
 	const (
-		wantTimeUntilNextFirstRun = 1 * time.Second
-		// all day long
-		wantTimeUntilNextSecondRun = 24 * time.Hour
+		wantTimeUntilNextFirstRun  = 1 * time.Second
+		wantTimeUntilNextSecondRun = 0 * time.Second
 	)
 
 	t.Run("check slice next run", func(t *testing.T) {
@@ -1628,13 +1627,15 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 	}
 
 	const (
+		wantTimeUntilNextRunZeroSecond = 0 * time.Second
+		// // all day long
 		wantTimeUntilNextRunOneDay = 24 * time.Hour
 		// two weeks difference
 		wantTimeUntilNextRunTwoWeeks = 24 * time.Hour * 14
 		// three weeks difference
 		wantTimeUntilNextRunThreeWeeks = 24 * time.Hour * 21
-		// two weeks difference less one day
-		wantTimeUntilNextRunTwoWeeksLessOneDay = 24 * time.Hour * (14 - 1)
+		// two weeks difference
+		wantTimeUntilNextRunTwoWeeksLessOneDay = 24 * time.Hour * 14
 	)
 
 	for _, tc := range testCases {
@@ -1654,14 +1655,18 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 				got := s.durationToNextRun(lastRun, job).duration
 
 				if numJob < len(tc.weekDays) {
-					assert.Equal(t, wantTimeUntilNextRunOneDay, got)
+					if tc.caseTest == 3 && day == 2 {
+						assert.Equal(t, wantTimeUntilNextRunZeroSecond, got, day)
+					} else {
+						assert.Equal(t, wantTimeUntilNextRunOneDay, got, day)
+					}
 				} else {
 					if tc.caseTest == 1 {
 						assert.Equal(t, wantTimeUntilNextRunTwoWeeks, got)
 					} else if tc.caseTest == 2 {
 						assert.Equal(t, wantTimeUntilNextRunThreeWeeks, got)
 					} else if tc.caseTest == 3 {
-						assert.Equal(t, wantTimeUntilNextRunTwoWeeksLessOneDay, got)
+						assert.Equal(t, wantTimeUntilNextRunTwoWeeksLessOneDay, got, day)
 					}
 
 				}
