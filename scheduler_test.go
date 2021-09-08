@@ -729,13 +729,13 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "every month at february on leap year should count 29 days", job: &Job{interval: 1, unit: months, lastRun: time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 29 * day},
 		{name: "every month at february on non leap year should count 28 days", job: &Job{interval: 1, unit: months, lastRun: time.Date(2019, time.February, 1, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 28 * day},
 		{name: "every month at first day at time should run next month + at time", job: &Job{interval: 1, unit: months, atTime: _getHours(9) + _getMinutes(30), lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30)},
-		{name: "every month at day should consider at days", job: &Job{interval: 1, unit: months, dayOfTheMonth: 2, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
+		{name: "every month at day should consider at days", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{2}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
 		{name: "every month at day should consider at hours", job: &Job{interval: 1, unit: months, atTime: _getHours(9) + _getMinutes(30), lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30)},
-		{name: "every month on the first day, but started on january 8th, should run February 1st", job: &Job{interval: 1, unit: months, dayOfTheMonth: 1, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 7)}, wantTimeUntilNextRun: 24 * day},
-		{name: "every 2 months at day 1, starting at day 1, should run in 2 months", job: &Job{interval: 2, unit: months, dayOfTheMonth: 1, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day},                          // 2020 january and february
-		{name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day", job: &Job{interval: 2, unit: months, dayOfTheMonth: 2, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day + 1*day},          // 2020 january and february
-		{name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day", job: &Job{interval: 2, unit: months, dayOfTheMonth: 1, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 30*day + 29*day}, // 2020 january and february
-		{name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day", job: &Job{interval: 13, unit: months, dayOfTheMonth: 1, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0))},
+		{name: "every month on the first day, but started on january 8th, should run February 1st", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 7)}, wantTimeUntilNextRun: 24 * day},
+		{name: "every 2 months at day 1, starting at day 1, should run in 2 months", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day},                          // 2020 january and february
+		{name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{2}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day + 1*day},          // 2020 january and february
+		{name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 30*day + 29*day}, // 2020 january and february
+		{name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day", job: &Job{interval: 13, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0))},
 		//// WEEKDAYS
 		{name: "every weekday starting on one day before it should run this weekday", job: &Job{interval: 1, unit: weeks, scheduledWeekday: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
 		{name: "every weekday starting on same weekday should run on same immediately", job: &Job{interval: 1, unit: weeks, scheduledWeekday: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 0},
@@ -919,7 +919,7 @@ func TestCalculateMonthsError(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
-			job, err := s.Every(1).Month().On(tc.dayOfMonth).Do(func() {
+			job, err := s.Every(1).Month(tc.dayOfMonth).Do(func() {
 				fmt.Println("hello task")
 			})
 			require.Error(t, err)
@@ -952,12 +952,12 @@ func TestCalculateMonths(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{description: "day before current and before current time, should run next month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 2, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0200)},
-		{description: "day before current and after current time, should run next month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 2, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0800)},
-		{description: "current day and before current time, should run next month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 6, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySixth2021At0200)},
-		{description: "current day and after current time, should run on current day", job: &Job{interval: 1, unit: months, dayOfTheMonth: 6, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: maySixth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
-		{description: "day after current and before current time, should run on current month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 10, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0200.Sub(maySixth2021At0500.Now(time.UTC))},
-		{description: "day after current and after current time, should run on current month", job: &Job{interval: 1, unit: months, dayOfTheMonth: 10, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day before current and before current time, should run next month", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{2}, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0200)},
+		{description: "day before current and after current time, should run next month", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{2}, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0800)},
+		{description: "current day and before current time, should run next month", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{6}, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySixth2021At0200)},
+		{description: "current day and after current time, should run on current day", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{6}, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: maySixth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day after current and before current time, should run on current month", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{10}, atTime: _getHours(2), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0200.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day after current and after current time, should run on current month", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{10}, atTime: _getHours(8), lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
 	}
 
 	for _, tc := range testCases {
@@ -1688,10 +1688,10 @@ func TestCalculateMonthOn(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{description: "should run current month 10", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{10, 6}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFirstCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run current month 10", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{10, 6}, atTime: _getHours(5), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunSecondCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run next month 6", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{6, 7}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunThirdCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run next month 11", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{12, 11}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFourthCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run current month 10", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{10, 6}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFirstCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run current month 10", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{10, 6}, atTime: _getHours(5), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunSecondCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run next month 6", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{6, 7}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunThirdCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run next month 11", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{12, 11}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFourthCaseDate.Sub(curTime.Now(time.UTC))},
 	}
 
 	for _, tc := range testCases {

@@ -24,8 +24,7 @@ type Job struct {
 	lastRun           time.Time      // datetime of last run
 	nextRun           time.Time      // datetime of next run
 	scheduledWeekday  []time.Weekday // Specific days of the week to start on
-	dayOfTheMonth     int            // Specific day of the month to run the job
-	dayOfTheMonths    []int          // Specific days of the month to run the job
+	daysOfTheMonth    []int          // Specific days of the month to run the job
 	tags              []string       // allow the user to tag Jobs with certain labels
 	runCount          int            // number of times the job ran
 	timer             *time.Timer    // handles running tasks at specific time

@@ -241,12 +241,10 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
-	if job.dayOfTheMonth > 0 { // calculate days to job.dayOfTheMonth
-		return calculateNextRunForMonth(s, job, lastRun, job.dayOfTheMonth)
-	} else if len(job.dayOfTheMonths) != 0 {
+	if len(job.daysOfTheMonth) != 0 { // calculate days to job.daysOfTheMonth
 
 		var nextRunDateMap map[int]nextRun = make(map[int]nextRun)
-		for _, day := range job.dayOfTheMonths {
+		for _, day := range job.daysOfTheMonth {
 			nextRunDateMap[day] = calculateNextRunForMonth(s, job, lastRun, day)
 		}
 
@@ -266,10 +264,6 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 }
 
 func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMonth int) nextRun {
-
-	if dayOfMonth == 0 {
-		dayOfMonth = job.dayOfTheMonth
-	}
 
 	jobDay := time.Date(lastRun.Year(), lastRun.Month(), dayOfMonth, 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
 	difference := absDuration(lastRun.Sub(jobDay))
@@ -716,12 +710,6 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
-	if jobUnit == months && job.dayOfTheMonth == 0 && job.dayOfTheMonths == nil {
-		//Here Month() used without On()
-		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntryWithOnMethod)
-		return nil, job.error
-	}
-
 	if job.error != nil {
 		// delete the job from the scheduler as this job
 		// cannot be executed
@@ -888,50 +876,41 @@ func (s *Scheduler) Weeks() *Scheduler {
 }
 
 // Month sets the unit with months
-func (s *Scheduler) Month() *Scheduler {
-	job := s.getCurrentJob()
-	job.dayOfTheMonth = 0
-	job.startsImmediately = false
-	s.setUnit(months)
-	return s
+func (s *Scheduler) Month(daysOfMonth ...int) *Scheduler {
+	return s.Months(daysOfMonth...)
 }
 
 // Months sets the unit with months
 // Note: Only days 1 through 28 are allowed for monthly schedules
-func (s *Scheduler) On(dayOfTheMonth int) *Scheduler {
+// Note: Multiple add same days of month cannot be allowed
+func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 	job := s.getCurrentJob()
 
-	if dayOfTheMonth < 1 || dayOfTheMonth > 28 {
+	if len(daysOfTheMonth) == 0 {
 		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
-	}
+	} else {
 
-	if job.dayOfTheMonths == nil {
-		job.dayOfTheMonths = make([]int, 0)
-	}
+		if job.daysOfTheMonth == nil {
+			job.daysOfTheMonth = make([]int, 0)
+		}
 
-	// Multiple add same day of month cannot be add
-	for _, v := range job.dayOfTheMonths {
-		if v == dayOfTheMonth {
-			job.error = wrapOrError(job.error, ErrInvalidDayOfMonthMultipleCallOnMethod)
+		repeatMap := make(map[int]int)
+		for _, dayOfMonth := range job.daysOfTheMonth {
+
+			if _, ok := repeatMap[dayOfMonth]; ok {
+				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthMultipleCallOnMethod)
+				break
+			} else {
+				repeatMap[dayOfMonth]++
+			}
+
+			if dayOfMonth < 1 || dayOfMonth > 28 {
+				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
+				break
+			}
 		}
 	}
-
-	job.dayOfTheMonths = append(job.dayOfTheMonths, dayOfTheMonth)
-	job.startsImmediately = false
-	s.setUnit(months)
-	return s
-}
-
-// Months sets the unit with months
-// Note: Only days 1 through 28 are allowed for monthly schedules
-func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
-	job := s.getCurrentJob()
-
-	if dayOfTheMonth < 1 || dayOfTheMonth > 28 {
-		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
-	}
-
-	job.dayOfTheMonth = dayOfTheMonth
+	job.daysOfTheMonth = daysOfTheMonth
 	job.startsImmediately = false
 	s.setUnit(months)
 	return s

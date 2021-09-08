@@ -170,7 +170,7 @@ func ExampleScheduler_Clear() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Second().Do(task)
 	_, _ = s.Every(1).Minute().Do(task)
-	_, _ = s.Every(1).Month().On(1).Do(task)
+	_, _ = s.Every(1).Month(1).Do(task)
 	fmt.Println(len(s.Jobs())) // Print the number of jobs before clearing
 	s.Clear()                  // Clear all the jobs
 	fmt.Println(len(s.Jobs())) // Print the number of jobs after clearing
@@ -378,14 +378,10 @@ func ExampleScheduler_Monday() {
 func ExampleScheduler_Month() {
 	s := gocron.NewScheduler(time.UTC)
 
-	_, _ = s.Every(1).Month().On(1).Do(task)
+	_, _ = s.Every(1).Month().Do(task)
+	_, _ = s.Every(1).Month(1).Do(task)
 	_, _ = s.Every(1).Months(1).Do(task)
-}
-
-func ExampleScheduler_On() {
-	s := gocron.NewScheduler(time.UTC)
-
-	_, _ = s.Every(1).Month().On(6).On(10).Do(task)
+	_, _ = s.Every(1).Month(1, 2).Do(task)
 }
 
 func ExampleScheduler_Months() {
