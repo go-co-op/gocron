@@ -17,7 +17,7 @@ import (
 
 // Error declarations for gocron related errors
 var (
-	ErrNotAFunction                  = errors.New("only functions can be schedule into the job queue")
+	ErrNotAFunction                  = errors.New("only functions can be scheduled into the job queue")
 	ErrNotScheduledWeekday           = errors.New("job not scheduled weekly on a weekday")
 	ErrJobNotFoundWithTag            = errors.New("no jobs found with given tag")
 	ErrUnsupportedTimeFormat         = errors.New("the given time format is not supported")

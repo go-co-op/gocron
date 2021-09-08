@@ -12,18 +12,18 @@ import (
 
 // Job struct stores the information necessary to run a Job
 type Job struct {
-	sync.RWMutex
+	mu sync.RWMutex
 	jobFunction
 	interval          int            // pause interval * unit between runs
 	duration          time.Duration  // time duration between runs
-	unit              schedulingUnit // time units, ,e.g. 'minutes', 'hours'...
+	unit              schedulingUnit // time units, e.g. 'minutes', 'hours'...
 	startsImmediately bool           // if the Job should run upon scheduler start
 	atTime            time.Duration  // optional time at which this Job runs when interval is day
 	startAtTime       time.Time      // optional time at which the Job starts
 	error             error          // error related to Job
 	lastRun           time.Time      // datetime of last run
 	nextRun           time.Time      // datetime of next run
-	scheduledWeekday  []time.Weekday // Specific days of the week to start on
+	scheduledWeekdays []time.Weekday // Specific days of the week to start on
 	dayOfTheMonth     int            // Specific day of the month to run the job
 	tags              []string       // allow the user to tag Jobs with certain labels
 	runCount          int            // number of times the job ran
@@ -88,8 +88,8 @@ func (j *Job) setStartsImmediately(b bool) {
 }
 
 func (j *Job) setTimer(t *time.Timer) {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.timer = t
 }
 
@@ -110,26 +110,26 @@ func (j *Job) setStartAtTime(t time.Time) {
 }
 
 func (j *Job) getUnit() schedulingUnit {
-	j.RLock()
-	defer j.RUnlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.unit
 }
 
 func (j *Job) setUnit(t schedulingUnit) {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.unit = t
 }
 
 func (j *Job) getDuration() time.Duration {
-	j.RLock()
-	defer j.RUnlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.duration
 }
 
 func (j *Job) setDuration(t time.Duration) {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.duration = t
 }
 
@@ -165,8 +165,8 @@ func (j *Job) Tags() []string {
 
 // ScheduledTime returns the time of the Job's next scheduled run
 func (j *Job) ScheduledTime() time.Time {
-	j.RLock()
-	defer j.RUnlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.nextRun
 }
 
@@ -178,21 +178,21 @@ func (j *Job) ScheduledAtTime() string {
 // Weekday returns which day of the week the Job will run on and
 // will return an error if the Job is not scheduled weekly
 func (j *Job) Weekday() (time.Weekday, error) {
-	if len(j.scheduledWeekday) == 0 {
+	if len(j.scheduledWeekdays) == 0 {
 		return time.Sunday, ErrNotScheduledWeekday
 	}
-	return j.scheduledWeekday[0], nil
+	return j.scheduledWeekdays[0], nil
 }
 
 // Weekdays returns a slice of time.Weekday that the Job will run in a week and
 // will return an error if the Job is not scheduled weekly
 func (j *Job) Weekdays() []time.Weekday {
-	// appending on j.scheduledWeekday may cause a side effect
-	if len(j.scheduledWeekday) == 0 {
+	// appending on j.scheduledWeekdays may cause a side effect
+	if len(j.scheduledWeekdays) == 0 {
 		return []time.Weekday{time.Sunday}
 	}
 
-	return j.scheduledWeekday
+	return j.scheduledWeekdays
 }
 
 // LimitRunsTo limits the number of executions of this job to n.
@@ -204,8 +204,8 @@ func (j *Job) Weekdays() []time.Weekday {
 // LimitRunsTo() func on the scheduler chain when scheduling the job.
 // For example: scheduler.LimitRunsTo(1).Do()
 func (j *Job) LimitRunsTo(n int) {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.runConfig.finiteRuns = true
 	j.runConfig.maxRuns = n
 }
@@ -217,8 +217,8 @@ func (j *Job) LimitRunsTo(n int) {
 // by default upon being added to the scheduler. It is recommended to use the
 // SingletonMode() func on the scheduler chain when scheduling the job.
 func (j *Job) SingletonMode() {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.runConfig.mode = singletonMode
 	j.jobFunction.limiter = &singleflight.Group{}
 
@@ -227,8 +227,8 @@ func (j *Job) SingletonMode() {
 // shouldRun evaluates if this job should run again
 // based on the runConfig
 func (j *Job) shouldRun() bool {
-	j.RLock()
-	defer j.RUnlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return !j.runConfig.finiteRuns || j.runCount < j.runConfig.maxRuns
 }
 
@@ -243,14 +243,14 @@ func (j *Job) setLastRun(t time.Time) {
 
 // NextRun returns the time the job will run next
 func (j *Job) NextRun() time.Time {
-	j.RLock()
-	defer j.RUnlock()
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.nextRun
 }
 
 func (j *Job) setNextRun(t time.Time) {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.nextRun = t
 }
 
@@ -260,8 +260,8 @@ func (j *Job) RunCount() int {
 }
 
 func (j *Job) stop() {
-	j.Lock()
-	defer j.Unlock()
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	if j.timer != nil {
 		j.timer.Stop()
 	}
