@@ -1674,31 +1674,31 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 }
 
 func TestCalculateMonthOn(t *testing.T) {
-	lastRunFirstCaseDate := time.Date(2021, 9, 10, 0, 0, 0, 0, time.UTC)	
-	lastRunSecondCaseDate := time.Date(2021, 9, 10, 5, 0, 0, 0, time.UTC)	
-	lastRunThirdCaseDate := time.Date(2021, 10, 6, 0, 0, 0, 0, time.UTC)	
-	lastRunFourthCaseDate := time.Date(2021, 9, 11, 0, 0, 0, 0, time.UTC)	
-	
+	lastRunFirstCaseDate := time.Date(2021, 9, 10, 0, 0, 0, 0, time.UTC)
+	lastRunSecondCaseDate := time.Date(2021, 9, 10, 5, 0, 0, 0, time.UTC)
+	lastRunThirdCaseDate := time.Date(2021, 10, 6, 0, 0, 0, 0, time.UTC)
+	lastRunFourthCaseDate := time.Date(2021, 9, 11, 0, 0, 0, 0, time.UTC)
+
 	curTime := fakeTime{onNow: func(l *time.Location) time.Time {
 		return time.Date(2021, 9, 8, 0, 0, 0, 0, l)
-	}}	
-	
+	}}
+
 	testCases := []struct {
 		description          string
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{description: "should run current month 10", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int {10, 6} , atTime: _getHours(0), lastRun: curTime.Now(time.UTC)},  wantTimeUntilNextRun: lastRunFirstCaseDate.Sub(curTime.Now(time.UTC)) },
+		{description: "should run current month 10", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{10, 6}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFirstCaseDate.Sub(curTime.Now(time.UTC))},
 		{description: "should run current month 10", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{10, 6}, atTime: _getHours(5), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunSecondCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run next month 6", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{6, 7}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)},  wantTimeUntilNextRun: lastRunThirdCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run next month 11", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{12, 11}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFourthCaseDate.Sub(curTime.Now(time.UTC))},		
+		{description: "should run next month 6", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{6, 7}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunThirdCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run next month 11", job: &Job{interval: 1, unit: months, dayOfTheMonths: []int{12, 11}, atTime: _getHours(0), lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFourthCaseDate.Sub(curTime.Now(time.UTC))},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.time = curTime
-			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration			
+			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})
 	}

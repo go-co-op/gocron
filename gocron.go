@@ -25,14 +25,14 @@ var (
 	ErrInvalidIntervalType           = errors.New(".Every() interval must be int, time.Duration, or string")
 	ErrInvalidIntervalUnitsSelection = errors.New(".Every(time.Duration) and .Cron() cannot be used with units (e.g. .Seconds())")
 
-	ErrAtTimeNotSupported     = errors.New("the At() method is not supported for this time unit")
-	ErrWeekdayNotSupported    = errors.New("weekday is not supported for time unit")
-	ErrInvalidDayOfMonthEntry = errors.New("only days 1 through 28 are allowed for monthly schedules")
-	ErrTagsUnique             = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
-	ErrWrongParams            = errors.New("wrong list of params")
-	ErrUpdateCalledWithoutJob = errors.New("a call to Scheduler.Update() requires a call to Scheduler.Job() first")
-	ErrCronParseFailure       = errors.New("cron expression failed to be parsed")
-	ErrInvalidDayOfMonthEntryWithOnMethod = errors.New("please use On() method after Month to decide which day of months will execute")
+	ErrAtTimeNotSupported                    = errors.New("the At() method is not supported for this time unit")
+	ErrWeekdayNotSupported                   = errors.New("weekday is not supported for time unit")
+	ErrInvalidDayOfMonthEntry                = errors.New("only days 1 through 28 are allowed for monthly schedules")
+	ErrTagsUnique                            = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
+	ErrWrongParams                           = errors.New("wrong list of params")
+	ErrUpdateCalledWithoutJob                = errors.New("a call to Scheduler.Update() requires a call to Scheduler.Job() first")
+	ErrCronParseFailure                      = errors.New("cron expression failed to be parsed")
+	ErrInvalidDayOfMonthEntryWithOnMethod    = errors.New("please use On() method after Month to decide which day of months will execute")
 	ErrInvalidDayOfMonthMultipleCallOnMethod = errors.New("please use On() method for unique day of month")
 )
 

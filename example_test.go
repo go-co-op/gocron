@@ -385,7 +385,7 @@ func ExampleScheduler_Month() {
 func ExampleScheduler_On() {
 	s := gocron.NewScheduler(time.UTC)
 
-	_, _ = s.Every(1).Month().On(6).On(10).Do(task)		
+	_, _ = s.Every(1).Month().On(6).On(10).Do(task)
 }
 
 func ExampleScheduler_Months() {
