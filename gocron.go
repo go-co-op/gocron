@@ -32,6 +32,8 @@ var (
 	ErrWrongParams            = errors.New("wrong list of params")
 	ErrUpdateCalledWithoutJob = errors.New("a call to Scheduler.Update() requires a call to Scheduler.Job() first")
 	ErrCronParseFailure       = errors.New("cron expression failed to be parsed")
+	ErrInvalidDayOfMonthEntryWithOnMethod = errors.New("please use On() method after Month to decide which day of months will execute")
+	ErrInvalidDayOfMonthMultipleCallOnMethod = errors.New("please use On() method for unique day of month")
 )
 
 func wrapOrError(toWrap error, err error) error {

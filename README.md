@@ -31,13 +31,17 @@ s.Every("5m").Do(func(){ ... })
 
 s.Every(5).Days().Do(func(){ ... })
 
+s.Every(1).Month().On(1).Do(func(){ ... })
+
+s.Every(1).Month().On(1).On(2).Do(func(){ ... })
+
 // cron expressions supported
 s.Cron("*/1 * * * *").Do(task) // every minute
 
 // you can start running the scheduler in two different ways:
 // starts the scheduler asynchronously
 s.StartAsync()
-// starts the scheduler and blocks current execution path 
+// starts the scheduler and blocks current execution path
 s.StartBlocking()
 ```
 
@@ -45,24 +49,24 @@ For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go
 
 ## Options
 
-Interval | Supported schedule options
--- | --
-sub-second | `StartAt()`
-milliseconds | `StartAt()`
-seconds | `StartAt()`
-minutes | `StartAt()`
-hours | `StartAt()`
-days | `StartAt()`, `At()`
-weeks | `StartAt()`, `At()`, `Weekday()` (and all week day named functions)
-months | `StartAt()`, `At()`
+| Interval     | Supported schedule options                                          |
+| ------------ | ------------------------------------------------------------------- |
+| sub-second   | `StartAt()`                                                         |
+| milliseconds | `StartAt()`                                                         |
+| seconds      | `StartAt()`                                                         |
+| minutes      | `StartAt()`                                                         |
+| hours        | `StartAt()`                                                         |
+| days         | `StartAt()`, `At()`                                                 |
+| weeks        | `StartAt()`, `At()`, `Weekday()` (and all week day named functions) |
+| months       | `StartAt()`, `At()`                                                 |
 
 There are several options available to restrict how jobs run:
 
-Mode | Function | Behavior
--- | -- | --
-Default |  | jobs are rescheduled at every interval
-Job singleton | `SingletonMode()` | a long running job will not be rescheduled until the current run is completed
-Scheduler limit | `SetMaxConcurrentJobs()` | set a collective maximum number of concurrent jobs running across the scheduler
+| Mode            | Function                 | Behavior                                                                        |
+| --------------- | ------------------------ | ------------------------------------------------------------------------------- |
+| Default         |                          | jobs are rescheduled at every interval                                          |
+| Job singleton   | `SingletonMode()`        | a long running job will not be rescheduled until the current run is completed   |
+| Scheduler limit | `SetMaxConcurrentJobs()` | set a collective maximum number of concurrent jobs running across the scheduler |
 
 ## Tags
 
@@ -88,22 +92,25 @@ s.RunByTag("tag")
 
 ## FAQ
 
-* Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
-* A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+- Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
+- A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
 
-* Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
-* A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.
+- Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
+- A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.
 
---- 
+---
+
 Looking to contribute? Try to follow these guidelines:
-* Use issues for everything
-* For a small change, just send a PR!
-* For bigger changes, please open an issue for discussion before sending a PR.
-* PRs should have: tests, documentation and examples (if it makes sense)
-* You can also contribute by:
-  * Reporting issues
-  * Suggesting new features or enhancements
-  * Improving/fixing documentation
+
+- Use issues for everything
+- For a small change, just send a PR!
+- For bigger changes, please open an issue for discussion before sending a PR.
+- PRs should have: tests, documentation and examples (if it makes sense)
+- You can also contribute by:
+  - Reporting issues
+  - Suggesting new features or enhancements
+  - Improving/fixing documentation
+
 ---
 
 ## Design
