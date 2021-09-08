@@ -1,7 +1,7 @@
 package gocron_test
 
 import (
-	"fmt"	
+	"fmt"
 	"time"
 
 	"github.com/go-co-op/gocron"
