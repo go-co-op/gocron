@@ -243,12 +243,12 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 
 	if len(job.daysOfTheMonth) != 0 { // calculate days to job.daysOfTheMonth
 
-		var nextRunDateMap map[int]nextRun = make(map[int]nextRun)
+		nextRunDateMap := make(map[int]nextRun)
 		for _, day := range job.daysOfTheMonth {
 			nextRunDateMap[day] = calculateNextRunForMonth(s, job, lastRun, day)
 		}
 
-		var nextRunResult nextRun = nextRun{}
+		nextRunResult := nextRun{}
 		for _, val := range nextRunDateMap {
 			if nextRunResult.dateTime.IsZero() {
 				nextRunResult = val
