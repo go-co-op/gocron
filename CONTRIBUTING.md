@@ -25,7 +25,7 @@ You can help us out by doing the following before raising a new issue:
 
 ## Adding Features
 
-Pull requests are always welcome. However, before going through the trouble of implementing a change it's worth creating a bug or feature request issue. 
+Pull requests are always welcome. However, before going through the trouble of implementing a change it's worth creating a bug or feature request issue.
 This allows us to discuss the changes and make sure they are a good fit for the project.
 
 Please always make sure a pull request has been:
