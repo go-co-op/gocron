@@ -241,25 +241,45 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
-	if job.dayOfTheMonth > 0 { // calculate days to job.dayOfTheMonth
-		jobDay := time.Date(lastRun.Year(), lastRun.Month(), job.dayOfTheMonth, 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
-		difference := absDuration(lastRun.Sub(jobDay))
-		next := lastRun
-		if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
-			next = next.AddDate(0, job.interval, -0)
-			next = next.Add(-difference)
-		} else {
-			if job.interval == 1 { // every month counts current month
-				next = next.AddDate(0, job.interval-1, 0)
-			} else { // should run next month interval
-				next = next.AddDate(0, job.interval, 0)
-			}
-			next = next.Add(difference)
+	if len(job.daysOfTheMonth) != 0 { // calculate days to job.daysOfTheMonth
+
+		nextRunDateMap := make(map[int]nextRun)
+		for _, day := range job.daysOfTheMonth {
+			nextRunDateMap[day] = calculateNextRunForMonth(s, job, lastRun, day)
 		}
-		return nextRun{duration: until(lastRun, next), dateTime: next}
+
+		nextRunResult := nextRun{}
+		for _, val := range nextRunDateMap {
+			if nextRunResult.dateTime.IsZero() {
+				nextRunResult = val
+			} else if nextRunResult.dateTime.Sub(val.dateTime).Milliseconds() > 0 {
+				nextRunResult = val
+			}
+		}
+
+		return nextRunResult
 	}
 	next := lastRunRoundedMidnight.Add(job.getAtTime()).AddDate(0, job.interval, 0)
 	return nextRun{duration: until(lastRunRoundedMidnight, next), dateTime: next}
+}
+
+func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMonth int) nextRun {
+
+	jobDay := time.Date(lastRun.Year(), lastRun.Month(), dayOfMonth, 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
+	difference := absDuration(lastRun.Sub(jobDay))
+	next := lastRun
+	if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
+		next = next.AddDate(0, job.interval, -0)
+		next = next.Add(-difference)
+	} else {
+		if job.interval == 1 { // every month counts current month
+			next = next.AddDate(0, job.interval-1, 0)
+		} else { // should run next month interval
+			next = next.AddDate(0, job.interval, 0)
+		}
+		next = next.Add(difference)
+	}
+	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
@@ -856,21 +876,48 @@ func (s *Scheduler) Weeks() *Scheduler {
 }
 
 // Month sets the unit with months
-// Note: Only days 1 through 28 are allowed for monthly schedules
-func (s *Scheduler) Month(dayOfTheMonth int) *Scheduler {
-	return s.Months(dayOfTheMonth)
+func (s *Scheduler) Month(daysOfMonth ...int) *Scheduler {
+	return s.Months(daysOfMonth...)
 }
 
 // Months sets the unit with months
 // Note: Only days 1 through 28 are allowed for monthly schedules
-func (s *Scheduler) Months(dayOfTheMonth int) *Scheduler {
+// Note: Multiple add same days of month cannot be allowed
+func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 	job := s.getCurrentJob()
 
-	if dayOfTheMonth < 1 || dayOfTheMonth > 28 {
+	if len(daysOfTheMonth) == 0 {
 		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
-	}
+	} else {
 
-	job.dayOfTheMonth = dayOfTheMonth
+		if job.daysOfTheMonth == nil {
+			job.daysOfTheMonth = make([]int, 0)
+		}
+
+		repeatMap := make(map[int]int)
+		for _, dayOfMonth := range daysOfTheMonth {
+
+			if dayOfMonth < 1 || dayOfMonth > 28 {
+				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
+				break
+			}
+
+			for _, dayOfMonthInJob := range job.daysOfTheMonth {
+				if dayOfMonthInJob == dayOfMonth {
+					job.error = wrapOrError(job.error, ErrInvalidDaysOfMonthDuplicateValue)
+					break
+				}
+			}
+
+			if _, ok := repeatMap[dayOfMonth]; ok {
+				job.error = wrapOrError(job.error, ErrInvalidDaysOfMonthDuplicateValue)
+				break
+			} else {
+				repeatMap[dayOfMonth]++
+			}
+		}
+	}
+	job.daysOfTheMonth = append(job.daysOfTheMonth, daysOfTheMonth...)
 	job.startsImmediately = false
 	s.setUnit(months)
 	return s
