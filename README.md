@@ -31,9 +31,7 @@ s.Every("5m").Do(func(){ ... })
 
 s.Every(5).Days().Do(func(){ ... })
 
-s.Every(1).Month().On(1).Do(func(){ ... })
-
-s.Every(1).Month().On(1).On(2).Do(func(){ ... })
+s.Every(1).Month(1, 2, 3).Do(func(){ ... })
 
 // cron expressions supported
 s.Cron("*/1 * * * *").Do(task) // every minute
