@@ -895,7 +895,19 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 		}
 
 		repeatMap := make(map[int]int)
-		for _, dayOfMonth := range job.daysOfTheMonth {
+		for _, dayOfMonth := range daysOfTheMonth {
+
+			if dayOfMonth < 1 || dayOfMonth > 28 {
+				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
+				break
+			}
+
+			for _, dayOfMonthInJob := range job.daysOfTheMonth {
+				if dayOfMonthInJob == dayOfMonth {
+					job.error = wrapOrError(job.error, ErrInvalidDaysOfMonthDuplicateValue)
+					break
+				}
+			}
 
 			if _, ok := repeatMap[dayOfMonth]; ok {
 				job.error = wrapOrError(job.error, ErrInvalidDaysOfMonthDuplicateValue)
@@ -903,14 +915,9 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 			} else {
 				repeatMap[dayOfMonth]++
 			}
-
-			if dayOfMonth < 1 || dayOfMonth > 28 {
-				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
-				break
-			}
 		}
 	}
-	job.daysOfTheMonth = daysOfTheMonth
+	job.daysOfTheMonth = append(job.daysOfTheMonth, daysOfTheMonth...)
 	job.startsImmediately = false
 	s.setUnit(months)
 	return s
