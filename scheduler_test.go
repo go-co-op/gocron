@@ -1673,7 +1673,7 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 
 }
 
-func TestCalculateMonthOn(t *testing.T) {
+func TestScheduler_CheckCalculateDaysOfMonth(t *testing.T) {
 	lastRunFirstCaseDate := time.Date(2021, 9, 10, 0, 0, 0, 0, time.UTC)
 	lastRunSecondCaseDate := time.Date(2021, 9, 10, 5, 0, 0, 0, time.UTC)
 	lastRunThirdCaseDate := time.Date(2021, 10, 6, 0, 0, 0, 0, time.UTC)
