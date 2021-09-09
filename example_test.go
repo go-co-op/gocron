@@ -453,6 +453,22 @@ func ExampleScheduler_RunAllWithDelay() {
 	s.RunAllWithDelay(10 * time.Second)
 }
 
+func ExampleScheduler_RunByTag() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Day().At("10:00").Do(task)
+	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
+	s.StartAsync()
+	_ = s.RunByTag("tag")
+}
+
+func ExampleScheduler_RunByTagWithDelay() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Day().Tag("tag").At("10:00").Do(task)
+	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
+	s.StartAsync()
+	_ = s.RunByTagWithDelay("tag", 2*time.Second)
+}
+
 func ExampleScheduler_Saturday() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every(1).Day().Saturday().Do(task)
@@ -502,12 +518,6 @@ func ExampleScheduler_SingletonMode() {
 	_, _ = s.Every(1).Second().SingletonMode().Do(task)
 }
 
-func ExampleScheduler_StartBlocking() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(3).Seconds().Do(task)
-	s.StartBlocking()
-}
-
 func ExampleScheduler_StartAsync() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)
@@ -518,6 +528,18 @@ func ExampleScheduler_StartAt() {
 	s := gocron.NewScheduler(time.UTC)
 	specificTime := time.Date(2019, time.November, 10, 15, 0, 0, 0, time.UTC)
 	_, _ = s.Every(1).Hour().StartAt(specificTime).Do(task)
+	s.StartBlocking()
+}
+
+func ExampleScheduler_StartBlocking() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(3).Seconds().Do(task)
+	s.StartBlocking()
+}
+
+func ExampleScheduler_StartImmediately() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Cron("0 0 * * 6,0").StartImmediately().Do(task)
 	s.StartBlocking()
 }
 
@@ -670,20 +692,4 @@ func ExampleScheduler_Weeks() {
 	_, _ = s.Every(1).Weeks().Do(task)
 
 	_, _ = s.Every(2).Weeks().Monday().Wednesday().Friday().Do(task)
-}
-
-func ExampleScheduler_RunByTag() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Day().At("10:00").Do(task)
-	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
-	s.StartAsync()
-	_ = s.RunByTag("tag")
-}
-
-func ExampleScheduler_RunByTagWithDelay() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Day().Tag("tag").At("10:00").Do(task)
-	_, _ = s.Every(2).Day().Tag("tag").At("10:00").Do(task)
-	s.StartAsync()
-	_ = s.RunByTagWithDelay("tag", 2*time.Second)
 }

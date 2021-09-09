@@ -14,8 +14,8 @@ import (
 
 type limitMode int8
 
-// Scheduler struct stores a list of Jobs and the location of time Scheduler
-// Scheduler implements the sort.Interface{} for sorting Jobs, by the time of nextRun
+// Scheduler struct stores a list of Jobs and the location of time used by the Scheduler,
+// and implements the sort.Interface{} for sorting Jobs, by the time of nextRun
 type Scheduler struct {
 	jobsMutex sync.RWMutex
 	jobs      []*Job
@@ -222,7 +222,7 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 	case days:
 		next = s.calculateDays(job, lastRun)
 	case weeks:
-		if len(job.scheduledWeekday) != 0 { // weekday selected, Every().Monday(), for example
+		if len(job.scheduledWeekdays) != 0 { // weekday selected, Every().Monday(), for example
 			next = s.calculateWeekday(job, lastRun)
 		} else {
 			next = s.calculateWeeks(job, lastRun)
@@ -496,8 +496,8 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 
-	job.Lock()
-	defer job.Unlock()
+	job.mu.Lock()
+	defer job.mu.Unlock()
 	job.setLastRun(s.now())
 	job.runCount++
 	s.executor.jobFunctions <- job.jobFunction
@@ -556,8 +556,8 @@ func (s *Scheduler) Remove(job interface{}) {
 func (s *Scheduler) RemoveByReference(job *Job) {
 	s.removeJobsUniqueTags(job)
 	s.removeByCondition(func(someJob *Job) bool {
-		job.RLock()
-		defer job.RUnlock()
+		job.mu.RLock()
+		defer job.mu.RUnlock()
 		return someJob == job
 	})
 }
@@ -706,7 +706,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
-	if len(job.scheduledWeekday) != 0 && jobUnit != weeks {
+	if len(job.scheduledWeekdays) != 0 && jobUnit != weeks {
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
@@ -738,7 +738,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		job.name = fname
 	}
 
-	// we should not schedule if not running since we cant foresee how long it will take for the scheduler to start
+	// we should not schedule if not running since we can't foresee how long it will take for the scheduler to start
 	if s.IsRunning() {
 		s.scheduleNextRun(job)
 	}
@@ -928,12 +928,12 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 // spill over to the next month. Similarly, if it's less than 0,
 // it will go back to the month before
 
-// Weekday sets the scheduledWeekday with a specifics weekdays
+// Weekday sets the scheduledWeekdays with a specifics weekdays
 func (s *Scheduler) Weekday(weekDay time.Weekday) *Scheduler {
 	job := s.getCurrentJob()
 
-	if in := in(job.scheduledWeekday, weekDay); !in {
-		job.scheduledWeekday = append(job.scheduledWeekday, weekDay)
+	if in := in(job.scheduledWeekdays, weekDay); !in {
+		job.scheduledWeekdays = append(job.scheduledWeekdays, weekDay)
 	}
 
 	job.startsImmediately = false
@@ -1083,5 +1083,20 @@ func (s *Scheduler) WaitForScheduleAll() {
 func (s *Scheduler) WaitForSchedule() *Scheduler {
 	job := s.getCurrentJob()
 	job.startsImmediately = false
+	return s
+}
+
+// StartImmediately sets the job to run immediately upon
+// starting the scheduler or adding the job to a running
+// scheduler. This overrides the jobs start status of any
+// previously called methods in the chain.
+//
+// Note: This is the default behavior of the scheduler
+// for most jobs, but is useful for overriding the default
+// behavior of Cron scheduled jobs which default to
+// WaitForSchedule.
+func (s *Scheduler) StartImmediately() *Scheduler {
+	job := s.getCurrentJob()
+	job.startsImmediately = true
 	return s
 }
