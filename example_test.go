@@ -22,6 +22,28 @@ func ExampleJob_Error() {
 	// the given time format is not supported
 }
 
+func ExampleJob_IsRunning() {
+	s := gocron.NewScheduler(time.UTC)
+	j, _ := s.Every(10).Seconds().Do(func() { time.Sleep(2 * time.Second) })
+
+	fmt.Println(j.IsRunning())
+
+	s.StartAsync()
+
+	time.Sleep(time.Second)
+	fmt.Println(j.IsRunning())
+
+	time.Sleep(time.Second)
+	s.Stop()
+
+	time.Sleep(1 * time.Second)
+	fmt.Println(j.IsRunning())
+	// Output:
+	// false
+	// true
+	// false
+}
+
 func ExampleJob_LastRun() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)

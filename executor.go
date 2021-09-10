@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -77,7 +78,9 @@ func (e *executor) start() {
 
 				switch f.runConfig.mode {
 				case defaultMode:
+					atomic.AddInt64(f.runState, 1)
 					callJobFuncWithParams(f.function, f.parameters)
+					atomic.AddInt64(f.runState, -1)
 				case singletonMode:
 					_, _, _ = f.limiter.Do("main", func() (interface{}, error) {
 						select {
@@ -87,7 +90,9 @@ func (e *executor) start() {
 							return nil, nil
 						default:
 						}
+						atomic.AddInt64(f.runState, 1)
 						callJobFuncWithParams(f.function, f.parameters)
+						atomic.AddInt64(f.runState, -1)
 						return nil, nil
 					})
 				}

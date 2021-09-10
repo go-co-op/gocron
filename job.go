@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -39,6 +40,7 @@ type jobFunction struct {
 	limiter    *singleflight.Group // limits inflight runs of job to one
 	ctx        context.Context     // for cancellation
 	cancel     context.CancelFunc  // for cancellation
+	runState   *int64              // will be non-zero when jobs are running
 }
 
 type runConfig struct {
@@ -61,14 +63,16 @@ const (
 // newJob creates a new Job with the provided interval
 func newJob(interval int, startImmediately bool) *Job {
 	ctx, cancel := context.WithCancel(context.Background())
+	var zero int64
 	return &Job{
 		interval: interval,
 		unit:     seconds,
 		lastRun:  time.Time{},
 		nextRun:  time.Time{},
 		jobFunction: jobFunction{
-			ctx:    ctx,
-			cancel: cancel,
+			ctx:      ctx,
+			cancel:   cancel,
+			runState: &zero,
 		},
 		tags:              []string{},
 		startsImmediately: startImmediately,
@@ -266,4 +270,12 @@ func (j *Job) stop() {
 		j.timer.Stop()
 	}
 	j.cancel()
+}
+
+// IsRunning reports whether any instances of the job function are currently running
+func (j *Job) IsRunning() bool {
+	if atomic.LoadInt64(j.runState) == 0 {
+		return false
+	}
+	return true
 }

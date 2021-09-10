@@ -136,3 +136,21 @@ func TestJob_CommonExports(t *testing.T) {
 	j.lastRun = lastRun
 	assert.Equal(t, lastRun, j.LastRun())
 }
+
+func TestJob_IsRunning(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	j, err := s.Every(10).Seconds().Do(func() { time.Sleep(2 * time.Second) })
+	require.NoError(t, err)
+	assert.False(t, j.IsRunning())
+
+	s.StartAsync()
+
+	time.Sleep(time.Second)
+	assert.True(t, j.IsRunning())
+
+	time.Sleep(time.Second)
+	s.Stop()
+
+	time.Sleep(1 * time.Second)
+	assert.False(t, j.IsRunning())
+}
