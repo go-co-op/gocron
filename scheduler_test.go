@@ -1726,3 +1726,11 @@ func TestScheduler_CheckCalculateDaysOfMonth(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_CheckSetWaitForSchedule(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	s = s.WaitForSchedule().Every("1m")
+
+	assert.Equal(t, true, s.isWaitForSchedule)
+	assert.Equal(t, true, s.getCurrentJob().startsImmediately)
+}

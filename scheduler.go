@@ -30,9 +30,10 @@ type Scheduler struct {
 
 	tags sync.Map // for storing tags when unique tags is set
 
-	tagsUnique      bool // defines whether tags should be unique
-	updateJob       bool // so the scheduler knows to create a new job or update the current
-	waitForInterval bool // defaults jobs to waiting for first interval to start
+	tagsUnique        bool // defines whether tags should be unique
+	updateJob         bool // so the scheduler knows to create a new job or update the current
+	waitForInterval   bool // defaults jobs to waiting for first interval to start
+	isWaitForSchedule bool // set if WaitForSchedule used before create new job
 }
 
 // days in a week
@@ -441,6 +442,10 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	job := &Job{}
 	if s.updateJob {
 		job = s.getCurrentJob()
+	}
+
+	if s.isWaitForSchedule {
+		job.startsImmediately = false
 	}
 
 	switch interval := interval.(type) {
@@ -1081,8 +1086,13 @@ func (s *Scheduler) WaitForScheduleAll() {
 // WaitForSchedule sets the job to not start immediately
 // but rather wait until the first scheduled interval.
 func (s *Scheduler) WaitForSchedule() *Scheduler {
-	job := s.getCurrentJob()
-	job.startsImmediately = false
+	if len(s.jobs) > 0 {
+		job := s.getCurrentJob()
+		job.startsImmediately = false
+	} else {
+		s.isWaitForSchedule = true
+	}
+
 	return s
 }
 
