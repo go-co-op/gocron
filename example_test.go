@@ -643,6 +643,7 @@ func ExampleScheduler_WaitForSchedule() {
 
 	// job will run 5 minutes from the scheduler starting
 	_, _ = s.Every("5m").WaitForSchedule().Do(task)
+	_, _ = s.WaitForSchedule().Every("5m").Do(task)
 
 	// job will run immediately and 5 minutes from the scheduler starting
 	_, _ = s.Every("5m").Do(task)
