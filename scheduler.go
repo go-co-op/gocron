@@ -30,9 +30,10 @@ type Scheduler struct {
 
 	tags sync.Map // for storing tags when unique tags is set
 
-	tagsUnique      bool // defines whether tags should be unique
-	updateJob       bool // so the scheduler knows to create a new job or update the current
-	waitForInterval bool // defaults jobs to waiting for first interval to start
+	tagsUnique                     bool // defines whether tags should be unique
+	updateJob                      bool // so the scheduler knows to create a new job or update the current
+	waitForInterval                bool // defaults jobs to waiting for first interval to start
+	isSetBehaviourBeforeJobCreated bool // represents if set some feature before job created
 }
 
 // days in a week
@@ -439,22 +440,22 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	job := &Job{}
-	if s.updateJob {
+	if s.updateJob || s.isSetBehaviourBeforeJobCreated {
 		job = s.getCurrentJob()
 	}
 
 	switch interval := interval.(type) {
 	case int:
-		if !s.updateJob {
+		if !(s.updateJob || s.isSetBehaviourBeforeJobCreated) {
 			job = s.newJob(interval)
 		} else {
-			job.interval = interval
+			job = s.newJob(interval)
 		}
 		if interval <= 0 {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 	case time.Duration:
-		if !s.updateJob {
+		if !(s.updateJob || s.isSetBehaviourBeforeJobCreated) {
 			job = s.newJob(0)
 		} else {
 			job.interval = 0
@@ -462,7 +463,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job.setDuration(interval)
 		job.setUnit(duration)
 	case string:
-		if !s.updateJob {
+		if !(s.updateJob || s.isSetBehaviourBeforeJobCreated) {
 			job = s.newJob(0)
 		} else {
 			job.interval = 0
@@ -474,7 +475,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job.setDuration(d)
 		job.setUnit(duration)
 	default:
-		if !s.updateJob {
+		if !(s.updateJob || s.isSetBehaviourBeforeJobCreated) {
 			job = s.newJob(0)
 		} else {
 			job.interval = 0
@@ -482,8 +483,11 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		job.error = wrapOrError(job.error, ErrInvalidIntervalType)
 	}
 
-	if s.updateJob {
+	if s.updateJob || s.isSetBehaviourBeforeJobCreated {
 		s.setJobs(append(s.Jobs()[:len(s.Jobs())-1], job))
+		if s.isSetBehaviourBeforeJobCreated {
+			s.isSetBehaviourBeforeJobCreated = false
+		}
 	} else {
 		s.setJobs(append(s.Jobs(), job))
 	}
@@ -977,6 +981,11 @@ func (s *Scheduler) Sunday() *Scheduler {
 }
 
 func (s *Scheduler) getCurrentJob() *Job {
+	if len(s.jobs) == 0 {
+		job := &Job{}
+		s.setJobs(append(s.Jobs(), job))
+		s.isSetBehaviourBeforeJobCreated = true
+	}
 	return s.Jobs()[len(s.Jobs())-1]
 }
 
@@ -1032,7 +1041,7 @@ func (s *Scheduler) CronWithSeconds(cronExpression string) *Scheduler {
 
 func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 	job := s.newJob(0)
-	if s.updateJob {
+	if s.updateJob || s.isSetBehaviourBeforeJobCreated {
 		job = s.getCurrentJob()
 	}
 
@@ -1058,8 +1067,9 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 	job.setUnit(crontab)
 	job.startsImmediately = false
 
-	if s.updateJob {
+	if s.updateJob || s.isSetBehaviourBeforeJobCreated {
 		s.setJobs(append(s.Jobs()[:len(s.Jobs())-1], job))
+		s.isSetBehaviourBeforeJobCreated = false
 	} else {
 		s.setJobs(append(s.Jobs(), job))
 	}
