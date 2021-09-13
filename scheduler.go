@@ -981,7 +981,7 @@ func (s *Scheduler) Sunday() *Scheduler {
 }
 
 func (s *Scheduler) getCurrentJob() *Job {
-	if len(s.jobs) == 0 {
+	if len(s.Jobs()) == 0 {
 		job := &Job{}
 		s.setJobs(append(s.Jobs(), job))
 		s.isSetBehaviourBeforeJobCreated = true
