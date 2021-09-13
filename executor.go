@@ -26,7 +26,7 @@ const (
 
 type executor struct {
 	jobFunctions   chan jobFunction
-	stop           chan struct{}
+	stopCh         chan struct{}
 	limitMode      limitMode
 	maxRunningJobs *semaphore.Weighted
 }
@@ -34,20 +34,20 @@ type executor struct {
 func newExecutor() executor {
 	return executor{
 		jobFunctions: make(chan jobFunction, 1),
-		stop:         make(chan struct{}, 1),
+		stopCh:       make(chan struct{}, 1),
 	}
 }
 
 func (e *executor) start() {
-	wg := sync.WaitGroup{}
 	stopCtx, cancel := context.WithCancel(context.Background())
+	runningJobsWg := sync.WaitGroup{}
 
 	for {
 		select {
 		case f := <-e.jobFunctions:
-			wg.Add(1)
+			runningJobsWg.Add(1)
 			go func() {
-				defer wg.Done()
+				defer runningJobsWg.Done()
 
 				if e.maxRunningJobs != nil {
 					if !e.maxRunningJobs.TryAcquire(1) {
@@ -92,10 +92,16 @@ func (e *executor) start() {
 					})
 				}
 			}()
-		case <-e.stop:
+		case <-e.stopCh:
 			cancel()
-			wg.Wait()
+			runningJobsWg.Wait()
+			e.stopCh <- struct{}{}
 			return
 		}
 	}
+}
+
+func (e *executor) stop() {
+	e.stopCh <- struct{}{}
+	<-e.stopCh
 }

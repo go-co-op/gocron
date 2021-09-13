@@ -689,7 +689,8 @@ func (s *Scheduler) Clear() {
 	}
 }
 
-// Stop stops the scheduler. This is a no-op if the scheduler is already stopped .
+// Stop stops the scheduler. This is a no-op if the scheduler is already stopped.
+// It waits for all running jobs to finish before returning, so it is safe to assume that running jobs will finish when calling this.
 func (s *Scheduler) Stop() {
 	if s.IsRunning() {
 		s.stop()
@@ -698,7 +699,7 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) stop() {
 	s.setRunning(false)
-	s.executor.stop <- struct{}{}
+	s.executor.stop()
 }
 
 // Do specifies the jobFunc that should be called every time the Job runs
