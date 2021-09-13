@@ -31,14 +31,14 @@ type executor struct {
 	maxRunningJobs *semaphore.Weighted
 
 	// runningJobsWg represents all running jobs at a current moment
-	runningJobsWg *sync.WaitGroup
+	runningJobsWg sync.WaitGroup
 }
 
 func newExecutor() executor {
 	return executor{
 		jobFunctions:  make(chan jobFunction, 1),
 		stopCh:        make(chan struct{}, 1),
-		runningJobsWg: &sync.WaitGroup{},
+		runningJobsWg: sync.WaitGroup{},
 	}
 }
 
@@ -97,12 +97,14 @@ func (e *executor) start() {
 			}()
 		case <-e.stopCh:
 			cancel()
+			e.runningJobsWg.Wait()
+			e.stopCh <- struct{}{}
 			return
 		}
 	}
 }
 
-func (e executor) stop() {
+func (e *executor) stop() {
 	e.stopCh <- struct{}{}
-	e.runningJobsWg.Wait()
+	<-e.stopCh
 }
