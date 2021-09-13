@@ -1726,3 +1726,9 @@ func TestScheduler_CheckCalculateDaysOfMonth(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_CheckSetBehaviourBeforeJobCreated(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	s.Month(1, 2).Every(1).Do(func() {})
+
+}
