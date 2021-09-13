@@ -274,8 +274,5 @@ func (j *Job) stop() {
 
 // IsRunning reports whether any instances of the job function are currently running
 func (j *Job) IsRunning() bool {
-	if atomic.LoadInt64(j.runState) == 0 {
-		return false
-	}
-	return true
+	return atomic.LoadInt64(j.runState) != 0
 }
