@@ -631,6 +631,19 @@ func TestScheduler_Stop(t *testing.T) {
 		s.Stop()
 		assert.False(t, s.IsRunning())
 	})
+	t.Run("waits for jobs to finish processing before returning .Stop()", func(t *testing.T) {
+		t.Parallel()
+		i := 0
+		s := NewScheduler(time.UTC)
+		s.Every(1).Second().Do(func() {
+			time.Sleep(2 * time.Second)
+			i = 1
+		})
+		s.StartAsync()
+		time.Sleep(1 * time.Second)
+		s.Stop()
+		assert.Equal(t, 1, i)
+	})
 }
 
 func TestScheduler_StartAt(t *testing.T) {
