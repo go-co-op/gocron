@@ -635,7 +635,7 @@ func TestScheduler_Stop(t *testing.T) {
 		t.Parallel()
 		i := 0
 		s := NewScheduler(time.UTC)
-		s.Every(1).Second().Do(func() {
+		s.Every(10).Second().Do(func() {
 			time.Sleep(2 * time.Second)
 			i = 1
 		})
