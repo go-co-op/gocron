@@ -1,0 +1,17 @@
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+name: formatting
+jobs:
+  check-sorted:
+    name: check sorted
+    runs-on: ubuntu-latest
+    steps:
+      - name: verify example_test.go
+        run: |
+          grep "func " example_test.go | sort -C
