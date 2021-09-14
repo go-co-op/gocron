@@ -21,6 +21,23 @@ func TestTags(t *testing.T) {
 	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
 }
 
+func TestJob_IsRunning(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	j, err := s.Every(10).Seconds().Do(func() { time.Sleep(2 * time.Second) })
+	require.NoError(t, err)
+	assert.False(t, j.IsRunning())
+
+	s.StartAsync()
+
+	time.Sleep(time.Second)
+	assert.True(t, j.IsRunning())
+
+	time.Sleep(time.Second)
+	s.Stop()
+
+	assert.False(t, j.IsRunning())
+}
+
 func TestGetScheduledTime(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		j, err := NewScheduler(time.UTC).Every(1).Day().At("10:30").Do(task)
@@ -127,12 +144,16 @@ func TestJob_CommonExports(t *testing.T) {
 	assert.True(t, j.NextRun().IsZero())
 
 	s.StartAsync()
+	s.Stop()
+
 	assert.False(t, j.NextRun().IsZero())
 
 	j.runCount = 5
 	assert.Equal(t, 5, j.RunCount())
 
 	lastRun := time.Now()
+	j.mu.Lock()
 	j.lastRun = lastRun
+	j.mu.Unlock()
 	assert.Equal(t, lastRun, j.LastRun())
 }
