@@ -12,6 +12,8 @@ jobs:
     name: check sorted
     runs-on: ubuntu-latest
     steps:
+      - name: checkout code
+        uses: actions/checkout@v2
       - name: verify example_test.go
         run: |
           grep "func " example_test.go | sort -C
