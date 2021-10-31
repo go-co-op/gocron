@@ -242,6 +242,11 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
+	// Special case: the last day of the month
+	if len(job.daysOfTheMonth) == 1 && job.daysOfTheMonth[0] == -1 {
+		return calculateNextRunForLastDayOfMonth(s, job, lastRun)
+	}
+
 	if len(job.daysOfTheMonth) != 0 { // calculate days to job.daysOfTheMonth
 
 		nextRunDateMap := make(map[int]nextRun)
@@ -262,6 +267,16 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	}
 	next := lastRunRoundedMidnight.Add(job.getAtTime()).AddDate(0, job.interval, 0)
 	return nextRun{duration: until(lastRunRoundedMidnight, next), dateTime: next}
+}
+
+func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time) nextRun {
+	// Calculate the last day of the next month, by adding job.interval+1 months (i.e. the
+	// first day of the month after the next month), and subtracting one day.
+	next := time.Date(lastRun.Year(), lastRun.Month(), 1, 0, 0, 0, 0, s.Location()).
+		Add(job.getAtTime()).
+		AddDate(0, job.interval+1, 0).
+		AddDate(0, 0, -1)
+	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
 func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMonth int) nextRun {
@@ -885,6 +900,11 @@ func (s *Scheduler) Month(daysOfMonth ...int) *Scheduler {
 	return s.Months(daysOfMonth...)
 }
 
+// MonthLastDay sets the unit with months at every last day of the month
+func (s *Scheduler) MonthLastDay() *Scheduler {
+	return s.Months(-1)
+}
+
 // Months sets the unit with months
 // Note: Only days 1 through 28 are allowed for monthly schedules
 // Note: Multiple add same days of month cannot be allowed
@@ -902,7 +922,7 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 		repeatMap := make(map[int]int)
 		for _, dayOfMonth := range daysOfTheMonth {
 
-			if dayOfMonth < 1 || dayOfMonth > 28 {
+			if dayOfMonth != -1 && (dayOfMonth < 1 || dayOfMonth > 28) {
 				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
 				break
 			}
