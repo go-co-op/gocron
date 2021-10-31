@@ -937,16 +937,17 @@ func TestRunJobsWithLimit(t *testing.T) {
 func TestCalculateMonthsError(t *testing.T) {
 	testCases := []struct {
 		desc       string
-		dayOfMonth int
+		dayOfMonth []int
 	}{
 		// -1 is now interpreted as "last day of the month"
-		{"invalid 29", 29},
+		{"invalid 29", []int{29}},
+		{"invalid -1 in list", []int{27, -1}},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
-			job, err := s.Every(1).Month(tc.dayOfMonth).Do(func() {
+			job, err := s.Every(1).Month(tc.dayOfMonth...).Do(func() {
 				fmt.Println("hello task")
 			})
 			require.Error(t, err)

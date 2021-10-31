@@ -908,21 +908,23 @@ func (s *Scheduler) MonthLastDay() *Scheduler {
 // Months sets the unit with months
 // Note: Only days 1 through 28 are allowed for monthly schedules
 // Note: Multiple add same days of month cannot be allowed
+// Note: -1 is a special value and can only occur as single argument
 func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 	job := s.getCurrentJob()
 
 	if len(daysOfTheMonth) == 0 {
 		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
-	} else {
-
-		if job.daysOfTheMonth == nil {
-			job.daysOfTheMonth = make([]int, 0)
+	} else if len(daysOfTheMonth) == 1 {
+		dayOfMonth := daysOfTheMonth[0]
+		if dayOfMonth != -1 && (dayOfMonth < 1 || dayOfMonth > 28) {
+			job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
 		}
+	} else {
 
 		repeatMap := make(map[int]int)
 		for _, dayOfMonth := range daysOfTheMonth {
 
-			if dayOfMonth != -1 && (dayOfMonth < 1 || dayOfMonth > 28) {
+			if dayOfMonth < 1 || dayOfMonth > 28 {
 				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
 				break
 			}
@@ -941,6 +943,9 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 				repeatMap[dayOfMonth]++
 			}
 		}
+	}
+	if job.daysOfTheMonth == nil {
+		job.daysOfTheMonth = make([]int, 0)
 	}
 	job.daysOfTheMonth = append(job.daysOfTheMonth, daysOfTheMonth...)
 	job.startsImmediately = false
