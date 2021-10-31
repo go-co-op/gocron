@@ -33,6 +33,12 @@ s.Every(5).Days().Do(func(){ ... })
 
 s.Every(1).Month(1, 2, 3).Do(func(){ ... })
 
+// Schedule each last day of the month
+s.Every(1).MonthLastDay().Do(func(){ ... })
+
+// Or each last day of every other month
+s.Every(2).MonthLastDay().Do(func(){ ... })
+
 // cron expressions supported
 s.Cron("*/1 * * * *").Do(task) // every minute
 
