@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,6 +103,95 @@ func TestParseTime(t *testing.T) {
 			} else {
 				assert.Zero(t, gotSec)
 			}
+		})
+	}
+}
+
+func Test_callJobFuncWithParams(t *testing.T) {
+	type args struct {
+		jobFunc interface{}
+		params  []interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		err  bool
+	}{
+		{
+			name: "test call func with no args",
+			args: args{
+				jobFunc: func() {},
+				params:  nil,
+			},
+		},
+		{
+			name: "test call func with single arg",
+			args: args{
+				jobFunc: func(arg string) {},
+				params:  []interface{}{"test"},
+			},
+		},
+		{
+			name: "test call func with wrong arg type",
+			args: args{
+				jobFunc: func(arg int) {},
+				params:  []interface{}{"test"},
+			},
+			err: true,
+		},
+		{
+			name: "test call func with wrong arg count",
+			args: args{
+				jobFunc: func(arg int) {},
+				params:  []interface{}{},
+			},
+			err: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := panicFnToErr(func() {
+				callJobFuncWithParams(tt.args.jobFunc, tt.args.params)
+			})
+
+			if err != nil && !tt.err {
+				t.Fatalf("unexpected panic: %s", err.Error())
+			}
+
+		})
+	}
+}
+
+func panicFnToErr(fn func()) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New("func panic")
+		}
+	}()
+	fn()
+	return err
+}
+
+func Test_getFunctionName(t *testing.T) {
+	type args struct {
+		fn interface{}
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "test get function name",
+			args: args{
+				fn: Test_getFunctionName,
+			},
+			want: "github.com/go-co-op/gocron.Test_getFunctionName",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, getFunctionName(tt.args.fn), "getFunctionName(%v)", tt.args.fn)
 		})
 	}
 }
