@@ -271,10 +271,16 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 
 func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time) nextRun {
 	// Calculate the last day of the next month, by adding job.interval+1 months (i.e. the
-	// first day of the month after the next month), and subtracting one day.
+	// first day of the month after the next month), and subtracting one day, unless the
+	// last run occurred before the end of the month.
+	addMonth := job.interval
+	if testDate := lastRun.AddDate(0, 0, 1); testDate.Month() != lastRun.Month() {
+		// Our last run was on the last day of this month.
+		addMonth++
+	}
 	next := time.Date(lastRun.Year(), lastRun.Month(), 1, 0, 0, 0, 0, s.Location()).
 		Add(job.getAtTime()).
-		AddDate(0, job.interval+1, 0).
+		AddDate(0, addMonth, 0).
 		AddDate(0, 0, -1)
 	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
