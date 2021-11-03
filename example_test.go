@@ -397,13 +397,6 @@ func ExampleScheduler_Monday() {
 	// Monday
 }
 
-func ExampleScheduler_MonthLastDay() {
-	s := gocron.NewScheduler(time.UTC)
-
-	_, _ = s.Every(1).MonthLastDay().Do(task)
-	_, _ = s.Every(2).MonthLastDay().Do(task)
-}
-
 func ExampleScheduler_Month() {
 	s := gocron.NewScheduler(time.UTC)
 
@@ -412,6 +405,13 @@ func ExampleScheduler_Month() {
 	_, _ = s.Every(1).Months(1).Do(task)
 	_, _ = s.Every(1).Month(1, 2).Do(task)
 	_, _ = s.Month(1, 2).Every(1).Do(task)
+}
+
+func ExampleScheduler_MonthLastDay() {
+	s := gocron.NewScheduler(time.UTC)
+
+	_, _ = s.Every(1).MonthLastDay().Do(task)
+	_, _ = s.Every(2).MonthLastDay().Do(task)
 }
 
 func ExampleScheduler_Months() {
