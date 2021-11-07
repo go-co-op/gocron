@@ -1220,6 +1220,20 @@ func TestScheduler_TagsUnique(t *testing.T) {
 
 }
 
+func TestScheduler_MultipleTagsChained(t *testing.T) {
+	const (
+		tag1 = "tag1"
+		tag2 = "tag2"
+	)
+
+	s := NewScheduler(time.UTC)
+
+	j, err := s.Every("1s").Tag(tag1).Tag(tag2).Do(func() {})
+	require.NoError(t, err)
+
+	assert.EqualValues(t, []string{tag1, tag2}, j.Tags())
+}
+
 func TestScheduler_DoParameterValidation(t *testing.T) {
 	testCases := []struct {
 		description string
