@@ -705,6 +705,9 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
 	}
+	januaryFirst2019At := func(hour, minute, second int) time.Time {
+		return time.Date(2019, time.January, 1, hour, minute, second, 0, time.UTC)
+	}
 	mondayAt := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 6, hour, minute, second, 0, time.UTC)
 	}
@@ -751,6 +754,19 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{2}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day + 1*day},          // 2020 january and february
 		{name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 30*day + 29*day}, // 2020 january and february
 		{name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day", job: &Job{interval: 13, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0))},
+		{name: "every last day of the month started on leap year february should run on march 31", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31 * day},
+		{name: "every last day of the month started on non-leap year february should run on march 31", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2019, time.February, 28, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31 * day},
+		{name: "every last day of 2 months started on leap year february should run on april 30", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31*day + 30*day},
+		{name: "every last day of 2 months started on non-leap year february should run on april 30", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2019, time.February, 28, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31*day + 30*day},
+		{name: "every last day of the month started on january 1 in leap year should run on january 31", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 30 * day},
+		{name: "every last day of the month started on january 1 in non-leap year should run on january 31", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0)}, wantTimeUntilNextRun: 30 * day},
+		{name: "every last day of the month started on january 30 in leap year should run on january 31", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 29)}, wantTimeUntilNextRun: 1 * day},
+		{name: "every last day of the month started on january 30 in non-leap year should run on january 31", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, 29)}, wantTimeUntilNextRun: 1 * day},
+		{name: "every last day of the month started on january 31 in leap year should run on february 29", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 30)}, wantTimeUntilNextRun: 29 * day},
+		{name: "every last day of the month started on january 31 in non-leap year should run on february 28", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, 30)}, wantTimeUntilNextRun: 28 * day},
+		{name: "every last day of the month started on december 31 should run on january 31 of the next year", job: &Job{interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31 * day},
+		{name: "every last day of 2 months started on december 31, 2018 should run on february 28, 2019", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31*day + 28*day},
+		{name: "every last day of 2 months started on december 31, 2019 should run on february 29, 2020", job: &Job{interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31*day + 29*day},
 		//// WEEKDAYS
 		{name: "every weekday starting on one day before it should run this weekday", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
 		{name: "every weekday starting on same weekday should run on same immediately", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 0},
@@ -925,16 +941,17 @@ func TestRunJobsWithLimit(t *testing.T) {
 func TestCalculateMonthsError(t *testing.T) {
 	testCases := []struct {
 		desc       string
-		dayOfMonth int
+		dayOfMonth []int
 	}{
-		{"invalid -1", -1},
-		{"invalid 29", 29},
+		// -1 is now interpreted as "last day of the month"
+		{"invalid 29", []int{29}},
+		{"invalid -1 in list", []int{27, -1}},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
-			job, err := s.Every(1).Month(tc.dayOfMonth).Do(func() {
+			job, err := s.Every(1).Month(tc.dayOfMonth...).Do(func() {
 				fmt.Println("hello task")
 			})
 			require.Error(t, err)

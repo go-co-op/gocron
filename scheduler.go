@@ -242,6 +242,11 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
 
+	// Special case: the last day of the month
+	if len(job.daysOfTheMonth) == 1 && job.daysOfTheMonth[0] == -1 {
+		return calculateNextRunForLastDayOfMonth(s, job, lastRun)
+	}
+
 	if len(job.daysOfTheMonth) != 0 { // calculate days to job.daysOfTheMonth
 
 		nextRunDateMap := make(map[int]nextRun)
@@ -262,6 +267,22 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	}
 	next := lastRunRoundedMidnight.Add(job.getAtTime()).AddDate(0, job.interval, 0)
 	return nextRun{duration: until(lastRunRoundedMidnight, next), dateTime: next}
+}
+
+func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time) nextRun {
+	// Calculate the last day of the next month, by adding job.interval+1 months (i.e. the
+	// first day of the month after the next month), and subtracting one day, unless the
+	// last run occurred before the end of the month.
+	addMonth := job.interval
+	if testDate := lastRun.AddDate(0, 0, 1); testDate.Month() != lastRun.Month() {
+		// Our last run was on the last day of this month.
+		addMonth++
+	}
+	next := time.Date(lastRun.Year(), lastRun.Month(), 1, 0, 0, 0, 0, s.Location()).
+		Add(job.getAtTime()).
+		AddDate(0, addMonth, 0).
+		AddDate(0, 0, -1)
+	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
 func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMonth int) nextRun {
@@ -885,19 +906,26 @@ func (s *Scheduler) Month(daysOfMonth ...int) *Scheduler {
 	return s.Months(daysOfMonth...)
 }
 
+// MonthLastDay sets the unit with months at every last day of the month
+func (s *Scheduler) MonthLastDay() *Scheduler {
+	return s.Months(-1)
+}
+
 // Months sets the unit with months
 // Note: Only days 1 through 28 are allowed for monthly schedules
 // Note: Multiple add same days of month cannot be allowed
+// Note: -1 is a special value and can only occur as single argument
 func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 	job := s.getCurrentJob()
 
 	if len(daysOfTheMonth) == 0 {
 		job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
-	} else {
-
-		if job.daysOfTheMonth == nil {
-			job.daysOfTheMonth = make([]int, 0)
+	} else if len(daysOfTheMonth) == 1 {
+		dayOfMonth := daysOfTheMonth[0]
+		if dayOfMonth != -1 && (dayOfMonth < 1 || dayOfMonth > 28) {
+			job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
 		}
+	} else {
 
 		repeatMap := make(map[int]int)
 		for _, dayOfMonth := range daysOfTheMonth {
@@ -921,6 +949,9 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 				repeatMap[dayOfMonth]++
 			}
 		}
+	}
+	if job.daysOfTheMonth == nil {
+		job.daysOfTheMonth = make([]int, 0)
 	}
 	job.daysOfTheMonth = append(job.daysOfTheMonth, daysOfTheMonth...)
 	job.startsImmediately = false
