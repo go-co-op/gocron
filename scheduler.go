@@ -809,7 +809,7 @@ func (s *Scheduler) Tag(t ...string) *Scheduler {
 		}
 	}
 
-	job.tags = t
+	job.tags = append(job.tags, t...)
 	return s
 }
 
