@@ -137,6 +137,24 @@ func (j *Job) setDuration(t time.Duration) {
 	j.duration = t
 }
 
+// hasTags returns true if all tags are matched on this Job
+func (j *Job) hasTags(tags ...string) bool {
+	// Build map of all Job tags for easy comparison
+	jobTags := map[string]int{}
+	for _, tag := range j.tags {
+		jobTags[tag] = 0
+	}
+
+	// Loop through required tags and if one doesn't exist, return false
+	for _, tag := range tags {
+		_, ok := jobTags[tag]
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // Error returns an error if one occurred while creating the Job.
 // If multiple errors occurred, they will be wrapped and can be
 // checked using the standard unwrap options.
