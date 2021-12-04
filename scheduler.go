@@ -619,9 +619,14 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	s.setJobs(retainedJobs)
 }
 
-// RemoveByTag will remove a job by a given tag.
+// RemoveByTag will remove Jobs that match the given tag.
 func (s *Scheduler) RemoveByTag(tag string) error {
-	jobs, err := s.findJobsByTag(tag)
+	return s.RemoveByTags(tag)
+}
+
+// RemoveByTags will remove Jobs that match all given tags.
+func (s *Scheduler) RemoveByTags(tags ...string) error {
+	jobs, err := s.findJobsByTag(tags...)
 	if err != nil {
 		return err
 	}
@@ -632,17 +637,14 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 	return nil
 }
 
-func (s *Scheduler) findJobsByTag(tag string) ([]*Job, error) {
+func (s *Scheduler) findJobsByTag(tags ...string) ([]*Job, error) {
 	var jobs []*Job
 
 Jobs:
 	for _, job := range s.Jobs() {
-		tags := job.Tags()
-		for _, t := range tags {
-			if t == tag {
-				jobs = append(jobs, job)
-				continue Jobs
-			}
+		if job.hasTags(tags...) {
+			jobs = append(jobs, job)
+			continue Jobs
 		}
 	}
 

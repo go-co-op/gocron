@@ -21,6 +21,72 @@ func TestTags(t *testing.T) {
 	assert.ElementsMatch(t, j.Tags(), []string{"tags", "tag", "some"})
 }
 
+func TestHasTags(t *testing.T) {
+	tests := []struct {
+		name      string
+		jobTags   []string
+		matchTags []string
+		expected  bool
+	}{
+		{
+			"OneTagMatch",
+			[]string{"tag1"},
+			[]string{"tag1"},
+			true,
+		},
+		{
+			"OneTagNoMatch",
+			[]string{"tag1"},
+			[]string{"tag2"},
+			false,
+		},
+		{
+			"DuplicateJobTagsMatch",
+			[]string{"tag1", "tag1"},
+			[]string{"tag1"},
+			true,
+		},
+		{
+			"DuplicateInputTagsMatch",
+			[]string{"tag1"},
+			[]string{"tag1", "tag1"},
+			true,
+		},
+		{
+			"MultipleTagsMatch",
+			[]string{"tag1", "tag2"},
+			[]string{"tag2", "tag1"},
+			true,
+		},
+		{
+			"MultipleTagsNoMatch",
+			[]string{"tag1", "tag2"},
+			[]string{"tag2", "tag1", "tag3"},
+			false,
+		},
+		{
+			"MultipleDuplicateTagsMatch",
+			[]string{"tag1", "tag1", "tag1", "tag2"},
+			[]string{"tag1", "tag2"},
+			true,
+		},
+		{
+			"MultipleDuplicateTagsNoMatch",
+			[]string{"tag1", "tag1", "tag1"},
+			[]string{"tag1", "tag1", "tag3"},
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j, _ := NewScheduler(time.UTC).Every(1).Minute().Do(task)
+			j.Tag(tt.jobTags...)
+			assert.Equal(t, tt.expected, j.hasTags(tt.matchTags...))
+		})
+	}
+}
+
 func TestJob_IsRunning(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	j, err := s.Every(10).Seconds().Do(func() { time.Sleep(2 * time.Second) })
