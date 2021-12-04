@@ -619,8 +619,13 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 	s.setJobs(retainedJobs)
 }
 
-// RemoveByTag will remove Jobs that match all given tags.
-func (s *Scheduler) RemoveByTag(tags ...string) error {
+// RemoveByTag will remove Jobs that match the given tag.
+func (s *Scheduler) RemoveByTag(tag string) error {
+	return s.RemoveByTags(tag)
+}
+
+// RemoveByTags will remove Jobs that match all given tags.
+func (s *Scheduler) RemoveByTags(tags ...string) error {
 	jobs, err := s.findJobsByTag(tags...)
 	if err != nil {
 		return err

@@ -405,7 +405,7 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 	})
 }
 
-func TestScheduler_RemoveByTag(t *testing.T) {
+func TestScheduler_RemoveByTags(t *testing.T) {
 	t.Run("non unique tags", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
@@ -420,7 +420,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 		// check Jobs()[0] tags is equal with tag "a" (tag1)
 		assert.Equal(t, s.Jobs()[0].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
 
-		err = s.RemoveByTag(tag1)
+		err = s.RemoveByTags(tag1)
 		require.NoError(t, err)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
@@ -428,7 +428,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 		assert.Equal(t, s.Jobs()[0].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
 
 		// Removing Non Existent Job with "a" because already removed above (will not removing any jobs because tag not match)
-		err = s.RemoveByTag(tag1)
+		err = s.RemoveByTags(tag1)
 		assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
 	})
 
@@ -444,7 +444,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 		_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
 		require.NoError(t, err)
 
-		err = s.RemoveByTag("tag one")
+		err = s.RemoveByTags("tag one")
 		require.NoError(t, err)
 
 		// Adding job with tag after removing by tag, assuming the unique tag has been removed as well
@@ -468,7 +468,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 		assert.Contains(t, s.Jobs()[0].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
 		assert.Contains(t, s.Jobs()[0].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
 
-		err = s.RemoveByTag(tag1, tag3)
+		err = s.RemoveByTags(tag1, tag3)
 		require.NoError(t, err)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
@@ -477,7 +477,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 		assert.Contains(t, s.Jobs()[0].Tags(), tag2, "Job With Tag 'ab' is removed from index 0")
 
 		// Removing Non Existent Job with "a"+"abc" because already removed above (will not removing any jobs because tag not match)
-		err = s.RemoveByTag(tag1, tag3)
+		err = s.RemoveByTags(tag1, tag3)
 		assert.EqualError(t, err, ErrJobNotFoundWithTag.Error())
 	})
 
@@ -494,7 +494,7 @@ func TestScheduler_RemoveByTag(t *testing.T) {
 		_, err = s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
 		require.NoError(t, err)
 
-		err = s.RemoveByTag(tag1, tag3)
+		err = s.RemoveByTags(tag1, tag3)
 		require.NoError(t, err)
 
 		// Adding job with tag after removing by tag, assuming the unique tag has been removed as well
