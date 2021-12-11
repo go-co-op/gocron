@@ -550,7 +550,7 @@ func (s *Scheduler) RunByTag(tag string) error {
 // RunByTagWithDelay is same as RunByTag but introduces a delay between
 // each job execution
 func (s *Scheduler) RunByTagWithDelay(tag string, d time.Duration) error {
-	jobs, err := s.findJobsByTag(tag)
+	jobs, err := s.FindJobsByTag(tag)
 	if err != nil {
 		return err
 	}
@@ -626,7 +626,7 @@ func (s *Scheduler) RemoveByTag(tag string) error {
 
 // RemoveByTags will remove Jobs that match all given tags.
 func (s *Scheduler) RemoveByTags(tags ...string) error {
-	jobs, err := s.findJobsByTag(tags...)
+	jobs, err := s.FindJobsByTag(tags...)
 	if err != nil {
 		return err
 	}
@@ -637,7 +637,8 @@ func (s *Scheduler) RemoveByTags(tags ...string) error {
 	return nil
 }
 
-func (s *Scheduler) findJobsByTag(tags ...string) ([]*Job, error) {
+// FindJobsByTag will return a slice of Jobs that match all given tags
+func (s *Scheduler) FindJobsByTag(tags ...string) ([]*Job, error) {
 	var jobs []*Job
 
 Jobs:
