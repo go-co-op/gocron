@@ -43,6 +43,18 @@ type jobFunction struct {
 	runState   *int64              // will be non-zero when jobs are running
 }
 
+func (jf *jobFunction) incrementRunState() {
+	if jf.runState != nil {
+		atomic.AddInt64(jf.runState, 1)
+	}
+}
+
+func (jf *jobFunction) decrementRunState() {
+	if jf.runState != nil {
+		atomic.AddInt64(jf.runState, -1)
+	}
+}
+
 type runConfig struct {
 	finiteRuns bool
 	maxRuns    int
@@ -287,7 +299,9 @@ func (j *Job) stop() {
 	if j.timer != nil {
 		j.timer.Stop()
 	}
-	j.cancel()
+	if j.cancel != nil {
+		j.cancel()
+	}
 }
 
 // IsRunning reports whether any instances of the job function are currently running
