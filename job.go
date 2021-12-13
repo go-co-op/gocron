@@ -287,7 +287,9 @@ func (j *Job) stop() {
 	if j.timer != nil {
 		j.timer.Stop()
 	}
-	j.cancel()
+	if j.cancel != nil {
+		j.cancel()
+	}
 }
 
 // IsRunning reports whether any instances of the job function are currently running
