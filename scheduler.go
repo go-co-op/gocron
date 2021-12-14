@@ -739,6 +739,12 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		job.error = wrapOrError(job.error, ErrWeekdayNotSupported)
 	}
 
+	if job.unit != crontab && job.interval == 0 {
+		if job.unit != duration {
+			job.error = wrapOrError(job.error, ErrInvalidInterval)
+		}
+	}
+
 	if job.error != nil {
 		// delete the job from the scheduler as this job
 		// cannot be executed
