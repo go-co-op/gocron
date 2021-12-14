@@ -889,6 +889,14 @@ func TestScheduler_Do(t *testing.T) {
 			},
 		},
 		{
+			description: "error due to every/cron not called",
+			evalFunc: func(s *Scheduler) {
+				_, err := s.Do(1)
+				assert.EqualError(t, err, ErrInvalidInterval.Error())
+				assert.Zero(t, s.Len(), "The job should be deleted if Every or Cron is not called")
+			},
+		},
+		{
 			description: "positive case",
 			evalFunc: func(s *Scheduler) {
 				_, err := s.Every(1).Day().Do(func() {})

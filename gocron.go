@@ -37,7 +37,7 @@ var (
 
 func wrapOrError(toWrap error, err error) error {
 	var returnErr error
-	if toWrap != nil {
+	if toWrap != nil && !errors.Is(err, toWrap) {
 		returnErr = fmt.Errorf("%s: %w", err, toWrap)
 	} else {
 		returnErr = err
