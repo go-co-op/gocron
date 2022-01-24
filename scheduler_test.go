@@ -1682,6 +1682,19 @@ func TestScheduler_CallNextWeekDay(t *testing.T) {
 
 }
 
+func TestScheduler_Midday(t *testing.T) {
+	currentMidday := time.Date(2022, time.January, 0, 12, 0, 0, 0, time.UTC)
+	expectedTime := 24 * time.Hour
+
+	t.Run("check time till next midday", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		job, _ := s.Every(1).Day().Midday().Do(func() {})
+		job.lastRun = currentMidday
+		durationToNextTime := s.durationToNextRun(currentMidday, job).duration
+		assert.Equal(t, expectedTime, durationToNextTime)
+	})
+}
+
 func TestScheduler_CheckNextWeekDay(t *testing.T) {
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)

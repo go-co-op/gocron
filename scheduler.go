@@ -986,6 +986,10 @@ func (s *Scheduler) Weekday(weekDay time.Weekday) *Scheduler {
 	return s
 }
 
+func (s *Scheduler) Midday() *Scheduler {
+	return s.At("12:00")
+}
+
 // Monday sets the start day as Monday
 func (s *Scheduler) Monday() *Scheduler {
 	return s.Weekday(time.Monday)
