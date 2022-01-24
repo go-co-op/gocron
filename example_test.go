@@ -252,12 +252,6 @@ func ExampleScheduler_Every() {
 	s.StartAsync()
 }
 
-func ExampleScheduler_Midday() {
-	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Day().Midday().Do(task)
-	s.StartAsync()
-}
-
 func ExampleScheduler_Friday() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every(1).Day().Friday().Do(task)
@@ -357,6 +351,12 @@ func ExampleScheduler_Location() {
 	fmt.Println(s.Location())
 	// Output:
 	// UTC
+}
+
+func ExampleScheduler_Midday() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Day().Midday().Do(task)
+	s.StartAsync()
 }
 
 func ExampleScheduler_Millisecond() {
