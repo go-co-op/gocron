@@ -33,6 +33,7 @@ type Scheduler struct {
 	tagsUnique      bool // defines whether tags should be unique
 	updateJob       bool // so the scheduler knows to create a new job or update the current
 	waitForInterval bool // defaults jobs to waiting for first interval to start
+	singletonMode   bool // defaults all jobs to use SingletonMode()
 	jobCreated      bool // so the scheduler knows a job was created prior to calling Every or Cron
 }
 
@@ -664,11 +665,17 @@ func (s *Scheduler) LimitRunsTo(i int) *Scheduler {
 }
 
 // SingletonMode prevents a new job from starting if the prior job has not yet
-// completed it's run
+// completed its run
 func (s *Scheduler) SingletonMode() *Scheduler {
 	job := s.getCurrentJob()
 	job.SingletonMode()
 	return s
+}
+
+// SingletonModeAll prevents new jobs from starting if the prior instance of the
+// particular job has not yet completed its run
+func (s *Scheduler) SingletonModeAll() {
+	s.singletonMode = true
 }
 
 // TaskPresent checks if specific job's function was added to the scheduler.
@@ -1121,7 +1128,7 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 }
 
 func (s *Scheduler) newJob(interval int) *Job {
-	return newJob(interval, !s.waitForInterval)
+	return newJob(interval, !s.waitForInterval, s.singletonMode)
 }
 
 // WaitForScheduleAll defaults the scheduler to create all

@@ -73,10 +73,10 @@ const (
 )
 
 // newJob creates a new Job with the provided interval
-func newJob(interval int, startImmediately bool) *Job {
+func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 	ctx, cancel := context.WithCancel(context.Background())
 	var zero int64
-	return &Job{
+	job := &Job{
 		interval: interval,
 		unit:     seconds,
 		lastRun:  time.Time{},
@@ -89,6 +89,10 @@ func newJob(interval int, startImmediately bool) *Job {
 		tags:              []string{},
 		startsImmediately: startImmediately,
 	}
+	if singletonMode {
+		job.SingletonMode()
+	}
+	return job
 }
 
 func (j *Job) neverRan() bool {
