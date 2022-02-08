@@ -554,6 +554,13 @@ func ExampleScheduler_SingletonMode() {
 	_, _ = s.Every(1).Second().SingletonMode().Do(task)
 }
 
+func ExampleScheduler_SingletonModeAll() {
+	s := gocron.NewScheduler(time.UTC)
+	s.SingletonModeAll()
+
+	_, _ = s.Every(1).Second().Do(task)
+}
+
 func ExampleScheduler_StartAsync() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(3).Seconds().Do(task)

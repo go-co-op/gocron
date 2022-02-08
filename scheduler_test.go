@@ -1098,6 +1098,46 @@ func TestScheduler_SingletonMode(t *testing.T) {
 
 }
 
+func TestScheduler_SingletonModeAll(t *testing.T) {
+
+	testCases := []struct {
+		description string
+		removeJob   bool
+	}{
+		{"with scheduler stop", false},
+		{"with job removal", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			s := NewScheduler(time.UTC)
+			s.SingletonModeAll()
+
+			var trigger int32
+
+			j, err := s.Every("100ms").Do(func() {
+				if atomic.LoadInt32(&trigger) == 1 {
+					t.Fatal("Restart should not occur")
+				}
+				atomic.AddInt32(&trigger, 1)
+				time.Sleep(300 * time.Millisecond)
+			})
+			require.NoError(t, err)
+
+			s.StartAsync()
+			time.Sleep(200 * time.Millisecond)
+
+			if tc.removeJob {
+				s.RemoveByReference(j)
+				time.Sleep(300 * time.Millisecond)
+			}
+			s.Stop()
+		})
+	}
+
+}
+
 func TestScheduler_LimitRunsTo(t *testing.T) {
 	t.Run("job added before starting scheduler", func(t *testing.T) {
 		semaphore := make(chan bool)
