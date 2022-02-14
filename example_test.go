@@ -471,6 +471,31 @@ func ExampleScheduler_RemoveByTag() {
 	// 1
 }
 
+func ExampleScheduler_RemoveByTags() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Week().Tag("tag1", "tag2", "tag3").Do(task)
+	_, _ = s.Every(1).Week().Tag("tag1", "tag2").Do(task)
+	_, _ = s.Every(1).Week().Tag("tag1").Do(task)
+	s.StartAsync()
+	_ = s.RemoveByTags("tag1", "tag2")
+	fmt.Println(s.Len())
+	// Output:
+	// 1
+}
+
+func ExampleScheduler_RemoveByTagsAny() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Week().Tag("tag1", "tag2", "tag3").Do(task)
+	_, _ = s.Every(1).Week().Tag("tag1").Do(task)
+	_, _ = s.Every(1).Week().Tag("tag2").Do(task)
+	_, _ = s.Every(1).Week().Tag("tag3").Do(task)
+	s.StartAsync()
+	_ = s.RemoveByTagsAny("tag1", "tag3")
+	fmt.Println(s.Len())
+	// Output:
+	// 1
+}
+
 func ExampleScheduler_RunAll() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Day().At("10:00").Do(task)
