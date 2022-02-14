@@ -638,6 +638,27 @@ func (s *Scheduler) RemoveByTags(tags ...string) error {
 	return nil
 }
 
+// RemoveByTagsAny will remove Jobs that match any one of the given tags.
+func (s *Scheduler) RemoveByTagsAny(tags ...string) error {
+	var errs error
+	mJob := make(map[*Job]struct{})
+	for _, tag := range tags {
+		jobs, err := s.FindJobsByTag(tag)
+		if err != nil {
+			errs = wrapOrError(errs, fmt.Errorf("%s: %s", err.Error(), tag))
+		}
+		for _, job := range jobs {
+			mJob[job] = struct{}{}
+		}
+	}
+
+	for job := range mJob {
+		s.RemoveByReference(job)
+	}
+
+	return errs
+}
+
 // FindJobsByTag will return a slice of Jobs that match all given tags
 func (s *Scheduler) FindJobsByTag(tags ...string) ([]*Job, error) {
 	var jobs []*Job
