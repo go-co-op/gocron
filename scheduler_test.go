@@ -1509,7 +1509,7 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 5, counter)
+		assert.Equal(t, 4, counter)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
