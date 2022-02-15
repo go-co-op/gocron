@@ -330,7 +330,7 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 
 	if daysToWeekday == 0 { // today, at future time or already passed
 		lastRunAtTime := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, s.Location()).Add(job.getAtTime())
-		if lastRun.Before(lastRunAtTime) || lastRun.Equal(lastRunAtTime) {
+		if lastRun.Before(lastRunAtTime) {
 			return 0
 		}
 		return 7
