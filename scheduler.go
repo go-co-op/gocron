@@ -275,7 +275,8 @@ func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time
 	// first day of the month after the next month), and subtracting one day, unless the
 	// last run occurred before the end of the month.
 	addMonth := job.interval
-	if testDate := lastRun.AddDate(0, 0, 1); testDate.Month() != lastRun.Month() {
+	if testDate := lastRun.AddDate(0, 0, 1); testDate.Month() != lastRun.Month() &&
+		!s.roundToMidnight(lastRun).Add(job.getAtTime()).After(lastRun) {
 		// Our last run was on the last day of this month.
 		addMonth++
 	}
