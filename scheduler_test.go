@@ -243,6 +243,48 @@ func TestAt(t *testing.T) {
 		assert.EqualError(t, err, ErrUnsupportedTimeFormat.Error())
 		assert.Zero(t, s.Len())
 	})
+
+	exp := []time.Duration{_getHours(1), _getHours(3), _getHours(4), _getHours(7), _getHours(15)}
+	// multiple times
+	testCases := []struct {
+		name   string
+		params []interface{}
+		result []time.Duration
+	}{
+		{
+			name:   "test1",
+			params: []interface{}{"03:00", "15:00", "01:00", "07:00", "04:00"},
+			result: exp,
+		},
+		{
+			name:   "test2",
+			params: []interface{}{"03:00;15:00;01:00;07:00;04:00"},
+			result: exp,
+		},
+		{
+			name:   "test3",
+			params: []interface{}{"03:00;15:00;01:00", time.Date(0, 0, 0, 7, 0, 0, 0, time.UTC), "04:00"},
+			result: exp,
+		},
+		{
+			name:   "test4",
+			params: []interface{}{"03:00;15:00;01:00;07:00;04:00;01:00"},
+			result: exp,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			for _, p := range tc.params {
+				s.At(p)
+			}
+
+			got := s.getCurrentJob().atTimes
+			assert.Equalf(t, tc.result, got, fmt.Sprintf("expected %v / got %v", tc.result, got))
+		})
+	}
+
 }
 
 func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n int, s *Scheduler) *Scheduler {
@@ -932,6 +974,11 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 func _tuesdayWeekday() *time.Weekday {
 	tuesday := time.Tuesday
 	return &tuesday
+}
+
+// helper test method
+func _getDays(i int) time.Duration {
+	return time.Duration(i) * time.Hour * 24
 }
 
 // helper test method
@@ -2010,4 +2057,52 @@ func TestScheduler_WeekdayIsCurrentDay(t *testing.T) {
 
 	job, _ := s.Every(1).Week().Thursday().Friday().Saturday().At("23:00").Do(func() {})
 	assert.Equal(t, time.Date(2022, 2, 17, 23, 0, 0, 0, s.Location()), job.NextRun())
+}
+
+func TestScheduler_MultipleAtTime(t *testing.T) {
+	getTime := func(hour, min, sec int) time.Time {
+		return time.Date(2022, 2, 16, hour, min, sec, 0, time.UTC)
+	}
+
+	getMonthLastDayTime := func(hour, min, sec int) time.Time {
+		return time.Date(2022, 2, 28, hour, min, sec, 0, time.UTC)
+	}
+
+	atTimes := []time.Duration{
+		_getHours(3) + _getMinutes(20),
+		_getHours(5) + _getMinutes(30),
+		_getHours(7) + _getMinutes(0),
+		_getHours(14) + _getMinutes(10),
+	}
+	testCases := []struct {
+		description          string
+		job                  *Job
+		wantTimeUntilNextRun time.Duration
+	}{
+		{description: "day test1", job: &Job{interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(1, 0, 0)}, wantTimeUntilNextRun: _getHours(2) + _getMinutes(20)},
+		{description: "day test2", job: &Job{interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(3, 30, 0)}, wantTimeUntilNextRun: _getHours(2)},
+		{description: "day test3", job: &Job{interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(5, 27, 10)}, wantTimeUntilNextRun: _getMinutes(2) + _getSeconds(50)},
+		{description: "day test4", job: &Job{interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
+		{description: "day test5", job: &Job{interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getHours(12) + _getMinutes(20)},
+		{description: "week test1", job: &Job{interval: 1, unit: weeks, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getDays(7) - _getHours(2) - _getMinutes(10)},
+		{description: "week test2", job: &Job{interval: 1, unit: weeks, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(7) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "weekday before test1", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Tuesday}, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getDays(6) - _getHours(2) - _getMinutes(10)},
+		{description: "weekday before test2", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Tuesday}, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(6) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "weekday equals test1", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Wednesday}, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
+		{description: "weekday equals test2", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Wednesday}, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(6) + _getHours(9) + _getHours(3) + _getMinutes(20)},
+		{description: "weekday after test1", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Thursday}, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getDays(1) - _getHours(2) - _getMinutes(10)},
+		{description: "weekday after test2", job: &Job{interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Thursday}, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(1) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "month test1", job: &Job{interval: 1, unit: months, atTimes: atTimes, lastRun: getTime(5, 30, 0), daysOfTheMonth: []int{1}}, wantTimeUntilNextRun: _getDays(13) - _getHours(2) - _getMinutes(10)},
+		{description: "month test2", job: &Job{interval: 1, unit: months, atTimes: atTimes, lastRun: getTime(15, 0, 0), daysOfTheMonth: []int{1}}, wantTimeUntilNextRun: _getDays(12) + _getHours(9) + _getHours(3) + _getMinutes(20)},
+		{description: "month last day test1", job: &Job{interval: 1, unit: months, atTimes: atTimes, lastRun: getMonthLastDayTime(5, 30, 0), daysOfTheMonth: []int{-1}}, wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
+		{description: "month last day test2", job: &Job{interval: 1, unit: months, atTimes: atTimes, lastRun: getMonthLastDayTime(15, 0, 0), daysOfTheMonth: []int{-1}}, wantTimeUntilNextRun: _getDays(30) + _getHours(9) + _getHours(3) + _getMinutes(20)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
+			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
+		})
+	}
 }
