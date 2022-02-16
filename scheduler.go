@@ -295,7 +295,7 @@ func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMo
 		next = next.AddDate(0, job.interval, -0)
 		next = next.Add(-difference)
 	} else {
-		if job.interval == 1 { // every month counts current month
+		if job.interval == 1 && !jobDay.Equal(lastRun) { // every month counts current month
 			next = next.AddDate(0, job.interval-1, 0)
 		} else { // should run next month interval
 			next = next.AddDate(0, job.interval, 0)
