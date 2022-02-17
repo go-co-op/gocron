@@ -306,7 +306,7 @@ func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMo
 }
 
 func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
-	daysToWeekday := remainingDaysToWeekday(lastRun.Weekday(), job.Weekdays())
+	daysToWeekday := s.remainingDaysToWeekday(lastRun, job)
 	totalDaysDifference := s.calculateTotalDaysDifference(lastRun, daysToWeekday, job)
 	next := s.roundToMidnight(lastRun).Add(job.getAtTime()).AddDate(0, 0, totalDaysDifference)
 	return nextRun{duration: until(lastRun, next), dateTime: next}
@@ -321,10 +321,12 @@ func (s *Scheduler) calculateWeeks(job *Job, lastRun time.Time) nextRun {
 func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekday int, job *Job) int {
 	if job.interval > 1 && job.RunCount() < len(job.Weekdays()) { // just count weeks after the first jobs were done
 		return daysToWeekday
-	} else if job.interval > 1 && job.RunCount() >= len(job.Weekdays()) {
+	}
+	if job.interval > 1 && job.RunCount() >= len(job.Weekdays()) {
 		if daysToWeekday > 0 {
 			return int(job.interval)*7 - (allWeekDays - daysToWeekday)
 		}
+
 		return int(job.interval) * 7
 	}
 
@@ -404,32 +406,34 @@ func shouldRunAtSpecificTime(job *Job) bool {
 	return job.getAtTime() != 0
 }
 
-func remainingDaysToWeekday(from time.Weekday, weekDays []time.Weekday) int {
-	var (
-		daysUntilScheduledDay         int
-		daysUntilScheduledDayPositive = allWeekDays
-		daysUntilScheduledDayNegative = 0
-	)
+func (s *Scheduler) remainingDaysToWeekday(lastRun time.Time, job *Job) int {
+	weekDays := job.Weekdays()
+	sort.Slice(weekDays, func(i, j int) bool {
+		return weekDays[i] < weekDays[j]
+	})
 
-	for _, day := range weekDays {
-		differenceBetweenDays := int(day) - int(from)
-		// checking only if is smaller than max cause there is no way to be equals
-		if differenceBetweenDays > 0 && differenceBetweenDays < daysUntilScheduledDayPositive {
-			daysUntilScheduledDayPositive = differenceBetweenDays
+	equals := false
+	lastRunWeekday := lastRun.Weekday()
+	index := sort.Search(len(weekDays), func(i int) bool {
+		b := weekDays[i] >= lastRunWeekday
+		if b {
+			equals = weekDays[i] == lastRunWeekday
 		}
-
-		// mapping negative days to repeat jobs
-		if differenceBetweenDays < 0 && differenceBetweenDays < daysUntilScheduledDayNegative {
-			daysUntilScheduledDayNegative = differenceBetweenDays
+		return b
+	})
+	// check atTime
+	if equals {
+		if s.roundToMidnight(lastRun).Add(job.getAtTime()).After(lastRun) {
+			return 0
 		}
+		index++
 	}
 
-	if daysUntilScheduledDayPositive > 0 && daysUntilScheduledDayPositive != allWeekDays {
-		daysUntilScheduledDay = daysUntilScheduledDayPositive
-	} else if daysUntilScheduledDayNegative < 0 {
-		daysUntilScheduledDay = allWeekDays + daysUntilScheduledDayNegative
+	if index < len(weekDays) {
+		return int(weekDays[index] - lastRunWeekday)
 	}
-	return daysUntilScheduledDay
+
+	return int(weekDays[0]) + allWeekDays - int(lastRunWeekday)
 }
 
 // absDuration returns the abs time difference

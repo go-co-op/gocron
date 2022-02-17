@@ -1981,3 +1981,14 @@ func TestScheduler_CheckSetBehaviourBeforeJobCreated(t *testing.T) {
 	s.Month(1, 2).Every(1).Do(func() {})
 
 }
+
+func TestScheduler_WeekdayIsCurrentDay(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	s.time = fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(2022, 2, 17, 20, 0, 0, 0, l)
+	}}
+	s.StartAsync()
+
+	job, _ := s.Every(1).Week().Thursday().Friday().Saturday().At("23:00").Do(func() {})
+	assert.Equal(t, time.Date(2022, 2, 17, 23, 0, 0, 0, s.Location()), job.NextRun())
+}
