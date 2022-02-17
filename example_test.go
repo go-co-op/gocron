@@ -88,8 +88,22 @@ func ExampleJob_ScheduledAtTime() {
 	job, _ := s.Every(1).Day().At("10:30").Do(task)
 	s.StartAsync()
 	fmt.Println(job.ScheduledAtTime())
+
+	// if multiple times are set, will return to the earliest one
+	job1, _ := s.Every(1).Day().At("10:30;08:00").Do(task)
+	fmt.Println(job1.ScheduledAtTime())
 	// Output:
 	// 10:30
+	// 8:0
+}
+
+func ExampleJob_ScheduledAtTimes() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Day().At("10:30;08:00").Do(task)
+	s.StartAsync()
+	fmt.Println(job.ScheduledAtTimes())
+	// Output:
+	// [8:0 10:30]
 }
 
 func ExampleJob_ScheduledTime() {
@@ -171,6 +185,9 @@ func ExampleScheduler_At() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Day().At("10:30").Do(task)
 	_, _ = s.Every(1).Monday().At("10:30:01").Do(task)
+	// multiple
+	_, _ = s.Every(1).Monday().At("10:30;18:00").Do(task)
+	_, _ = s.Every(1).Monday().At("10:30").At("18:00").Do(task)
 }
 
 func ExampleScheduler_ChangeLocation() {
