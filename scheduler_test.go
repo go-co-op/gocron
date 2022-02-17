@@ -1982,6 +1982,25 @@ func TestScheduler_CheckSetBehaviourBeforeJobCreated(t *testing.T) {
 
 }
 
+func TestScheduler_MonthLastDayAtTime(t *testing.T) {
+	testCases := []struct {
+		name                 string
+		job                  *Job
+		wantTimeUntilNextRun time.Duration
+	}{
+		{name: "month last day before run at time", job: &Job{interval: 1, unit: months, atTime: _getHours(20) + _getMinutes(0), daysOfTheMonth: []int{-1}, lastRun: time.Date(2022, 2, 28, 10, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: _getHours(10)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+
+			s := NewScheduler(time.UTC)
+			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
+			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
+		})
+	}
+}
+
 func TestScheduler_WeekdayIsCurrentDay(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	s.time = fakeTime{onNow: func(l *time.Location) time.Time {
