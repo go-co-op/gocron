@@ -20,7 +20,7 @@ type Job struct {
 	duration          time.Duration   // time duration between runs
 	unit              schedulingUnit  // time units, e.g. 'minutes', 'hours'...
 	startsImmediately bool            // if the Job should run upon scheduler start
-	atTimes           []time.Duration // optional time at which this Job runs when interval is day
+	atTimes           []time.Duration // optional time(s) at which this Job runs when interval is day
 	startAtTime       time.Time       // optional time at which the Job starts
 	error             error           // error related to Job
 	lastRun           time.Time       // datetime of last run
@@ -260,7 +260,8 @@ func (j *Job) ScheduledTime() time.Time {
 	return j.nextRun
 }
 
-// ScheduledAtTime returns the specific time of day the Job will run at
+// ScheduledAtTime returns the specific time of day the Job will run at.
+// If multiple times are set, the earliest time will be returned.
 func (j *Job) ScheduledAtTime() string {
 	if len(j.atTimes) == 0 {
 		return "0:0"

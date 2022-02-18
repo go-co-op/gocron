@@ -89,7 +89,7 @@ func ExampleJob_ScheduledAtTime() {
 	s.StartAsync()
 	fmt.Println(job.ScheduledAtTime())
 
-	// if multiple times are set, will return to the earliest one
+	// if multiple times are set, the earliest time will be returned
 	job1, _ := s.Every(1).Day().At("10:30;08:00").Do(task)
 	fmt.Println(job1.ScheduledAtTime())
 	// Output:
