@@ -268,7 +268,7 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 		return nextRunResult
 	}
 	next := lastRunRoundedMidnight.Add(job.getFirstAtTime()).AddDate(0, job.interval, 0)
-	return nextRun{duration: until(lastRunRoundedMidnight, next), dateTime: next}
+	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
 func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time) nextRun {
