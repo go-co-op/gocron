@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -15,21 +16,21 @@ import (
 type Job struct {
 	mu sync.RWMutex
 	jobFunction
-	interval          int            // pause interval * unit between runs
-	duration          time.Duration  // time duration between runs
-	unit              schedulingUnit // time units, e.g. 'minutes', 'hours'...
-	startsImmediately bool           // if the Job should run upon scheduler start
-	atTime            time.Duration  // optional time at which this Job runs when interval is day
-	startAtTime       time.Time      // optional time at which the Job starts
-	error             error          // error related to Job
-	lastRun           time.Time      // datetime of last run
-	nextRun           time.Time      // datetime of next run
-	scheduledWeekdays []time.Weekday // Specific days of the week to start on
-	daysOfTheMonth    []int          // Specific days of the month to run the job
-	tags              []string       // allow the user to tag Jobs with certain labels
-	runCount          int            // number of times the job ran
-	timer             *time.Timer    // handles running tasks at specific time
-	cronSchedule      cron.Schedule  // stores the schedule when a task uses cron
+	interval          int             // pause interval * unit between runs
+	duration          time.Duration   // time duration between runs
+	unit              schedulingUnit  // time units, e.g. 'minutes', 'hours'...
+	startsImmediately bool            // if the Job should run upon scheduler start
+	atTimes           []time.Duration // optional time(s) at which this Job runs when interval is day
+	startAtTime       time.Time       // optional time at which the Job starts
+	error             error           // error related to Job
+	lastRun           time.Time       // datetime of last run
+	nextRun           time.Time       // datetime of next run
+	scheduledWeekdays []time.Weekday  // Specific days of the week to start on
+	daysOfTheMonth    []int           // Specific days of the month to run the job
+	tags              []string        // allow the user to tag Jobs with certain labels
+	runCount          int             // number of times the job ran
+	timer             *time.Timer     // handles running tasks at specific time
+	cronSchedule      cron.Schedule   // stores the schedule when a task uses cron
 }
 
 type jobFunction struct {
@@ -113,12 +114,63 @@ func (j *Job) setTimer(t *time.Timer) {
 	j.timer = t
 }
 
-func (j *Job) getAtTime() time.Duration {
-	return j.atTime
+func (j *Job) getFirstAtTime() time.Duration {
+	var t time.Duration
+	if len(j.atTimes) > 0 {
+		t = j.atTimes[0]
+	}
+
+	return t
 }
 
-func (j *Job) setAtTime(t time.Duration) {
-	j.atTime = t
+func (j *Job) getAtTime(lastRun time.Time) time.Duration {
+	var r time.Duration
+	if len(j.atTimes) == 0 {
+		return r
+	}
+
+	if len(j.atTimes) == 1 {
+		return j.atTimes[0]
+	}
+
+	if lastRun.IsZero() {
+		r = j.atTimes[0]
+	} else {
+		for _, d := range j.atTimes {
+			nt := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, lastRun.Location()).Add(d)
+			if nt.After(lastRun) {
+				r = d
+				break
+			}
+		}
+	}
+
+	return r
+}
+
+func (j *Job) addAtTime(t time.Duration) {
+	if len(j.atTimes) == 0 {
+		j.atTimes = append(j.atTimes, t)
+		return
+	}
+	exist := false
+	index := sort.Search(len(j.atTimes), func(i int) bool {
+		atTime := j.atTimes[i]
+		b := atTime >= t
+		if b {
+			exist = atTime == t
+		}
+		return b
+	})
+
+	// ignore if present
+	if exist {
+		return
+	}
+
+	j.atTimes = append(j.atTimes, time.Duration(0))
+	copy(j.atTimes[index+1:], j.atTimes[index:])
+	j.atTimes[index] = t
 }
 
 func (j *Job) getStartAtTime() time.Time {
@@ -208,9 +260,24 @@ func (j *Job) ScheduledTime() time.Time {
 	return j.nextRun
 }
 
-// ScheduledAtTime returns the specific time of day the Job will run at
+// ScheduledAtTime returns the specific time of day the Job will run at.
+// If multiple times are set, the earliest time will be returned.
 func (j *Job) ScheduledAtTime() string {
-	return fmt.Sprintf("%d:%d", j.atTime/time.Hour, (j.atTime%time.Hour)/time.Minute)
+	if len(j.atTimes) == 0 {
+		return "0:0"
+	}
+
+	return fmt.Sprintf("%d:%d", j.getFirstAtTime()/time.Hour, (j.getFirstAtTime()%time.Hour)/time.Minute)
+}
+
+// ScheduledAtTimes returns the specific times of day the Job will run at
+func (j *Job) ScheduledAtTimes() []string {
+	r := make([]string, len(j.atTimes))
+	for i, t := range j.atTimes {
+		r[i] = fmt.Sprintf("%d:%d", t/time.Hour, (t%time.Hour)/time.Minute)
+	}
+
+	return r
 }
 
 // Weekday returns which day of the week the Job will run on and

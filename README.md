@@ -33,6 +33,14 @@ s.Every(5).Days().Do(func(){ ... })
 
 s.Every(1).Month(1, 2, 3).Do(func(){ ... })
 
+// set time
+s.Every(1).Day().At("10:30").Do(func(){ ... })
+
+// set multiple times
+s.Every(1).Day().At("10:30;08:00").Do(func(){ ... })
+
+s.Every(1).Day().At("10:30").At("08:00").Do(func(){ ... })
+
 // Schedule each last day of the month
 s.Every(1).MonthLastDay().Do(func(){ ... })
 
