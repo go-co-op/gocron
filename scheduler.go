@@ -1138,7 +1138,12 @@ func (s *Scheduler) cron(cronExpression string, withSeconds bool) *Scheduler {
 		job = s.getCurrentJob()
 	}
 
-	withLocation := fmt.Sprintf("CRON_TZ=%s %s", s.location.String(), cronExpression)
+	var withLocation string
+	if strings.HasPrefix(cronExpression, "TZ=") || strings.HasPrefix(cronExpression, "CRON_TZ=") {
+		withLocation = cronExpression
+	} else {
+		withLocation = fmt.Sprintf("CRON_TZ=%s %s", s.location.String(), cronExpression)
+	}
 
 	var (
 		cronSchedule cron.Schedule
