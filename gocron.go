@@ -30,6 +30,7 @@ var (
 	ErrInvalidDayOfMonthEntry           = errors.New("only days 1 through 28 are allowed for monthly schedules")
 	ErrTagsUnique                       = func(tag string) error { return fmt.Errorf("a non-unique tag was set on the job: %s", tag) }
 	ErrWrongParams                      = errors.New("wrong list of params")
+	ErrDoWithDetails                    = errors.New("DoWithDetails expects a function whose last parameter is a gocron.Job")
 	ErrUpdateCalledWithoutJob           = errors.New("a call to Scheduler.Update() requires a call to Scheduler.Job() first")
 	ErrCronParseFailure                 = errors.New("cron expression failed to be parsed")
 	ErrInvalidDaysOfMonthDuplicateValue = errors.New("duplicate days of month is not allowed in Month() and Months() methods")

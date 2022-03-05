@@ -480,7 +480,7 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 // parses with time.ParseDuration().
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 func (s *Scheduler) Every(interval interface{}) *Scheduler {
-	job := &Job{}
+	job := s.newJob(0)
 	if s.updateJob || s.jobCreated {
 		job = s.getCurrentJob()
 	}
@@ -545,6 +545,19 @@ func (s *Scheduler) run(job *Job) {
 	defer job.mu.Unlock()
 	job.setLastRun(s.now())
 	job.runCount++
+
+	if job.runWithDetails {
+		switch len(job.parameters) {
+		case job.parametersLen:
+			job.parameters = append(job.parameters, job.copy())
+		case job.parametersLen + 1:
+			job.parameters[job.parametersLen] = job.copy()
+		default:
+			// something is really wrong and we should never get here
+			return
+		}
+	}
+
 	s.executor.jobFunctions <- job.jobFunction
 }
 
@@ -773,8 +786,7 @@ func (s *Scheduler) stop() {
 	s.executor.stop()
 }
 
-// Do specifies the jobFunc that should be called every time the Job runs
-func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
+func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, error) {
 	job := s.getCurrentJob()
 
 	jobUnit := job.getUnit()
@@ -806,18 +818,29 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 		return nil, ErrNotAFunction
 	}
 
-	f := reflect.ValueOf(jobFun)
-	if len(params) != f.Type().NumIn() {
-		s.RemoveByReference(job)
-		job.error = wrapOrError(job.error, ErrWrongParams)
-		return nil, job.error
-	}
-
 	fname := getFunctionName(jobFun)
 	if job.name != fname {
 		job.function = jobFun
 		job.parameters = params
 		job.name = fname
+	}
+
+	f := reflect.ValueOf(jobFun)
+	expectedParamLength := f.Type().NumIn()
+	if job.runWithDetails {
+		expectedParamLength--
+	}
+
+	if len(params) != expectedParamLength {
+		s.RemoveByReference(job)
+		job.error = wrapOrError(job.error, ErrWrongParams)
+		return nil, job.error
+	}
+
+	if job.runWithDetails && f.Type().In(len(params)).Kind() != reflect.ValueOf(*job).Kind() {
+		s.RemoveByReference(job)
+		job.error = wrapOrError(job.error, ErrDoWithDetails)
+		return nil, job.error
 	}
 
 	// we should not schedule if not running since we can't foresee how long it will take for the scheduler to start
@@ -826,6 +849,22 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	}
 
 	return job, nil
+}
+
+// Do specifies the jobFunc that should be called every time the Job runs
+func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
+	return s.doCommon(jobFun, params...)
+}
+
+// DoWithDetails specifies the jobFunc that should be called every time the Job runs
+// and additionally passes the details of the current job to the jobFunc.
+// The last argument of the function must be a gocron.Job that will be passed by
+// the scheduler when the function is called.
+func (s *Scheduler) DoWithDetails(jobFun interface{}, params ...interface{}) (*Job, error) {
+	job := s.getCurrentJob()
+	job.runWithDetails = true
+	job.parametersLen = len(params)
+	return s.doCommon(jobFun, params...)
 }
 
 // At schedules the Job at a specific time of day in the form "HH:MM:SS" or "HH:MM"
@@ -1076,7 +1115,7 @@ func (s *Scheduler) Sunday() *Scheduler {
 
 func (s *Scheduler) getCurrentJob() *Job {
 	if len(s.Jobs()) == 0 {
-		s.setJobs([]*Job{{}})
+		s.setJobs([]*Job{s.newJob(0)})
 		s.jobCreated = true
 	}
 	return s.Jobs()[len(s.Jobs())-1]
