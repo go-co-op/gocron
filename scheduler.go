@@ -84,7 +84,7 @@ func (s *Scheduler) start() {
 
 func (s *Scheduler) runJobs(jobs []*Job) {
 	for _, job := range jobs {
-		s.scheduleNextRun(job)
+		s.runContinuous(job)
 	}
 }
 
@@ -155,17 +155,10 @@ type nextRun struct {
 }
 
 // scheduleNextRun Compute the instant when this Job should run next
-func (s *Scheduler) scheduleNextRun(job *Job) {
+func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 	now := s.now()
-	lastRun := job.LastRun()
 	if !s.jobPresent(job) {
-		return
-	}
-
-	if job.getStartsImmediately() {
-		s.run(job)
-		lastRun = now
-		job.setStartsImmediately(false)
+		return false, nextRun{}
 	}
 
 	if job.neverRan() {
@@ -183,32 +176,21 @@ func (s *Scheduler) scheduleNextRun(job *Job) {
 				job.startAtTime = job.startAtTime.Add(duration * count)
 			}
 		}
-		lastRun = now
 	}
 
 	if !job.shouldRun() {
 		s.RemoveByReference(job)
-		return
+		return false, nextRun{}
 	}
 
-	next := s.durationToNextRun(lastRun, job)
+	next := s.durationToNextRun(now, job)
 
 	if next.dateTime.IsZero() {
-		job.setNextRun(lastRun.Add(next.duration))
+		job.setNextRun(now.Add(next.duration))
 	} else {
 		job.setNextRun(next.dateTime)
 	}
-	job.setTimer(time.AfterFunc(next.duration, func() {
-		if !next.dateTime.IsZero() {
-			for {
-				if time.Now().Unix() >= next.dateTime.Unix() {
-					break
-				}
-			}
-		}
-		s.run(job)
-		s.scheduleNextRun(job)
-	}))
+	return true, next
 }
 
 // durationToNextRun calculate how much time to the next run, depending on unit
@@ -543,8 +525,6 @@ func (s *Scheduler) run(job *Job) {
 
 	job.mu.Lock()
 	defer job.mu.Unlock()
-	job.setLastRun(s.now())
-	job.runCount++
 
 	if job.runWithDetails {
 		switch len(job.parameters) {
@@ -558,7 +538,33 @@ func (s *Scheduler) run(job *Job) {
 		}
 	}
 
-	s.executor.jobFunctions <- job.jobFunction
+	s.executor.jobFunctions <- job.jobFunction.copy()
+	job.setLastRun(s.now())
+	job.runCount++
+}
+
+func (s *Scheduler) runContinuous(job *Job) {
+	shouldRun, next := s.scheduleNextRun(job)
+	if !shouldRun {
+		return
+	}
+
+	if !job.getStartsImmediately() {
+		job.setStartsImmediately(true)
+	} else {
+		s.run(job)
+	}
+
+	job.setTimer(time.AfterFunc(next.duration, func() {
+		if !next.dateTime.IsZero() {
+			for {
+				if time.Now().Unix() >= next.dateTime.Unix() {
+					break
+				}
+			}
+		}
+		s.runContinuous(job)
+	}))
 }
 
 // RunAll run all Jobs regardless if they are scheduled to run or not
@@ -845,7 +851,7 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 
 	// we should not schedule if not running since we can't foresee how long it will take for the scheduler to start
 	if s.IsRunning() {
-		s.scheduleNextRun(job)
+		s.runContinuous(job)
 	}
 
 	return job, nil
@@ -1160,6 +1166,12 @@ func (s *Scheduler) Update() (*Job, error) {
 	s.updateJob = false
 	job.stop()
 	job.ctx, job.cancel = context.WithCancel(context.Background())
+	job.setStartsImmediately(false)
+
+	if job.runWithDetails {
+		return s.DoWithDetails(job.function, job.parameters...)
+	}
+
 	return s.Do(job.function, job.parameters...)
 }
 

@@ -62,6 +62,22 @@ func (jf *jobFunction) decrementRunState() {
 	}
 }
 
+func (jf *jobFunction) copy() jobFunction {
+	cp := jobFunction{
+		function:      jf.function,
+		parameters:    nil,
+		parametersLen: jf.parametersLen,
+		name:          jf.name,
+		runConfig:     jf.runConfig,
+		limiter:       jf.limiter,
+		ctx:           jf.ctx,
+		cancel:        jf.cancel,
+		runState:      jf.runState,
+	}
+	copy(cp.parameters, jf.parameters)
+	return cp
+}
+
 type runConfig struct {
 	finiteRuns bool
 	maxRuns    int
