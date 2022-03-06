@@ -74,9 +74,7 @@ func (jf *jobFunction) copy() jobFunction {
 		cancel:        jf.cancel,
 		runState:      jf.runState,
 	}
-	for _, param := range jf.parameters {
-		cp.parameters = append(cp.parameters, param)
-	}
+	cp.parameters = append(cp.parameters, jf.parameters...)
 	return cp
 }
 
