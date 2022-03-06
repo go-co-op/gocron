@@ -2108,7 +2108,7 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 	}
 }
 
-func TestScheduler_DoWithDetails(t *testing.T) {
+func TestScheduler_DoWithJobDetails(t *testing.T) {
 	testCases := []struct {
 		description   string
 		jobFunc       interface{}
@@ -2118,14 +2118,14 @@ func TestScheduler_DoWithDetails(t *testing.T) {
 		{"no error", func(foo, bar string, job Job) {}, []interface{}{"foo", "bar"}, ""},
 		{"too few params", func(foo, bar string, job Job) {}, []interface{}{"foo"}, ErrWrongParams.Error()},
 		{"too many params", func(foo, bar string, job Job) {}, []interface{}{"foo", "bar", "baz"}, ErrWrongParams.Error()},
-		{"jobFunc doesn't have Job param", func(foo, bar string) {}, []interface{}{"foo"}, ErrDoWithDetails.Error()},
-		{"jobFunc has Job param but not last param", func(job Job, foo, bar string) {}, []interface{}{"foo", "bar"}, ErrDoWithDetails.Error()},
+		{"jobFunc doesn't have Job param", func(foo, bar string) {}, []interface{}{"foo"}, ErrDoWithJobDetails.Error()},
+		{"jobFunc has Job param but not last param", func(job Job, foo, bar string) {}, []interface{}{"foo", "bar"}, ErrDoWithJobDetails.Error()},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
-			_, err := s.Every("1s").DoWithDetails(tc.jobFunc, tc.params...)
+			_, err := s.Every("1s").DoWithJobDetails(tc.jobFunc, tc.params...)
 			if tc.expectedError == "" {
 				assert.NoError(t, err)
 			} else {
@@ -2137,7 +2137,7 @@ func TestScheduler_DoWithDetails(t *testing.T) {
 	t.Run("run job with details", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		_, err := s.Tag("tag1").Every("100ms").DoWithDetails(func(job Job) {
+		_, err := s.Tag("tag1").Every("100ms").DoWithJobDetails(func(job Job) {
 			log.Printf("job last run: %s, job next run: %s", job.LastRun(), job.NextRun())
 		})
 		require.NoError(t, err)

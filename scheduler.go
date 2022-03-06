@@ -845,7 +845,7 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 
 	if job.runWithDetails && f.Type().In(len(params)).Kind() != reflect.ValueOf(*job).Kind() {
 		s.RemoveByReference(job)
-		job.error = wrapOrError(job.error, ErrDoWithDetails)
+		job.error = wrapOrError(job.error, ErrDoWithJobDetails)
 		return nil, job.error
 	}
 
@@ -862,11 +862,11 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 	return s.doCommon(jobFun, params...)
 }
 
-// DoWithDetails specifies the jobFunc that should be called every time the Job runs
+// DoWithJobDetails specifies the jobFunc that should be called every time the Job runs
 // and additionally passes the details of the current job to the jobFunc.
 // The last argument of the function must be a gocron.Job that will be passed by
 // the scheduler when the function is called.
-func (s *Scheduler) DoWithDetails(jobFun interface{}, params ...interface{}) (*Job, error) {
+func (s *Scheduler) DoWithJobDetails(jobFun interface{}, params ...interface{}) (*Job, error) {
 	job := s.getCurrentJob()
 	job.runWithDetails = true
 	job.parametersLen = len(params)
@@ -1169,7 +1169,7 @@ func (s *Scheduler) Update() (*Job, error) {
 	job.setStartsImmediately(false)
 
 	if job.runWithDetails {
-		return s.DoWithDetails(job.function, job.parameters...)
+		return s.DoWithJobDetails(job.function, job.parameters...)
 	}
 
 	return s.Do(job.function, job.parameters...)
