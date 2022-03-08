@@ -715,6 +715,17 @@ Jobs:
 	return nil, ErrJobNotFoundWithTag
 }
 
+// MonthFirstWeekday sets the job to run the first specified weekday of the month
+func (s *Scheduler) MonthFirstWeekday(weekday time.Weekday) *Scheduler {
+	_, month, day := s.time.Now(time.UTC).Date()
+
+	if day < 7 {
+		return s.Cron(fmt.Sprintf("0 0 %d %d %d", day, month, weekday))
+	}
+
+	return s.Cron(fmt.Sprintf("0 0 %d %d %d", day, month+1, weekday))
+}
+
 // LimitRunsTo limits the number of executions of this job to n.
 // Upon reaching the limit, the job is removed from the scheduler.
 func (s *Scheduler) LimitRunsTo(i int) *Scheduler {

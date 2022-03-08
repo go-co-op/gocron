@@ -1875,6 +1875,50 @@ func TestScheduler_Midday(t *testing.T) {
 	})
 }
 
+func TestScheduler_EveryMonthFirstWeekday(t *testing.T) {
+	testCases := []struct {
+		current  time.Time
+		expected time.Time
+		weekday  time.Weekday
+	}{
+		{
+			current:  time.Date(2022, time.March, 7, 0, 0, 0, 0, time.UTC),
+			expected: time.Date(2022, time.April, 6, 0, 0, 0, 0, time.UTC),
+			weekday:  time.Wednesday,
+		},
+		{
+			current:  time.Date(2022, time.March, 1, 0, 0, 0, 0, time.UTC),
+			expected: time.Date(2022, time.March, 3, 0, 0, 0, 0, time.UTC),
+			weekday:  time.Thursday,
+		},
+		{
+			current:  time.Date(2022, time.March, 23, 0, 0, 0, 0, time.UTC),
+			expected: time.Date(2022, time.April, 4, 0, 0, 0, 0, time.UTC),
+			weekday:  time.Monday,
+		},
+		{
+			current:  time.Date(2022, time.February, 28, 0, 0, 0, 0, time.UTC),
+			expected: time.Date(2022, time.March, 7, 0, 0, 0, 0, time.UTC),
+			weekday:  time.Monday,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run("check first weekday of the month", func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			s.time = fakeTime{
+				onNow: func(l *time.Location) time.Time {
+					return tc.current
+				},
+			}
+			job, _ := s.MonthFirstWeekday(tc.weekday).Do(func() {})
+			job.lastRun = tc.current
+			durationToNextTime := s.durationToNextRun(tc.current, job)
+			assert.Equal(t, tc.expected, durationToNextTime.dateTime)
+		})
+	}
+}
+
 func TestScheduler_CheckNextWeekDay(t *testing.T) {
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
