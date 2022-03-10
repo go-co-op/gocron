@@ -490,7 +490,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		if !(s.updateJob || s.jobCreated) {
 			job = s.newJob(interval)
 		} else {
-			job = s.newJob(interval)
+			job.interval = interval
 		}
 		if interval <= 0 {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
