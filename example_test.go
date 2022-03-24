@@ -256,9 +256,13 @@ func ExampleScheduler_Days() {
 
 func ExampleScheduler_Do() {
 	s := gocron.NewScheduler(time.UTC)
-	j, err := s.Every(1).Second().Do(task)
+	j1, err := s.Every(1).Second().Do(task)
+	fmt.Printf("Job: %v, Error: %v", j1, err)
+
+	taskWithParameters := func(param1, param2 string) {}
+	j2, err := s.Every(1).Second().Do(taskWithParameters, "param1", "param2")
+	fmt.Printf("Job: %v, Error: %v", j2, err)
 	s.StartAsync()
-	fmt.Printf("Job: %v, Error: %v", j, err)
 }
 
 func ExampleScheduler_DoWithJobDetails() {
