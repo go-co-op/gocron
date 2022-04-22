@@ -243,31 +243,32 @@ func TestAt(t *testing.T) {
 		assert.EqualError(t, err, ErrUnsupportedTimeFormat.Error())
 		assert.Zero(t, s.Len())
 	})
+}
 
+func TestMultipleAtTimesDecoding(t *testing.T) {
 	exp := []time.Duration{_getHours(1), _getHours(3), _getHours(4), _getHours(7), _getHours(15)}
-	// multiple times
 	testCases := []struct {
 		name   string
 		params []interface{}
 		result []time.Duration
 	}{
 		{
-			name:   "test1",
+			name:   "multiple simple strings",
 			params: []interface{}{"03:00", "15:00", "01:00", "07:00", "04:00"},
 			result: exp,
 		},
 		{
-			name:   "test2",
+			name:   "single string separated by semicolons",
 			params: []interface{}{"03:00;15:00;01:00;07:00;04:00"},
 			result: exp,
 		},
 		{
-			name:   "test3",
+			name:   "interpolation of semicolons string, time.Time and simple string",
 			params: []interface{}{"03:00;15:00;01:00", time.Date(0, 0, 0, 7, 0, 0, 0, time.UTC), "04:00"},
 			result: exp,
 		},
 		{
-			name:   "test4",
+			name:   "repeated values on input don't get duplicated after decoding",
 			params: []interface{}{"03:00;15:00;01:00;07:00;04:00;01:00"},
 			result: exp,
 		},
@@ -284,7 +285,6 @@ func TestAt(t *testing.T) {
 			assert.Equalf(t, tc.result, got, fmt.Sprintf("expected %v / got %v", tc.result, got))
 		})
 	}
-
 }
 
 func schedulerForNextOrPreviousWeekdayEveryNTimes(weekday time.Weekday, next bool, n int, s *Scheduler) *Scheduler {
