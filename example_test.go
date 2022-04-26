@@ -265,6 +265,17 @@ func ExampleScheduler_Do() {
 	s.StartAsync()
 }
 
+func ExampleScheduler_DoWithJobDetails() {
+	task := func(in string, job gocron.Job) {
+		fmt.Printf("this job's last run: %s\nthis job's next run: %s", job.LastRun(), job.NextRun())
+	}
+
+	s := gocron.NewScheduler(time.UTC)
+	j, err := s.Every(1).Second().DoWithJobDetails(task, "foo")
+	s.StartAsync()
+	fmt.Printf("Job: %v, Error: %v", j, err)
+}
+
 func ExampleScheduler_Every() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Second().Do(task)

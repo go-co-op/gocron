@@ -14,7 +14,7 @@ import (
 
 // Job struct stores the information necessary to run a Job
 type Job struct {
-	mu sync.RWMutex
+	mu *jobMutex
 	jobFunction
 	interval          int             // pause interval * unit between runs
 	duration          time.Duration   // time duration between runs
@@ -31,17 +31,23 @@ type Job struct {
 	runCount          int             // number of times the job ran
 	timer             *time.Timer     // handles running tasks at specific time
 	cronSchedule      cron.Schedule   // stores the schedule when a task uses cron
+	runWithDetails    bool            // when true the job is passed as the last arg of the jobFunc
 }
 
 type jobFunction struct {
-	function   interface{}         // task's function
-	parameters []interface{}       // task's function parameters
-	name       string              //nolint the function name to run
-	runConfig  runConfig           // configuration for how many times to run the job
-	limiter    *singleflight.Group // limits inflight runs of job to one
-	ctx        context.Context     // for cancellation
-	cancel     context.CancelFunc  // for cancellation
-	runState   *int64              // will be non-zero when jobs are running
+	function      interface{}         // task's function
+	parameters    []interface{}       // task's function parameters
+	parametersLen int                 // length of the passed parameters
+	name          string              //nolint the function name to run
+	runConfig     runConfig           // configuration for how many times to run the job
+	limiter       *singleflight.Group // limits inflight runs of job to one
+	ctx           context.Context     // for cancellation
+	cancel        context.CancelFunc  // for cancellation
+	runState      *int64              // will be non-zero when jobs are running
+}
+
+type jobMutex struct {
+	sync.RWMutex
 }
 
 func (jf *jobFunction) incrementRunState() {
@@ -54,6 +60,22 @@ func (jf *jobFunction) decrementRunState() {
 	if jf.runState != nil {
 		atomic.AddInt64(jf.runState, -1)
 	}
+}
+
+func (jf *jobFunction) copy() jobFunction {
+	cp := jobFunction{
+		function:      jf.function,
+		parameters:    nil,
+		parametersLen: jf.parametersLen,
+		name:          jf.name,
+		runConfig:     jf.runConfig,
+		limiter:       jf.limiter,
+		ctx:           jf.ctx,
+		cancel:        jf.cancel,
+		runState:      jf.runState,
+	}
+	cp.parameters = append(cp.parameters, jf.parameters...)
+	return cp
 }
 
 type runConfig struct {
@@ -78,6 +100,7 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 	ctx, cancel := context.WithCancel(context.Background())
 	var zero int64
 	job := &Job{
+		mu:       &jobMutex{},
 		interval: interval,
 		unit:     seconds,
 		lastRun:  time.Time{},
@@ -378,4 +401,28 @@ func (j *Job) stop() {
 // IsRunning reports whether any instances of the job function are currently running
 func (j *Job) IsRunning() bool {
 	return atomic.LoadInt64(j.runState) != 0
+}
+
+// you must lock the job before calling copy
+func (j *Job) copy() Job {
+	return Job{
+		mu:                &jobMutex{},
+		jobFunction:       j.jobFunction,
+		interval:          j.interval,
+		duration:          j.duration,
+		unit:              j.unit,
+		startsImmediately: j.startsImmediately,
+		atTimes:           j.atTimes,
+		startAtTime:       j.startAtTime,
+		error:             j.error,
+		lastRun:           j.lastRun,
+		nextRun:           j.nextRun,
+		scheduledWeekdays: j.scheduledWeekdays,
+		daysOfTheMonth:    j.daysOfTheMonth,
+		tags:              j.tags,
+		runCount:          j.runCount,
+		timer:             j.timer,
+		cronSchedule:      j.cronSchedule,
+		runWithDetails:    j.runWithDetails,
+	}
 }
