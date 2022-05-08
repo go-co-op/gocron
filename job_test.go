@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -223,4 +224,35 @@ func TestJob_CommonExports(t *testing.T) {
 	j.lastRun = lastRun
 	j.mu.Unlock()
 	assert.Equal(t, lastRun, j.LastRun())
+}
+
+func TestJob_SetEventListeners(t *testing.T) {
+	t.Run("run event listeners callbacks for a job", func(t *testing.T) {
+		var (
+			jobRanPassed         = false
+			beforeCallbackPassed = false
+			afterCallbackPassed  = false
+			wg                   = &sync.WaitGroup{}
+		)
+		wg.Add(1)
+		s := NewScheduler(time.UTC)
+		job, err := s.Tag("tag1").Every("1ms").Do(func() {
+			jobRanPassed = true
+		})
+		job.SetEventListeners(func() {
+			beforeCallbackPassed = true
+		}, func() {
+			defer wg.Done()
+			afterCallbackPassed = true
+		})
+
+		s.StartAsync()
+		s.stop()
+		wg.Wait()
+
+		require.NoError(t, err)
+		assert.True(t, jobRanPassed)
+		assert.True(t, beforeCallbackPassed)
+		assert.True(t, afterCallbackPassed)
+	})
 }

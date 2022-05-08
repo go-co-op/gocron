@@ -67,6 +67,12 @@ const (
 	crontab
 )
 
+func callJobFunc(jobFunc interface{}) {
+	if jobFunc != nil {
+		reflect.ValueOf(jobFunc).Call([]reflect.Value{})
+	}
+}
+
 func callJobFuncWithParams(jobFunc interface{}, params []interface{}) {
 	f := reflect.ValueOf(jobFunc)
 	if len(params) != f.Type().NumIn() {
