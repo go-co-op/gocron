@@ -283,6 +283,7 @@ func (j *Job) Tags() []string {
 	return j.tags
 }
 
+// SetEventListeners accepts two functions that will be called, one before and one after the job is run
 func (j *Job) SetEventListeners(onBeforeJobExecution interface{}, onAfterJobExecution interface{}) {
 	j.eventListeners = eventListeners{
 		onBeforeJobExecution: onBeforeJobExecution,
