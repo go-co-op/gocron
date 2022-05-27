@@ -35,15 +35,21 @@ type Job struct {
 }
 
 type jobFunction struct {
-	function      interface{}         // task's function
-	parameters    []interface{}       // task's function parameters
-	parametersLen int                 // length of the passed parameters
-	name          string              //nolint the function name to run
-	runConfig     runConfig           // configuration for how many times to run the job
-	limiter       *singleflight.Group // limits inflight runs of job to one
-	ctx           context.Context     // for cancellation
-	cancel        context.CancelFunc  // for cancellation
-	runState      *int64              // will be non-zero when jobs are running
+	eventListeners                     // additional functions to allow run 'em during job performing
+	function       interface{}         // task's function
+	parameters     []interface{}       // task's function parameters
+	parametersLen  int                 // length of the passed parameters
+	name           string              //nolint the function name to run
+	runConfig      runConfig           // configuration for how many times to run the job
+	limiter        *singleflight.Group // limits inflight runs of job to one
+	ctx            context.Context     // for cancellation
+	cancel         context.CancelFunc  // for cancellation
+	runState       *int64              // will be non-zero when jobs are running
+}
+
+type eventListeners struct {
+	onBeforeJobExecution interface{} // performs before job executing
+	onAfterJobExecution  interface{} // performs after job executing
 }
 
 type jobMutex struct {
@@ -64,15 +70,16 @@ func (jf *jobFunction) decrementRunState() {
 
 func (jf *jobFunction) copy() jobFunction {
 	cp := jobFunction{
-		function:      jf.function,
-		parameters:    nil,
-		parametersLen: jf.parametersLen,
-		name:          jf.name,
-		runConfig:     jf.runConfig,
-		limiter:       jf.limiter,
-		ctx:           jf.ctx,
-		cancel:        jf.cancel,
-		runState:      jf.runState,
+		eventListeners: jf.eventListeners,
+		function:       jf.function,
+		parameters:     nil,
+		parametersLen:  jf.parametersLen,
+		name:           jf.name,
+		runConfig:      jf.runConfig,
+		limiter:        jf.limiter,
+		ctx:            jf.ctx,
+		cancel:         jf.cancel,
+		runState:       jf.runState,
 	}
 	cp.parameters = append(cp.parameters, jf.parameters...)
 	return cp
@@ -274,6 +281,14 @@ func (j *Job) Untag(t string) {
 // Tags returns the tags attached to the Job
 func (j *Job) Tags() []string {
 	return j.tags
+}
+
+// SetEventListeners accepts two functions that will be called, one before and one after the job is run
+func (j *Job) SetEventListeners(onBeforeJobExecution interface{}, onAfterJobExecution interface{}) {
+	j.eventListeners = eventListeners{
+		onBeforeJobExecution: onBeforeJobExecution,
+		onAfterJobExecution:  onAfterJobExecution,
+	}
 }
 
 // ScheduledTime returns the time of the Job's next scheduled run

@@ -75,11 +75,17 @@ func (e *executor) start() {
 					defer e.maxRunningJobs.Release(1)
 				}
 
+				runJob := func() {
+					f.incrementRunState()
+					callJobFunc(f.eventListeners.onBeforeJobExecution)
+					callJobFuncWithParams(f.function, f.parameters)
+					callJobFunc(f.eventListeners.onAfterJobExecution)
+					f.decrementRunState()
+				}
+
 				switch f.runConfig.mode {
 				case defaultMode:
-					f.incrementRunState()
-					callJobFuncWithParams(f.function, f.parameters)
-					f.decrementRunState()
+					runJob()
 				case singletonMode:
 					_, _, _ = f.limiter.Do("main", func() (interface{}, error) {
 						select {
@@ -89,9 +95,7 @@ func (e *executor) start() {
 							return nil, nil
 						default:
 						}
-						f.incrementRunState()
-						callJobFuncWithParams(f.function, f.parameters)
-						f.decrementRunState()
+						runJob()
 						return nil, nil
 					})
 				}

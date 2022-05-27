@@ -113,6 +113,12 @@ func ExampleJob_ScheduledTime() {
 	fmt.Println(job.ScheduledTime())
 }
 
+func ExampleJob_SetEventListeners() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Week().Do(task)
+	job.SetEventListeners(func() {}, func() {})
+}
+
 func ExampleJob_SingletonMode() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
