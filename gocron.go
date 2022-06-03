@@ -19,14 +19,16 @@ import (
 // Panic handler type for external programs to use
 type PanicHandlerFunc func(jobName string, recoverData interface{})
 
-// The global panic handler, set it to your own func using gocron.PanicHandler = YourPanicHandler
-// If the PanicHandler is not nil, any panic that occurs during executing a job will be recovered
-// and the PanicHandler func will be called with the job's name and the recover data.
+// The global panic handler
 var (
 	panicHandler      PanicHandlerFunc
 	panicHandlerMutex sync.RWMutex = sync.RWMutex{}
 )
 
+// SetPanicHandler sets the global panichandler to the given function.
+// Setting it to nil disables automatic panic handling.
+// If the panicHandler is not nil, any panic that occurs during executing a job will be recovered
+// and the panicHandler func will be called with the job's name and the recover data.
 func SetPanicHandler(handler PanicHandlerFunc) {
 	panicHandlerMutex.Lock()
 	defer panicHandlerMutex.Unlock()
