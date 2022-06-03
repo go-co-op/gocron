@@ -31,13 +31,16 @@ func Test_ExecutorExecute(t *testing.T) {
 }
 
 func Test_ExecutorPanicHandling(t *testing.T) {
-	panicHandled := false
-	PanicHandler = func(jobName string, recoverData interface{}) {
-		fmt.Println("PanicHandler calld:")
+	panicHandled := make(chan bool)
+
+	handler := func(jobName string, recoverData interface{}) {
+		fmt.Println("PanicHandler called:")
 		fmt.Println("panic in " + jobName)
 		fmt.Println(recoverData)
-		panicHandled = true
+		panicHandled <- true
 	}
+
+	SetPanicHandler(handler)
 
 	e := newExecutor()
 
@@ -60,5 +63,9 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	e.stop()
 	wg.Wait()
 
-	assert.Equal(t, panicHandled, true)
+	select {
+	case state := <-panicHandled:
+		assert.Equal(t, state, true)
+	}
+
 }

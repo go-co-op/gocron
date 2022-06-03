@@ -47,10 +47,13 @@ func (e *executor) start() {
 		case f := <-e.jobFunctions:
 			runningJobsWg.Add(1)
 			go func() {
-				if PanicHandler != nil {
+				panicHandlerMutex.RLock()
+				defer panicHandlerMutex.RUnlock()
+
+				if panicHandler != nil {
 					defer func() {
 						if r := recover(); r != nil {
-							PanicHandler(f.name, r)
+							panicHandler(f.name, r)
 						}
 					}()
 				}

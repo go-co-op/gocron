@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sync"
 	"time"
 )
 
@@ -21,7 +22,16 @@ type PanicHandlerFunc func(jobName string, recoverData interface{})
 // The global panic handler, set it to your own func using gocron.PanicHandler = YourPanicHandler
 // If the PanicHandler is not nil, any panic that occurs during executing a job will be recovered
 // and the PanicHandler func will be called with the job's name and the recover data.
-var PanicHandler PanicHandlerFunc = nil
+var (
+	panicHandler      PanicHandlerFunc
+	panicHandlerMutex sync.RWMutex = sync.RWMutex{}
+)
+
+func SetPanicHandler(handler PanicHandlerFunc) {
+	panicHandlerMutex.Lock()
+	defer panicHandlerMutex.Unlock()
+	panicHandler = handler
+}
 
 // Error declarations for gocron related errors
 var (
