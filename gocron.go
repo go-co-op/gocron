@@ -15,6 +15,14 @@ import (
 	"time"
 )
 
+// Panic handler type for external programs to use
+type PanicHandlerFunc func(jobName string, recoverData interface{})
+
+// The global panic handler, set it to your own func using gocron.PanicHandler = YourPanicHandler
+// If the PanicHandler is not nil, any panic that occurs during executing a job will be recovered
+// and the PanicHandler func will be called with the job's name and the recover data.
+var PanicHandler PanicHandlerFunc = nil
+
 // Error declarations for gocron related errors
 var (
 	ErrNotAFunction                  = errors.New("only functions can be scheduled into the job queue")

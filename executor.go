@@ -47,6 +47,14 @@ func (e *executor) start() {
 		case f := <-e.jobFunctions:
 			runningJobsWg.Add(1)
 			go func() {
+				if PanicHandler != nil {
+					defer func() {
+						if r := recover(); r != nil {
+							PanicHandler(f.name, r)
+						}
+					}()
+				}
+
 				defer runningJobsWg.Done()
 
 				if e.maxRunningJobs != nil {
