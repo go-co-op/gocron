@@ -22,7 +22,7 @@ type PanicHandlerFunc func(jobName string, recoverData interface{})
 // The global panic handler
 var (
 	panicHandler      PanicHandlerFunc
-	panicHandlerMutex sync.RWMutex = sync.RWMutex{}
+	panicHandlerMutex = sync.RWMutex{}
 )
 
 // SetPanicHandler sets the global panichandler to the given function.
