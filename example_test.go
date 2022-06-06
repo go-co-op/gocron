@@ -2,6 +2,7 @@ package gocron_test
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/go-co-op/gocron"
@@ -202,7 +203,7 @@ func ExampleScheduler_ChangeLocation() {
 
 	location, err := time.LoadLocation("America/Los_Angeles")
 	if err != nil {
-		panic(err)
+		log.Fatalf("Error loading location: %s", err)
 	}
 	s.ChangeLocation(location)
 	fmt.Println(s.Location())
@@ -804,4 +805,15 @@ func ExampleScheduler_Weeks() {
 	_, _ = s.Every(1).Weeks().Do(task)
 
 	_, _ = s.Every(2).Weeks().Monday().Wednesday().Friday().Do(task)
+}
+
+// ---------------------------------------------------------------------
+// ---------------------OTHER-FUNCTIONS---------------------------------
+// ---------------------------------------------------------------------
+
+func ExampleSetPanicHandler() {
+	gocron.SetPanicHandler(func(jobName string, recoverData interface{}) {
+		fmt.Printf("Panic in job: %s", jobName)
+		fmt.Println("do something to handle the panic")
+	})
 }

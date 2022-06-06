@@ -16,7 +16,8 @@ import (
 	"time"
 )
 
-// Panic handler type for external programs to use
+// PanicHandlerFunc represents a type that can be set to handle panics occurring
+// during job execution.
 type PanicHandlerFunc func(jobName string, recoverData interface{})
 
 // The global panic handler
@@ -25,10 +26,10 @@ var (
 	panicHandlerMutex = sync.RWMutex{}
 )
 
-// SetPanicHandler sets the global panichandler to the given function.
-// Setting it to nil disables automatic panic handling.
+// SetPanicHandler sets the global panicHandler to the given function.
+// Leaving it nil or setting it to nil disables automatic panic handling.
 // If the panicHandler is not nil, any panic that occurs during executing a job will be recovered
-// and the panicHandler func will be called with the job's name and the recover data.
+// and the panicHandlerFunc will be called with the job's name and the recover data.
 func SetPanicHandler(handler PanicHandlerFunc) {
 	panicHandlerMutex.Lock()
 	defer panicHandlerMutex.Unlock()
