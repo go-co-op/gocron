@@ -2189,3 +2189,27 @@ func TestScheduler_DoWithJobDetails(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	})
 }
+
+func TestScheduler_Random(t *testing.T) {
+	testCases := []struct {
+		description string
+		min         int
+		max         int
+		expected    int
+	}{
+		{
+			description: "assign check",
+			min:         5,
+			max:         7,
+			expected:    6,
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			job, _ := s.Months(int(time.January), int(time.December)).Do(func() {})
+			assert.Equal(t, c.expected, job.interval)
+		})
+	}
+}
