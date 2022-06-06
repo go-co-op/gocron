@@ -63,7 +63,7 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	e.stop()
 	wg.Wait()
 
-	state := <-panicHandled:
+	state := <-panicHandled
 	assert.Equal(t, state, true)
 
 }
