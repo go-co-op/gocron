@@ -63,9 +63,7 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	e.stop()
 	wg.Wait()
 
-	select {
-	case state := <-panicHandled:
-		assert.Equal(t, state, true)
-	}
+	state := <-panicHandled:
+	assert.Equal(t, state, true)
 
 }
