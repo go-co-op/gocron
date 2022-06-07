@@ -78,6 +78,31 @@ func TestScheduler_Every_InvalidInterval(t *testing.T) {
 
 }
 
+func TestScheduler_EveryRandom(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	semaphore := make(chan bool)
+
+	j, err := s.EveryRandom(1, 2).Seconds().Do(func() {
+		semaphore <- true
+	})
+	require.NoError(t, err)
+	assert.True(t, j.randomizeInterval)
+
+	s.StartAsync()
+
+	var counter int
+
+	now := time.Now()
+	for time.Now().Before(now.Add(2 * time.Second)) {
+		if <-semaphore {
+			counter++
+		}
+	}
+	s.Stop()
+	assert.LessOrEqual(t, counter, 3)
+	assert.GreaterOrEqual(t, counter, 1)
+}
+
 func TestScheduler_Every(t *testing.T) {
 	t.Run("time.Duration", func(t *testing.T) {
 		s := NewScheduler(time.UTC)

@@ -291,6 +291,18 @@ func ExampleScheduler_Every() {
 	s.StartAsync()
 }
 
+func ExampleScheduler_EveryRandom() {
+	s := gocron.NewScheduler(time.UTC)
+
+	// every 1 - 5 seconds randomly
+	_, _ = s.EveryRandom(1, 5).Seconds().Do(task)
+	
+	// every 5 - 10 hours randomly
+	_, _ = s.EveryRandom(5, 10).Hours().Do(task)
+
+	s.StartAsync()
+}
+
 func ExampleScheduler_Friday() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every(1).Day().Friday().Do(task)
