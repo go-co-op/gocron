@@ -296,7 +296,7 @@ func ExampleScheduler_EveryRandom() {
 
 	// every 1 - 5 seconds randomly
 	_, _ = s.EveryRandom(1, 5).Seconds().Do(task)
-	
+
 	// every 5 - 10 hours randomly
 	_, _ = s.EveryRandom(5, 10).Hours().Do(task)
 

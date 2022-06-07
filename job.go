@@ -135,15 +135,15 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 }
 
 func (j *Job) setRandomInterval(a, b int) {
-	j.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	j.random.rand = rand.New(rand.NewSource(time.Now().UnixNano())) // nolint
 
-	j.randomizeInterval = true
+	j.random.randomizeInterval = true
 	if a < b {
-		j.randomIntervalRange[0] = a
-		j.randomIntervalRange[1] = b + 1
+		j.random.randomIntervalRange[0] = a
+		j.random.randomIntervalRange[1] = b + 1
 	} else {
-		j.randomIntervalRange[0] = b
-		j.randomIntervalRange[1] = a + 1
+		j.random.randomIntervalRange[0] = b
+		j.random.randomIntervalRange[1] = a + 1
 	}
 }
 
