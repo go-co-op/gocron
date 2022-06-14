@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,8 @@ import (
 type Job struct {
 	mu *jobMutex
 	jobFunction
-	interval          int             // pause interval * unit between runs
+	interval          int             // interval * unit between runs
+	random                            // details for randomness
 	duration          time.Duration   // time duration between runs
 	unit              schedulingUnit  // time units, e.g. 'minutes', 'hours'...
 	startsImmediately bool            // if the Job should run upon scheduler start
@@ -32,6 +34,12 @@ type Job struct {
 	timer             *time.Timer     // handles running tasks at specific time
 	cronSchedule      cron.Schedule   // stores the schedule when a task uses cron
 	runWithDetails    bool            // when true the job is passed as the last arg of the jobFunc
+}
+
+type random struct {
+	rand                *rand.Rand
+	randomizeInterval   bool   // whether the interval is random
+	randomIntervalRange [2]int // random interval range
 }
 
 type jobFunction struct {
@@ -124,6 +132,31 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		job.SingletonMode()
 	}
 	return job
+}
+
+func (j *Job) setRandomInterval(a, b int) {
+	j.random.rand = rand.New(rand.NewSource(time.Now().UnixNano())) // nolint
+
+	j.random.randomizeInterval = true
+	if a < b {
+		j.random.randomIntervalRange[0] = a
+		j.random.randomIntervalRange[1] = b + 1
+	} else {
+		j.random.randomIntervalRange[0] = b
+		j.random.randomIntervalRange[1] = a + 1
+	}
+}
+
+func (j *Job) getRandomInterval() int {
+	randNum := j.rand.Intn(j.randomIntervalRange[1] - j.randomIntervalRange[0])
+	return j.randomIntervalRange[0] + randNum
+}
+
+func (j *Job) getInterval() int {
+	if j.randomizeInterval {
+		return j.getRandomInterval()
+	}
+	return j.interval
 }
 
 func (j *Job) neverRan() bool {
