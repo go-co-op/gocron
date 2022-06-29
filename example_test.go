@@ -674,8 +674,20 @@ func ExampleScheduler_Stop() {
 	s.StartAsync()
 	s.Stop()
 	fmt.Println(s.IsRunning())
+
+	s = gocron.NewScheduler(time.UTC)
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		s.Stop()
+	}()
+
+	s.StartBlocking()
+	fmt.Println(".Stop() stops the blocking start")
+
 	// Output:
 	// false
+	// .Stop() stops the blocking start
 }
 
 func ExampleScheduler_Sunday() {

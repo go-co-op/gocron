@@ -52,7 +52,7 @@ func (e *executor) start() {
 
 				if panicHandler != nil {
 					defer func() {
-						if r := recover(); r != nil {
+						if r := recover(); r != interface{}(nil) {
 							panicHandler(f.name, r)
 						}
 					}()
