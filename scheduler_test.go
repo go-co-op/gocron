@@ -854,6 +854,20 @@ func TestScheduler_Stop(t *testing.T) {
 
 		assert.EqualValues(t, 1, atomic.LoadInt32(&i))
 	})
+	t.Run("stops a running scheduler calling .Stop()", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		go func() {
+			time.Sleep(1 * time.Second)
+			assert.True(t, s.IsRunning())
+			s.Stop()
+			time.Sleep(100 * time.Millisecond) // wait for stop goroutine to catch up
+		}()
+
+		s.StartBlocking()
+		log.Println(".Stop() stops the blocking start")
+		assert.False(t, s.IsRunning())
+	})
 }
 
 func TestScheduler_StartAt(t *testing.T) {
