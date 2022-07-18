@@ -2,9 +2,9 @@ package gocron
 
 import "time"
 
-var _ timeWrapper = (*trueTime)(nil)
+var _ TimeWrapper = (*trueTime)(nil)
 
-type timeWrapper interface {
+type TimeWrapper interface {
 	Now(*time.Location) time.Time
 	Unix(int64, int64) time.Time
 	Sleep(time.Duration)

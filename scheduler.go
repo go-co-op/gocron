@@ -26,7 +26,7 @@ type Scheduler struct {
 	runningMutex  sync.RWMutex
 	running       bool // represents if the scheduler is running at the moment or not
 
-	time     timeWrapper // wrapper around time.Time
+	time     TimeWrapper // wrapper around time.Time
 	executor *executor   // executes jobs passed via chan
 
 	tags sync.Map // for storing tags when unique tags is set
@@ -52,6 +52,20 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		location:   loc,
 		running:    false,
 		time:       &trueTime{},
+		executor:   &executor,
+		tagsUnique: false,
+		stopChan:   make(chan struct{}, 1),
+	}
+}
+
+// NewSchedulerCustomTime creates a new Scheduler using a custom time provider overriding the system time
+func NewSchedulerCustomTime(loc *time.Location, tw TimeWrapper) *Scheduler {
+	executor := newExecutor()
+	return &Scheduler{
+		jobs:       make([]*Job, 0),
+		location:   loc,
+		running:    false,
+		time:       tw,
 		executor:   &executor,
 		tagsUnique: false,
 		stopChan:   make(chan struct{}, 1),
