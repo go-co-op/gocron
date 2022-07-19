@@ -532,7 +532,7 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 
-	job = s.runJobWithDetails(job)
+	job = s.addJobDetails(job)
 	if job.error != nil {
 		// delete the job from the scheduler as this job
 		// cannot be executed
@@ -546,7 +546,7 @@ func (s *Scheduler) run(job *Job) {
 	job.incrementRunCount()
 }
 
-func (s *Scheduler) runJobWithDetails(job *Job) *Job {
+func (s *Scheduler) addJobDetails(job *Job) *Job {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
