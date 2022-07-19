@@ -397,7 +397,6 @@ func (j *Job) SingletonMode() {
 	defer j.mu.Unlock()
 	j.runConfig.mode = singletonMode
 	j.jobFunction.limiter = &singleflight.Group{}
-
 }
 
 // shouldRun evaluates if this job should run again
@@ -410,10 +409,14 @@ func (j *Job) shouldRun() bool {
 
 // LastRun returns the time the job was run last
 func (j *Job) LastRun() time.Time {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.lastRun
 }
 
 func (j *Job) setLastRun(t time.Time) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.lastRun = t
 }
 
@@ -432,7 +435,15 @@ func (j *Job) setNextRun(t time.Time) {
 
 // RunCount returns the number of time the job ran so far
 func (j *Job) RunCount() int {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.runCount
+}
+
+func (j *Job) incrementRunCount() {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.runCount++
 }
 
 func (j *Job) stop() {
