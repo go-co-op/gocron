@@ -79,7 +79,7 @@ func (s *Scheduler) StartAsync() {
 	}
 }
 
-//start starts the scheduler, scheduling and running jobs
+// start starts the scheduler, scheduling and running jobs
 func (s *Scheduler) start() {
 	go s.executor.start()
 	s.setRunning(true)
@@ -342,7 +342,6 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 }
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) nextRun {
-
 	if job.getInterval() == 1 {
 		lastRunDayPlusJobAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime(lastRun))
 
@@ -533,6 +532,21 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 
+	job = s.addJobDetails(job)
+	if job.error != nil {
+		// delete the job from the scheduler as this job
+		// cannot be executed
+		s.RemoveByReference(job)
+		return
+		// return job.error
+	}
+
+	s.executor.jobFunctions <- job.jobFunction.copy()
+	job.setLastRun(s.now())
+	job.incrementRunCount()
+}
+
+func (s *Scheduler) addJobDetails(job *Job) *Job {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
@@ -544,13 +558,11 @@ func (s *Scheduler) run(job *Job) {
 			job.parameters[job.parametersLen] = job.copy()
 		default:
 			// something is really wrong and we should never get here
-			return
+			job.error = wrapOrError(job.error, ErrInvalidFunctionParameters)
 		}
 	}
 
-	s.executor.jobFunctions <- job.jobFunction.copy()
-	job.setLastRun(s.now())
-	job.runCount++
+	return job
 }
 
 func (s *Scheduler) runContinuous(job *Job) {
