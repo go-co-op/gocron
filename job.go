@@ -160,7 +160,8 @@ func (j *Job) getInterval() int {
 }
 
 func (j *Job) neverRan() bool {
-	return j.lastRun.IsZero()
+	jobLastRun := j.LastRun()
+	return jobLastRun.IsZero()
 }
 
 func (j *Job) getStartsImmediately() bool {
@@ -415,8 +416,6 @@ func (j *Job) LastRun() time.Time {
 }
 
 func (j *Job) setLastRun(t time.Time) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
 	j.lastRun = t
 }
 
@@ -435,15 +434,7 @@ func (j *Job) setNextRun(t time.Time) {
 
 // RunCount returns the number of time the job ran so far
 func (j *Job) RunCount() int {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
 	return j.runCount
-}
-
-func (j *Job) incrementRunCount() {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	j.runCount++
 }
 
 func (j *Job) stop() {
