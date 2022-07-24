@@ -819,7 +819,8 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 	job := s.getCurrentJob()
 
 	jobUnit := job.getUnit()
-	if shouldRunAtSpecificTime(job) && (jobUnit <= hours || jobUnit >= duration) {
+	jobLastRun := job.LastRun()
+	if job.getAtTime(jobLastRun) != 0 && (jobUnit <= hours || jobUnit >= duration) {
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
