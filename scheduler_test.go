@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var _ timeWrapper = (*fakeTime)(nil)
+var _ TimeWrapper = (*fakeTime)(nil)
 
 type fakeTime struct {
 	onNow func(location *time.Location) time.Time

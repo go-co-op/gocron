@@ -245,6 +245,31 @@ func ExampleScheduler_CronWithSeconds() {
 	_, _ = s.CronWithSeconds("0-30 * * * * *").Do(task) // every second 0-30
 }
 
+func ExampleScheduler_CustomTime() {
+	// Implement your own custom time struct
+	//
+	// type myCustomTime struct{}
+	//
+	// var _ gocron.TimeWrapper = (*myCustomTime)(nil)
+	//
+	// func (m myCustomTime) Now(loc *time.Location) time.Time {
+	//	 panic("implement me")
+	// }
+	//
+	// func (m myCustomTime) Sleep(duration time.Duration) {
+	//	 panic("implement me")
+	// }
+	//
+	// func (m myCustomTime) Unix(sec int64, nsec int64) time.Time {
+	//	 panic("implement me")
+	// }
+	//
+	// mct := myCustomTime{}
+	//
+	// s := gocron.NewScheduler(time.UTC)
+	// s.CustomTime(mct)
+}
+
 func ExampleScheduler_Day() {
 	s := gocron.NewScheduler(time.UTC)
 

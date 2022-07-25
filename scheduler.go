@@ -26,7 +26,7 @@ type Scheduler struct {
 	runningMutex  sync.RWMutex
 	running       bool // represents if the scheduler is running at the moment or not
 
-	time     timeWrapper // wrapper around time.Time
+	time     TimeWrapper // wrapper around time.Time
 	executor *executor   // executes jobs passed via chan
 
 	tags sync.Map // for storing tags when unique tags is set
@@ -1282,4 +1282,11 @@ func (s *Scheduler) StartImmediately() *Scheduler {
 	job := s.getCurrentJob()
 	job.startsImmediately = true
 	return s
+}
+
+// CustomTime takes an in a struct that implements the TimeWrapper interface
+// allowing the caller to mock the time used by the scheduler. This is useful
+// for tests relying on gocron.
+func (s *Scheduler) CustomTime(customTimeWrapper TimeWrapper) {
+	s.time = customTimeWrapper
 }
