@@ -403,7 +403,8 @@ func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 }
 
 func shouldRunAtSpecificTime(job *Job) bool {
-	return job.getAtTime(job.lastRun) != 0
+	jobLastRun := job.LastRun()
+	return job.getAtTime(jobLastRun) != 0
 }
 
 func (s *Scheduler) remainingDaysToWeekday(lastRun time.Time, job *Job) int {
@@ -532,21 +533,6 @@ func (s *Scheduler) run(job *Job) {
 		return
 	}
 
-	job = s.addJobDetails(job)
-	if job.error != nil {
-		// delete the job from the scheduler as this job
-		// cannot be executed
-		s.RemoveByReference(job)
-		return
-		// return job.error
-	}
-
-	s.executor.jobFunctions <- job.jobFunction.copy()
-	job.setLastRun(s.now())
-	job.incrementRunCount()
-}
-
-func (s *Scheduler) addJobDetails(job *Job) *Job {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 
@@ -559,10 +545,13 @@ func (s *Scheduler) addJobDetails(job *Job) *Job {
 		default:
 			// something is really wrong and we should never get here
 			job.error = wrapOrError(job.error, ErrInvalidFunctionParameters)
+			return
 		}
 	}
 
-	return job
+	s.executor.jobFunctions <- job.jobFunction.copy()
+	job.setLastRun(s.now())
+	job.runCount++
 }
 
 func (s *Scheduler) runContinuous(job *Job) {
@@ -830,7 +819,8 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 	job := s.getCurrentJob()
 
 	jobUnit := job.getUnit()
-	if job.getAtTime(job.lastRun) != 0 && (jobUnit <= hours || jobUnit >= duration) {
+	jobLastRun := job.LastRun()
+	if job.getAtTime(jobLastRun) != 0 && (jobUnit <= hours || jobUnit >= duration) {
 		job.error = wrapOrError(job.error, ErrAtTimeNotSupported)
 	}
 
