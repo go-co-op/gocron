@@ -569,7 +569,7 @@ func (s *Scheduler) runContinuous(job *Job) {
 	job.setTimer(time.AfterFunc(next.duration, func() {
 		if !next.dateTime.IsZero() {
 			for {
-				if time.Now().Unix() >= next.dateTime.Unix() {
+				if s.now().Unix() >= next.dateTime.Unix() {
 					break
 				}
 			}
