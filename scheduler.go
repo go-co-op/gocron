@@ -569,9 +569,11 @@ func (s *Scheduler) runContinuous(job *Job) {
 	job.setTimer(time.AfterFunc(next.duration, func() {
 		if !next.dateTime.IsZero() {
 			for {
-				if s.now().Unix() >= next.dateTime.Unix() {
+				n := s.now().UnixNano() - next.dateTime.UnixNano()
+				if n >= 0 {
 					break
 				}
+				s.time.Sleep(time.Duration(n))
 			}
 		}
 		s.runContinuous(job)
