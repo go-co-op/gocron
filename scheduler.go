@@ -813,8 +813,15 @@ func (s *Scheduler) Stop() {
 
 func (s *Scheduler) stop() {
 	s.setRunning(false)
+	s.stopJobs(s.jobs)
 	s.executor.stop()
 	s.stopChan <- struct{}{}
+}
+
+func (s *Scheduler) stopJobs(jobs []*Job) {
+	for _, job := range jobs {
+		job.stop()
+	}
 }
 
 func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, error) {
