@@ -37,7 +37,7 @@ type Scheduler struct {
 	singletonMode   bool // defaults all jobs to use SingletonMode()
 	jobCreated      bool // so the scheduler knows a job was created prior to calling Every or Cron
 
-	stopChan chan struct{} // stops the scheduler
+	startBlockingStopChan chan struct{} // stops the scheduler
 }
 
 // days in a week
@@ -54,7 +54,6 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		time:       &trueTime{},
 		executor:   &executor,
 		tagsUnique: false,
-		stopChan:   make(chan struct{}, 1),
 	}
 }
 
@@ -69,7 +68,8 @@ func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
 // This blocking method can be stopped with Stop() from a separate goroutine.
 func (s *Scheduler) StartBlocking() {
 	s.StartAsync()
-	<-s.stopChan
+	s.startBlockingStopChan = make(chan struct{}, 1)
+	<-s.startBlockingStopChan
 }
 
 // StartAsync starts all jobs without blocking the current thread
@@ -815,7 +815,9 @@ func (s *Scheduler) stop() {
 	s.setRunning(false)
 	s.stopJobs(s.jobs)
 	s.executor.stop()
-	s.stopChan <- struct{}{}
+	if s.startBlockingStopChan != nil {
+		s.startBlockingStopChan <- struct{}{}
+	}
 }
 
 func (s *Scheduler) stopJobs(jobs []*Job) {
