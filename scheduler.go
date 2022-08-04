@@ -175,7 +175,6 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 			job.startAtTime = job.startAtTime.Add(duration)
 			if job.startAtTime.Before(now) {
 				diff := now.Sub(job.startAtTime)
-				duration := s.durationToNextRun(job.startAtTime, job).duration
 				count := diff / duration
 				if diff%duration != 0 {
 					count++
