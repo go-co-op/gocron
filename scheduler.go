@@ -37,7 +37,8 @@ type Scheduler struct {
 	singletonMode   bool // defaults all jobs to use SingletonMode()
 	jobCreated      bool // so the scheduler knows a job was created prior to calling Every or Cron
 
-	startBlockingStopChan chan struct{} // stops the scheduler
+	startBlockingStopChanMutex sync.Mutex
+	startBlockingStopChan      chan struct{} // stops the scheduler
 }
 
 // days in a week
@@ -68,7 +69,9 @@ func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
 // This blocking method can be stopped with Stop() from a separate goroutine.
 func (s *Scheduler) StartBlocking() {
 	s.StartAsync()
+	s.startBlockingStopChanMutex.Lock()
 	s.startBlockingStopChan = make(chan struct{}, 1)
+	s.startBlockingStopChanMutex.Unlock()
 	<-s.startBlockingStopChan
 }
 
@@ -815,9 +818,7 @@ func (s *Scheduler) stop() {
 	s.setRunning(false)
 	s.stopJobs(s.jobs)
 	s.executor.stop()
-	if s.startBlockingStopChan != nil {
-		s.startBlockingStopChan <- struct{}{}
-	}
+	s.StopBlockingChan()
 }
 
 func (s *Scheduler) stopJobs(jobs []*Job) {
@@ -1300,4 +1301,12 @@ func (s *Scheduler) StartImmediately() *Scheduler {
 // for tests relying on gocron.
 func (s *Scheduler) CustomTime(customTimeWrapper TimeWrapper) {
 	s.time = customTimeWrapper
+}
+
+func (s *Scheduler) StopBlockingChan() {
+	s.startBlockingStopChanMutex.Lock()
+	if s.startBlockingStopChan != nil {
+		s.startBlockingStopChan <- struct{}{}
+	}
+	s.startBlockingStopChanMutex.Unlock()
 }
