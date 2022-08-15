@@ -1841,7 +1841,7 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	require.NoError(t, err)
 	s.StartAsync()
 
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(1050 * time.Millisecond)
 	s.Stop()
 
 	counterMutex.RLock()
