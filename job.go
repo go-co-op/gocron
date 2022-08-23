@@ -434,6 +434,8 @@ func (j *Job) setNextRun(t time.Time) {
 
 // RunCount returns the number of time the job ran so far
 func (j *Job) RunCount() int {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	return j.runCount
 }
 
