@@ -27,7 +27,8 @@ type Scheduler struct {
 	running       bool // represents if the scheduler is running at the moment or not
 
 	time     TimeWrapper // wrapper around time.Time
-	executor *executor   // executes jobs passed via chan
+	timer    func(d time.Duration, f func()) *time.Timer
+	executor *executor // executes jobs passed via chan
 
 	tags sync.Map // for storing tags when unique tags is set
 
@@ -55,6 +56,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		time:       &trueTime{},
 		executor:   &executor,
 		tagsUnique: false,
+		timer:      afterFunc,
 	}
 }
 
@@ -569,7 +571,7 @@ func (s *Scheduler) runContinuous(job *Job) {
 		s.run(job)
 	}
 
-	job.setTimer(time.AfterFunc(next.duration, func() {
+	job.setTimer(s.timer(next.duration, func() {
 		if !next.dateTime.IsZero() {
 			for {
 				n := s.now().UnixNano() - next.dateTime.UnixNano()
@@ -1301,6 +1303,13 @@ func (s *Scheduler) StartImmediately() *Scheduler {
 // for tests relying on gocron.
 func (s *Scheduler) CustomTime(customTimeWrapper TimeWrapper) {
 	s.time = customTimeWrapper
+}
+
+// CustomTimer takes in a function that mirrors the time.AfterFunc
+// This is used to mock the time.AfterFunc function used by the scheduler
+// for testing long intervals in a short amount of time.
+func (s *Scheduler) CustomTimer(customTimer func(d time.Duration, f func()) *time.Timer) {
+	s.timer = customTimer
 }
 
 func (s *Scheduler) StopBlockingChan() {

@@ -25,3 +25,9 @@ func (t *trueTime) Unix(sec int64, nsec int64) time.Time {
 func (t *trueTime) Sleep(d time.Duration) {
 	time.Sleep(d)
 }
+
+// afterFunc proxies the time.AfterFunc function.
+// This allows it to be mocked for testing.
+func afterFunc(d time.Duration, f func()) *time.Timer {
+	return time.AfterFunc(d, f)
+}

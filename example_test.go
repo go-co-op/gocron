@@ -270,6 +270,17 @@ func ExampleScheduler_CustomTime() {
 	// s.CustomTime(mct)
 }
 
+func ExampleScheduler_CustomTimer() {
+	s := gocron.NewScheduler(time.UTC)
+	s.CustomTimer(func(d time.Duration, f func()) *time.Timer {
+		// force all jobs to run every second instead of their interval
+		d = time.Second
+		return time.AfterFunc(d, f)
+	})
+	// this job will run every 1 second
+	_, _ = s.Every("1m").Do(task)
+}
+
 func ExampleScheduler_Day() {
 	s := gocron.NewScheduler(time.UTC)
 
