@@ -3,7 +3,6 @@
 // An in-process scheduler for periodic jobs that uses the builder pattern
 // for configuration. gocron lets you run Golang functions periodically
 // at pre-determined intervals using a simple, human-friendly syntax.
-//
 package gocron
 
 import (
