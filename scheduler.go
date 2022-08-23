@@ -578,7 +578,7 @@ func (s *Scheduler) runContinuous(job *Job) {
 
 	nextRun := next.dateTime.Sub(s.now())
 	if nextRun < 0 {
-		time.Sleep(nextRun.Abs())
+		time.Sleep(absDuration(nextRun))
 		shouldRun, next := s.scheduleNextRun(job)
 		if !shouldRun {
 			return
