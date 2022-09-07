@@ -170,6 +170,8 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 		return false, nextRun{}
 	}
 
+	lastRun := now
+
 	if job.neverRan() {
 		// Increment startAtTime to the future
 		if !job.startAtTime.IsZero() && job.startAtTime.Before(now) {
@@ -185,6 +187,8 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 				job.startAtTime = job.startAtTime.Add(duration * count)
 			}
 		}
+	} else {
+		lastRun = job.LastRun()
 	}
 
 	if !job.shouldRun() {
@@ -192,10 +196,12 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 		return false, nextRun{}
 	}
 
-	next := s.durationToNextRun(now, job)
+	next := s.durationToNextRun(lastRun, job)
 
+	job.setLastRun(job.NextRun())
 	if next.dateTime.IsZero() {
-		job.setNextRun(now.Add(next.duration))
+		next.dateTime = lastRun.Add(next.duration)
+		job.setNextRun(next.dateTime)
 	} else {
 		job.setNextRun(next.dateTime)
 	}
@@ -555,7 +561,6 @@ func (s *Scheduler) run(job *Job) {
 	}
 
 	s.executor.jobFunctions <- job.jobFunction.copy()
-	job.setLastRun(s.now())
 	job.runCount++
 }
 
@@ -571,7 +576,17 @@ func (s *Scheduler) runContinuous(job *Job) {
 		s.run(job)
 	}
 
-	job.setTimer(s.timer(next.duration, func() {
+	nextRun := next.dateTime.Sub(s.now())
+	if nextRun < 0 {
+		time.Sleep(absDuration(nextRun))
+		shouldRun, next := s.scheduleNextRun(job)
+		if !shouldRun {
+			return
+		}
+		nextRun = next.dateTime.Sub(s.now())
+	}
+
+	job.setTimer(s.timer(nextRun, func() {
 		if !next.dateTime.IsZero() {
 			for {
 				n := s.now().UnixNano() - next.dateTime.UnixNano()
