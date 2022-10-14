@@ -6,14 +6,25 @@ on:
     branches:
       - main
 
-name: formatting
+name: golangci-lint
 jobs:
-  check-sorted:
-    name: check sorted
+  golangci:
+    strategy:
+      matrix:
+        go-version:
+          - 1.19
+    name: lint and test
     runs-on: ubuntu-latest
     steps:
-      - name: checkout code
+      - name: Checkout code
         uses: actions/checkout@v3
-      - name: verify example_test.go
-        run: |
-          grep "^func " example_test.go | sort -C
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3.2.0
+        with:
+          version: v1.48.0
+      - name: Install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: test
+        run: make test
