@@ -2,7 +2,6 @@ package gocron
 
 import (
 	"context"
-	"log"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
