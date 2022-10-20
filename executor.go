@@ -67,18 +67,17 @@ func (e *executor) start() {
 						case RescheduleMode:
 							return
 						case WaitMode:
-							for {
-								select {
-								case <-stopCtx.Done():
-									return
-								case <-f.ctx.Done():
-									return
-								default:
-								}
+							select {
+							case <-stopCtx.Done():
+								return
+							case <-f.ctx.Done():
+								return
+							default:
+							}
 
-								if e.maxRunningJobs.TryAcquire(1) {
-									break
-								}
+							if err := e.maxRunningJobs.Acquire(f.ctx, 1); err != nil {
+								break
+
 							}
 						}
 					}
