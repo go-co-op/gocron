@@ -47,6 +47,8 @@ func (e *executor) start() {
 		case f := <-e.jobFunctions:
 			runningJobsWg.Add(1)
 			go func() {
+				defer runningJobsWg.Done()
+
 				panicHandlerMutex.RLock()
 				defer panicHandlerMutex.RUnlock()
 
@@ -57,8 +59,6 @@ func (e *executor) start() {
 						}
 					}()
 				}
-
-				defer runningJobsWg.Done()
 
 				if e.maxRunningJobs != nil {
 					if !e.maxRunningJobs.TryAcquire(1) {
