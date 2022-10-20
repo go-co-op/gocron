@@ -539,6 +539,13 @@ func (s *Scheduler) run(job *Job) {
 	}
 
 	job.mu.Lock()
+
+	if job.function == nil {
+		job.mu.Unlock()
+		s.Remove(job)
+		return
+	}
+
 	defer job.mu.Unlock()
 
 	if job.runWithDetails {

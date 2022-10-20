@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"golang.org/x/sync/semaphore"
@@ -47,6 +48,8 @@ func (e *executor) start() {
 		case f := <-e.jobFunctions:
 			runningJobsWg.Add(1)
 			go func() {
+				defer runningJobsWg.Done()
+
 				panicHandlerMutex.RLock()
 				defer panicHandlerMutex.RUnlock()
 
@@ -57,8 +60,6 @@ func (e *executor) start() {
 						}
 					}()
 				}
-
-				defer runningJobsWg.Done()
 
 				if e.maxRunningJobs != nil {
 					if !e.maxRunningJobs.TryAcquire(1) {
@@ -106,6 +107,7 @@ func (e *executor) start() {
 							return nil, nil
 						default:
 						}
+						log.Printf("executor jobFunction: %+v\n", f)
 						runJob()
 						return nil, nil
 					})
