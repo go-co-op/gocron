@@ -107,7 +107,6 @@ func (e *executor) start() {
 							return nil, nil
 						default:
 						}
-						log.Printf("executor jobFunction: %+v\n", f)
 						runJob()
 						return nil, nil
 					})
