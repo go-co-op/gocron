@@ -27,6 +27,7 @@ const (
 type executor struct {
 	jobFunctions   chan jobFunction
 	stopCh         chan struct{}
+	stoppedCh      chan struct{}
 	limitMode      limitMode
 	maxRunningJobs *semaphore.Weighted
 }
@@ -34,7 +35,8 @@ type executor struct {
 func newExecutor() executor {
 	return executor{
 		jobFunctions: make(chan jobFunction, 1),
-		stopCh:       make(chan struct{}, 1),
+		stopCh:       make(chan struct{}),
+		stoppedCh:    make(chan struct{}),
 	}
 }
 
@@ -113,13 +115,13 @@ func (e *executor) start() {
 		case <-e.stopCh:
 			cancel()
 			runningJobsWg.Wait()
-			e.stopCh <- struct{}{}
+			close(e.stoppedCh)
 			return
 		}
 	}
 }
 
 func (e *executor) stop() {
-	e.stopCh <- struct{}{}
-	<-e.stopCh
+	close(e.stopCh)
+	<-e.stoppedCh
 }
