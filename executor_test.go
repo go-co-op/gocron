@@ -26,12 +26,12 @@ func Test_ExecutorExecute(t *testing.T) {
 		runState:   &runState,
 	}
 
-	e.stop()
 	wg.Wait()
+	e.stop()
 }
 
 func Test_ExecutorPanicHandling(t *testing.T) {
-	panicHandled := make(chan bool)
+	panicHandled := make(chan bool, 1)
 
 	handler := func(jobName string, recoverData interface{}) {
 		fmt.Println("PanicHandler called:")
@@ -60,8 +60,8 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 		runState:   &runState,
 	}
 
-	e.stop()
 	wg.Wait()
+	e.stop()
 
 	state := <-panicHandled
 	assert.Equal(t, state, true)
