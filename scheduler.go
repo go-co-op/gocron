@@ -356,12 +356,6 @@ func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) nextRun {
 	if job.getInterval() == 1 {
 		lastRunDayPlusJobAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime(lastRun))
 
-		// handle occasional occurrence of job running to quickly / too early such that last run was within a second of now
-		lastRunUnix, nowUnix := job.LastRun().Unix(), s.now().Unix()
-		if lastRunUnix == nowUnix || lastRunUnix == nowUnix-1 || lastRunUnix == nowUnix+1 {
-			lastRun = lastRunDayPlusJobAtTime
-		}
-
 		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
 			return nextRun{duration: until(lastRun, lastRunDayPlusJobAtTime), dateTime: lastRunDayPlusJobAtTime}
 		}
