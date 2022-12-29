@@ -16,7 +16,7 @@ import (
 type limitMode int8
 
 // Scheduler struct stores a list of Jobs and the location of time used by the Scheduler,
-// and implements the sort.Interface{} for sorting Jobs, by the time of nextRun
+// and implements the sort. any for sorting Jobs, by the time of nextRun
 type Scheduler struct {
 	jobsMutex sync.RWMutex
 	jobs      []*Job
@@ -494,7 +494,7 @@ func (s *Scheduler) EveryRandom(lower, upper int) *Scheduler {
 // Interval can be an int, time.Duration or a string that
 // parses with time.ParseDuration().
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-func (s *Scheduler) Every(interval interface{}) *Scheduler {
+func (s *Scheduler) Every(interval any) *Scheduler {
 	job := s.newJob(0)
 	if s.updateJob || s.jobCreated {
 		job = s.getCurrentJob()
@@ -641,7 +641,7 @@ func (s *Scheduler) RunByTagWithDelay(tag string, d time.Duration) error {
 // it through gocron as https://pkg.go.dev/time#Timer.Stop explains.
 // The job function would need to have implemented a means of
 // stopping, e.g. using a context.WithCancel().
-func (s *Scheduler) Remove(job interface{}) {
+func (s *Scheduler) Remove(job any) {
 	fName := getFunctionName(job)
 	j := s.findJobByTaskName(fName)
 	s.removeJobsUniqueTags(j)
@@ -783,7 +783,7 @@ func (s *Scheduler) SingletonModeAll() {
 }
 
 // TaskPresent checks if specific job's function was added to the scheduler.
-func (s *Scheduler) TaskPresent(j interface{}) bool {
+func (s *Scheduler) TaskPresent(j any) bool {
 	for _, job := range s.Jobs() {
 		if job.name == getFunctionName(j) {
 			return true
@@ -817,7 +817,7 @@ func (s *Scheduler) Clear() {
 	s.setJobs(make([]*Job, 0))
 	// If unique tags was enabled, delete all the tags loaded in the tags sync.Map
 	if s.tagsUnique {
-		s.tags.Range(func(key interface{}, value interface{}) bool {
+		s.tags.Range(func(key any, value any) bool {
 			s.tags.Delete(key)
 			return true
 		})
@@ -845,7 +845,7 @@ func (s *Scheduler) stopJobs(jobs []*Job) {
 	}
 }
 
-func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, error) {
+func (s *Scheduler) doCommon(jobFun any, params ...any) (*Job, error) {
 	job := s.getCurrentJob()
 
 	jobUnit := job.getUnit()
@@ -912,7 +912,7 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 }
 
 // Do specifies the jobFunc that should be called every time the Job runs
-func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) {
+func (s *Scheduler) Do(jobFun any, params ...any) (*Job, error) {
 	return s.doCommon(jobFun, params...)
 }
 
@@ -920,7 +920,7 @@ func (s *Scheduler) Do(jobFun interface{}, params ...interface{}) (*Job, error) 
 // and additionally passes the details of the current job to the jobFunc.
 // The last argument of the function must be a gocron.Job that will be passed by
 // the scheduler when the function is called.
-func (s *Scheduler) DoWithJobDetails(jobFun interface{}, params ...interface{}) (*Job, error) {
+func (s *Scheduler) DoWithJobDetails(jobFun any, params ...any) (*Job, error) {
 	job := s.getCurrentJob()
 	job.runWithDetails = true
 	job.parametersLen = len(params)
@@ -929,7 +929,7 @@ func (s *Scheduler) DoWithJobDetails(jobFun interface{}, params ...interface{}) 
 
 // At schedules the Job at a specific time of day in the form "HH:MM:SS" or "HH:MM"
 // or time.Time (note that only the hours, minutes, seconds and nanos are used).
-func (s *Scheduler) At(i interface{}) *Scheduler {
+func (s *Scheduler) At(i any) *Scheduler {
 	job := s.getCurrentJob()
 
 	switch t := i.(type) {

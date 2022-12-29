@@ -22,7 +22,7 @@ func Test_ExecutorExecute(t *testing.T) {
 			assert.Equal(t, arg, "test")
 			wg.Done()
 		},
-		parameters: []interface{}{"test"},
+		parameters: []any{"test"},
 		runState:   &runState,
 	}
 
@@ -33,7 +33,7 @@ func Test_ExecutorExecute(t *testing.T) {
 func Test_ExecutorPanicHandling(t *testing.T) {
 	panicHandled := make(chan bool, 1)
 
-	handler := func(jobName string, recoverData interface{}) {
+	handler := func(jobName string, recoverData any) {
 		fmt.Println("PanicHandler called:")
 		fmt.Println("panic in " + jobName)
 		fmt.Println(recoverData)

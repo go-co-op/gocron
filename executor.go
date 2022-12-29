@@ -56,7 +56,7 @@ func (e *executor) start() {
 
 				if panicHandler != nil {
 					defer func() {
-						if r := recover(); r != interface{}(nil) {
+						if r := recover(); r != any(nil) {
 							panicHandler(f.name, r)
 						}
 					}()
@@ -99,7 +99,7 @@ func (e *executor) start() {
 				case defaultMode:
 					runJob()
 				case singletonMode:
-					_, _, _ = f.limiter.Do("main", func() (interface{}, error) {
+					_, _, _ = f.limiter.Do("main", func() (any, error) {
 						select {
 						case <-stopCtx.Done():
 							return nil, nil

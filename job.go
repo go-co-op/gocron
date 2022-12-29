@@ -44,10 +44,10 @@ type random struct {
 
 type jobFunction struct {
 	eventListeners                     // additional functions to allow run 'em during job performing
-	function       interface{}         // task's function
-	parameters     []interface{}       // task's function parameters
+	function       any                 // task's function
+	parameters     []any               // task's function parameters
 	parametersLen  int                 // length of the passed parameters
-	name           string              //nolint the function name to run
+	name           string              // nolint the function name to run
 	runConfig      runConfig           // configuration for how many times to run the job
 	limiter        *singleflight.Group // limits inflight runs of job to one
 	ctx            context.Context     // for cancellation
@@ -56,8 +56,8 @@ type jobFunction struct {
 }
 
 type eventListeners struct {
-	onBeforeJobExecution interface{} // performs before job executing
-	onAfterJobExecution  interface{} // performs after job executing
+	onBeforeJobExecution any // performs before job executing
+	onAfterJobExecution  any // performs after job executing
 }
 
 type jobMutex struct {
@@ -318,7 +318,7 @@ func (j *Job) Tags() []string {
 }
 
 // SetEventListeners accepts two functions that will be called, one before and one after the job is run
-func (j *Job) SetEventListeners(onBeforeJobExecution interface{}, onAfterJobExecution interface{}) {
+func (j *Job) SetEventListeners(onBeforeJobExecution any, onAfterJobExecution any) {
 	j.eventListeners = eventListeners{
 		onBeforeJobExecution: onBeforeJobExecution,
 		onAfterJobExecution:  onAfterJobExecution,

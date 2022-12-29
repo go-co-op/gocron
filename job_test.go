@@ -236,7 +236,7 @@ func TestJob_SetEventListeners(t *testing.T) {
 		)
 		wg.Add(1)
 		s := NewScheduler(time.UTC)
-		job, err := s.Tag("tag1").Every("1ms").Do(func() {
+		job, err := s.Tag("tag1").Every("100ms").Do(func() {
 			jobRanPassed = true
 		})
 		job.SetEventListeners(func() {
