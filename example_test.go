@@ -874,7 +874,7 @@ func ExampleScheduler_Weeks() {
 // ---------------------------------------------------------------------
 
 func ExampleSetPanicHandler() {
-	gocron.SetPanicHandler(func(jobName string, recoverData interface{}) {
+	gocron.SetPanicHandler(func(jobName string, _ any) {
 		fmt.Printf("Panic in job: %s", jobName)
 		fmt.Println("do something to handle the panic")
 	})

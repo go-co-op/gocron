@@ -57,7 +57,7 @@ func TestImmediateExecution(t *testing.T) {
 func TestScheduler_Every_InvalidInterval(t *testing.T) {
 	testCases := []struct {
 		description   string
-		interval      interface{}
+		interval      any
 		expectedError string
 	}{
 		{"zero", 0, ErrInvalidInterval.Error()},
@@ -271,27 +271,27 @@ func TestMultipleAtTimesDecoding(t *testing.T) {
 	exp := []time.Duration{_getHours(1), _getHours(3), _getHours(4), _getHours(7), _getHours(15)}
 	testCases := []struct {
 		name   string
-		params []interface{}
+		params []any
 		result []time.Duration
 	}{
 		{
 			name:   "multiple simple strings",
-			params: []interface{}{"03:00", "15:00", "01:00", "07:00", "04:00"},
+			params: []any{"03:00", "15:00", "01:00", "07:00", "04:00"},
 			result: exp,
 		},
 		{
 			name:   "single string separated by semicolons",
-			params: []interface{}{"03:00;15:00;01:00;07:00;04:00"},
+			params: []any{"03:00;15:00;01:00;07:00;04:00"},
 			result: exp,
 		},
 		{
 			name:   "interpolation of semicolons string, time.Time and simple string",
-			params: []interface{}{"03:00;15:00;01:00", time.Date(0, 0, 0, 7, 0, 0, 0, time.UTC), "04:00"},
+			params: []any{"03:00;15:00;01:00", time.Date(0, 0, 0, 7, 0, 0, 0, time.UTC), "04:00"},
 			result: exp,
 		},
 		{
 			name:   "repeated values on input don't get duplicated after decoding",
-			params: []interface{}{"03:00;15:00;01:00;07:00;04:00;01:00"},
+			params: []any{"03:00;15:00;01:00;07:00;04:00;01:00"},
 			result: exp,
 		},
 	}
@@ -773,7 +773,7 @@ func TestClearUnique(t *testing.T) {
 	// be stopped on s.Clear()
 	assert.Equal(t, 1, counter)
 
-	s.tags.Range(func(key, value interface{}) bool {
+	s.tags.Range(func(key, value any) bool {
 		assert.FailNow(t, "map should be empty")
 		return true
 	})
@@ -1177,7 +1177,7 @@ func TestRunJobsWithLimit(t *testing.T) {
 			require.LessOrEqual(t, counter, 1)
 		}
 
-		s.tags.Range(func(key, value interface{}) bool {
+		s.tags.Range(func(key, value any) bool {
 			assert.FailNow(t, "map should be empty")
 			return true
 		})
@@ -1535,10 +1535,10 @@ func TestScheduler_MultipleTagsChained(t *testing.T) {
 func TestScheduler_DoParameterValidation(t *testing.T) {
 	testCases := []struct {
 		description string
-		parameters  []interface{}
+		parameters  []any
 	}{
-		{"less than expected", []interface{}{"p1"}},
-		{"more than expected", []interface{}{"p1", "p2", "p3"}},
+		{"less than expected", []any{"p1"}},
+		{"more than expected", []any{"p1", "p2", "p3"}},
 	}
 
 	for _, tc := range testCases {
@@ -2195,15 +2195,15 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 func TestScheduler_DoWithJobDetails(t *testing.T) {
 	testCases := []struct {
 		description   string
-		jobFunc       interface{}
-		params        []interface{}
+		jobFunc       any
+		params        []any
 		expectedError string
 	}{
-		{"no error", func(foo, bar string, job Job) {}, []interface{}{"foo", "bar"}, ""},
-		{"too few params", func(foo, bar string, job Job) {}, []interface{}{"foo"}, ErrWrongParams.Error()},
-		{"too many params", func(foo, bar string, job Job) {}, []interface{}{"foo", "bar", "baz"}, ErrWrongParams.Error()},
-		{"jobFunc doesn't have Job param", func(foo, bar string) {}, []interface{}{"foo"}, ErrDoWithJobDetails.Error()},
-		{"jobFunc has Job param but not last param", func(job Job, foo, bar string) {}, []interface{}{"foo", "bar"}, ErrDoWithJobDetails.Error()},
+		{"no error", func(foo, bar string, job Job) {}, []any{"foo", "bar"}, ""},
+		{"too few params", func(foo, bar string, job Job) {}, []any{"foo"}, ErrWrongParams.Error()},
+		{"too many params", func(foo, bar string, job Job) {}, []any{"foo", "bar", "baz"}, ErrWrongParams.Error()},
+		{"jobFunc doesn't have Job param", func(foo, bar string) {}, []any{"foo"}, ErrDoWithJobDetails.Error()},
+		{"jobFunc has Job param but not last param", func(job Job, foo, bar string) {}, []any{"foo", "bar"}, ErrDoWithJobDetails.Error()},
 	}
 
 	for _, tc := range testCases {
