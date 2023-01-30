@@ -247,8 +247,8 @@ func TestJob_SetEventListeners(t *testing.T) {
 		})
 
 		s.StartAsync()
-		s.stop()
 		wg.Wait()
+		s.Stop()
 
 		require.NoError(t, err)
 		assert.True(t, jobRanPassed)
