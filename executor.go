@@ -102,8 +102,6 @@ func (e *executor) start() {
 					callJobFuncWithParams(f.function, f.parameters)
 					callJobFunc(f.eventListeners.onAfterJobExecution)
 					f.decrementRunState()
-
-					incJobCounter(getFunctionName(f.function))
 				}
 
 				switch f.runConfig.mode {
