@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -88,11 +89,21 @@ func (e *executor) start() {
 				}
 
 				runJob := func() {
+					startTime := time.Now()
+					defer func() {
+						observeJobLatency(
+							float64(time.Since(startTime).Milliseconds()),
+							getFunctionName(f.function),
+						)
+					}()
+
 					f.incrementRunState()
 					callJobFunc(f.eventListeners.onBeforeJobExecution)
 					callJobFuncWithParams(f.function, f.parameters)
 					callJobFunc(f.eventListeners.onAfterJobExecution)
 					f.decrementRunState()
+
+					incJobCounter(getFunctionName(f.function))
 				}
 
 				switch f.runConfig.mode {
