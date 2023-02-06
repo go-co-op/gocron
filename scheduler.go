@@ -42,6 +42,7 @@ type Scheduler struct {
 	startBlockingStopChan      chan struct{} // stops the scheduler
 
 	isTelemetryEnabled bool // flag to enable/disable metrics
+	telemetryShdName   string
 }
 
 // days in a week
@@ -1341,10 +1342,12 @@ func (s *Scheduler) StopBlockingChan() {
 	s.startBlockingStopChanMutex.Unlock()
 }
 
-// EnableTelemetry enables the collection of metrics for the scheduler
-func (s *Scheduler) EnableTelemetry() {
+// EnableTelemetry enables the collection of metrics for the scheduler. Takes
+// the name of the scheduler to set it as a metric label
+func (s *Scheduler) EnableTelemetry(schedulerName string) {
 	initTelemetry()
 	s.isTelemetryEnabled = true
+	s.telemetryShdName = schedulerName
 }
 
 func (s *Scheduler) observeJobLatency(jobName string, latency float64) {
@@ -1352,5 +1355,5 @@ func (s *Scheduler) observeJobLatency(jobName string, latency float64) {
 		return
 	}
 
-	observeJobLatency(latency, jobName)
+	observeJobLatency(latency, jobName, s.telemetryShdName)
 }

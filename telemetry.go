@@ -10,7 +10,7 @@ var (
 	jobLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "gocron_job_latency_milliseconds",
 		Help: "time taken to execute a job in milliseconds",
-	}, []string{"job_name"})
+	}, []string{"job_name", "scheduler_name"})
 
 	telemetryOnce sync.Once
 )
@@ -21,6 +21,6 @@ func initTelemetry() {
 	})
 }
 
-func observeJobLatency(latency float64, jobName string) {
-	jobLatency.WithLabelValues(jobName).Observe(latency)
+func observeJobLatency(latency float64, jobName, shdName string) {
+	jobLatency.WithLabelValues(jobName, shdName).Observe(latency)
 }
