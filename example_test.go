@@ -879,3 +879,16 @@ func ExampleSetPanicHandler() {
 		fmt.Println("do something to handle the panic")
 	})
 }
+
+// ---------------------------------------------------------------------
+// ---------------------Enable Telemetry--------------------------------
+// ---------------------------------------------------------------------
+
+func ExampleTelemetry() {
+	shd1 := gocron.NewScheduler(time.Local)
+	shd1.Every(1).Second().Do(func() {})
+
+	// custom latency buckets
+	gocron.LatencyBuckets = []float64{0.1, 0.5, 1, 2, 5, 10, 20, 50, 100}
+	shd1.EnableTelemetry("prod")
+}
