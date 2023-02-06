@@ -9,7 +9,7 @@ import (
 )
 
 func Test_ExecutorExecute(t *testing.T) {
-	e := newExecutor()
+	e := newExecutor(&Scheduler{})
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -42,7 +42,7 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 
 	SetPanicHandler(handler)
 
-	e := newExecutor()
+	e := newExecutor(&Scheduler{})
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

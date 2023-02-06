@@ -102,6 +102,32 @@ s.RunByTag("tag")
 // both jobs will run
 ```
 
+## Enable Telemetry
+
+You can optionally enable telemetry to emit the job execution metrics in open-metrics format
+
+1. Start a prometheus http handler if your application isn't already running one
+
+```
+go func() {
+  http.Handle("/metrics", promhttp.Handler())
+  log.Fatal(http.ListenAndServe(":9090", nil))
+}()
+```
+
+2. Enable metrics on a per scheduler basis
+
+```
+shd := gocron.NewScheduler(time.Local)
+shd.Every(1).Second().Do(job)
+shd.EnableTelemetry()
+shd.StartBlocking()
+```
+
+3. Now your application will be emitting the metrics on the `/metrics`
+   endpoint. You can configure any prometheus compatible metric exporter to
+   scrape these metrics and `remote_write` them to your metric storage
+
 ## FAQ
 
 - Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?

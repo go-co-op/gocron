@@ -40,6 +40,8 @@ type Scheduler struct {
 
 	startBlockingStopChanMutex sync.Mutex
 	startBlockingStopChan      chan struct{} // stops the scheduler
+
+	isTelemetryEnabled bool // flag to enable/disable metrics
 }
 
 // days in a week
@@ -47,17 +49,20 @@ const allWeekDays = 7
 
 // NewScheduler creates a new Scheduler
 func NewScheduler(loc *time.Location) *Scheduler {
-	executor := newExecutor()
 
-	return &Scheduler{
+	shd := &Scheduler{
 		jobs:       make([]*Job, 0),
 		location:   loc,
 		running:    false,
 		time:       &trueTime{},
-		executor:   &executor,
 		tagsUnique: false,
 		timer:      afterFunc,
 	}
+
+	executor := newExecutor(shd)
+	shd.executor = &executor
+
+	return shd
 }
 
 // SetMaxConcurrentJobs limits how many jobs can be running at the same time.
@@ -1334,4 +1339,18 @@ func (s *Scheduler) StopBlockingChan() {
 		s.startBlockingStopChan <- struct{}{}
 	}
 	s.startBlockingStopChanMutex.Unlock()
+}
+
+// EnableTelemetry enables the collection of metrics for the scheduler
+func (s *Scheduler) EnableTelemetry() {
+	initTelemetry()
+	s.isTelemetryEnabled = true
+}
+
+func (s *Scheduler) observeJobLatency(jobName string, latency float64) {
+	if !s.isTelemetryEnabled {
+		return
+	}
+
+	observeJobLatency(latency, jobName)
 }

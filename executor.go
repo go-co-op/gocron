@@ -31,13 +31,15 @@ type executor struct {
 	stoppedCh      chan struct{}
 	limitMode      limitMode
 	maxRunningJobs *semaphore.Weighted
+	scheduler      *Scheduler // a backlink to the scheduler
 }
 
-func newExecutor() executor {
+func newExecutor(shd *Scheduler) executor {
 	return executor{
 		jobFunctions: make(chan jobFunction, 1),
 		stopCh:       make(chan struct{}),
 		stoppedCh:    make(chan struct{}),
+		scheduler:    shd,
 	}
 }
 
@@ -91,9 +93,9 @@ func (e *executor) start() {
 				runJob := func() {
 					startTime := time.Now()
 					defer func() {
-						observeJobLatency(
-							float64(time.Since(startTime).Milliseconds()),
+						e.scheduler.observeJobLatency(
 							getFunctionName(f.function),
+							float64(time.Since(startTime).Milliseconds()),
 						)
 					}()
 
