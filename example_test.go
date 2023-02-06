@@ -884,7 +884,7 @@ func ExampleSetPanicHandler() {
 // ---------------------Enable Telemetry--------------------------------
 // ---------------------------------------------------------------------
 
-func ExampleEnableTelemetry() {
+func ExampleScheduler_EnableTelemetry() {
 	shd1 := gocron.NewScheduler(time.Local)
 	shd1.Every(1).Second().Do(func() {})
 
