@@ -253,12 +253,11 @@ func TestAt(t *testing.T) {
 
 		select {
 		case <-time.After(1 * time.Second):
-			s.stop()
 			log.Println(now.Add(time.Minute))
 			log.Println(dayJob.nextRun)
 			assert.Equal(t, now.Add(1*time.Minute), dayJob.nextRun)
-		case <-semaphore:
 			s.stop()
+		case <-semaphore:
 			t.Fatal("job ran even though scheduled in future")
 		}
 	})
