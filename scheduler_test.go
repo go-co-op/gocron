@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
 var _ TimeWrapper = (*fakeTime)(nil)
@@ -48,9 +49,11 @@ func TestImmediateExecution(t *testing.T) {
 	s.StartAsync()
 	select {
 	case <-time.After(1 * time.Second):
+		s.stop()
 		t.Fatal("job did not run immediately")
 	case <-semaphore:
 		// test passed
+		s.stop()
 	}
 }
 
@@ -229,6 +232,8 @@ func TestScheduled(t *testing.T) {
 
 func TestAt(t *testing.T) {
 	t.Run("job scheduled for future hasn't run yet", func(t *testing.T) {
+		defer goleak.VerifyNone(t)
+
 		ft := fakeTime{onNow: func(l *time.Location) time.Time {
 			return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
 		}}
@@ -252,8 +257,10 @@ func TestAt(t *testing.T) {
 		case <-time.After(1 * time.Second):
 			log.Println(now.Add(time.Minute))
 			log.Println(dayJob.nextRun)
+			s.stop()
 			assert.Equal(t, now.Add(1*time.Minute), dayJob.nextRun)
 		case <-semaphore:
+			s.stop()
 			t.Fatal("job ran even though scheduled in future")
 		}
 	})
