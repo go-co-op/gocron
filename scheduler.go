@@ -1174,11 +1174,17 @@ func (s *Scheduler) Sunday() *Scheduler {
 }
 
 func (s *Scheduler) getCurrentJob() *Job {
+
 	if len(s.Jobs()) == 0 {
 		s.setJobs([]*Job{s.newJob(0)})
 		s.jobCreated = true
 	}
-	return s.Jobs()[len(s.Jobs())-1]
+
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
+
+	return s.jobs[len(s.jobs)-1]
+
 }
 
 func (s *Scheduler) now() time.Time {
