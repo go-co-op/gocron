@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.8.2
-	go.uber.org/goleak v1.2.0
+	go.uber.org/goleak v1.2.1
 	golang.org/x/sync v0.1.0
 )
 
