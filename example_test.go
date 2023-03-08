@@ -95,7 +95,7 @@ func ExampleJob_ScheduledAtTime() {
 	fmt.Println(job1.ScheduledAtTime())
 	// Output:
 	// 10:30
-	// 8:0
+	// 08:00
 }
 
 func ExampleJob_ScheduledAtTimes() {
@@ -104,7 +104,7 @@ func ExampleJob_ScheduledAtTimes() {
 	s.StartAsync()
 	fmt.Println(job.ScheduledAtTimes())
 	// Output:
-	// [8:0 10:30]
+	// [08:00 10:30]
 }
 
 func ExampleJob_ScheduledTime() {
@@ -657,7 +657,6 @@ func ExampleScheduler_Seconds() {
 	_, _ = s.Every(1).Seconds().Do(task)
 	_, _ = s.Every("1s").Seconds().Do(task)
 	_, _ = s.Every(time.Second).Seconds().Do(task)
-
 }
 
 func ExampleScheduler_SetMaxConcurrentJobs() {
