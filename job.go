@@ -336,17 +336,17 @@ func (j *Job) ScheduledTime() time.Time {
 // If multiple times are set, the earliest time will be returned.
 func (j *Job) ScheduledAtTime() string {
 	if len(j.atTimes) == 0 {
-		return "0:0"
+		return "00:00"
 	}
 
-	return fmt.Sprintf("%d:%d", j.getFirstAtTime()/time.Hour, (j.getFirstAtTime()%time.Hour)/time.Minute)
+	return fmt.Sprintf("%02d:%02d", j.getFirstAtTime()/time.Hour, (j.getFirstAtTime()%time.Hour)/time.Minute)
 }
 
 // ScheduledAtTimes returns the specific times of day the Job will run at
 func (j *Job) ScheduledAtTimes() []string {
 	r := make([]string, len(j.atTimes))
 	for i, t := range j.atTimes {
-		r[i] = fmt.Sprintf("%d:%d", t/time.Hour, (t%time.Hour)/time.Minute)
+		r[i] = fmt.Sprintf("%02d:%02d", t/time.Hour, (t%time.Hour)/time.Minute)
 	}
 
 	return r
