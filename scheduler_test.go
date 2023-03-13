@@ -2247,5 +2247,6 @@ func TestScheduler_StartAsyncStop(t *testing.T) {
 		s.Stop()
 		s.StartAsync()
 		time.Sleep(20 * time.Millisecond)
+		s.Stop()
 	})
 }
