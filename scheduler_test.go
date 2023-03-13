@@ -2199,6 +2199,39 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 	}
 }
 
+type dstTime struct{}
+
+func (m dstTime) Now(loc *time.Location) time.Time {
+	return time.Date(2023, 3, 12, 5, 0, 0, 0, loc)
+}
+
+func (m dstTime) Sleep(d time.Duration) {
+	time.Sleep(d)
+}
+
+func (m dstTime) Unix(sec int64, nsec int64) time.Time {
+	panic("not implemented")
+}
+
+func TestScheduler_DaylightSavings(t *testing.T) {
+	dt := dstTime{}
+
+	loc, err := time.LoadLocation("US/Pacific")
+	assert.NoError(t, err)
+
+	s := NewScheduler(loc)
+	s.CustomTime(dt)
+
+	job, err := s.Every(1).Day().At("20:00").Do(func() {})
+	assert.NoError(t, err)
+
+	s.setRunning(true)
+	s.scheduleNextRun(job)
+
+	nextRun := job.NextRun()
+	assert.Equal(t, time.Date(2023, 3, 12, 20, 0, 0, 0, loc), nextRun)
+}
+
 func TestScheduler_DoWithJobDetails(t *testing.T) {
 	testCases := []struct {
 		description   string
