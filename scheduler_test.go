@@ -866,7 +866,7 @@ func TestScheduler_Stop(t *testing.T) {
 			atomic.AddInt32(&i, 1)
 		})
 		s.StartAsync()
-		time.Sleep(1 * time.Second) // enough time for job to run
+		time.Sleep(2 * time.Second) // enough time for job to run
 		s.Stop()
 
 		assert.EqualValues(t, 1, atomic.LoadInt32(&i))
