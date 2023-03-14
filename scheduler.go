@@ -1338,9 +1338,6 @@ func (s *Scheduler) StopBlockingChan() {
 	s.startBlockingStopChanMutex.Lock()
 	if s.startBlockingStopChan != nil {
 		s.startBlockingStopChan <- struct{}{}
-		s.executor.closeStoppedCh()
-	} else {
-		s.executor.setStopped(true)
 	}
 	s.startBlockingStopChanMutex.Unlock()
 }

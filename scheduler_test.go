@@ -2239,14 +2239,15 @@ func TestScheduler_DoWithJobDetails(t *testing.T) {
 
 func TestScheduler_StartAsyncStop(t *testing.T) {
 	s := NewScheduler(time.UTC)
-	assert.NotPanics(t, func() {
-		s.Every(5).Milliseconds().Do(func() {
-			fmt.Println("Job is executed")
+	t.Run("Should safely stop the jobs after StartAsync call", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			s.Every(5).Milliseconds().Do(func() {
+				fmt.Println("Job is executed")
+			})
+			s.StartAsync()
+			s.Stop()
+			s.StartAsync()
+			s.Stop()
 		})
-		s.StartAsync()
-		s.Stop()
-		s.StartAsync()
-		time.Sleep(20 * time.Millisecond)
-		s.Stop()
 	})
 }

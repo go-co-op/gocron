@@ -26,21 +26,41 @@ const (
 
 type executor struct {
 	jobFunctions   chan jobFunction
-	stopCh         chan struct{}
+	stopCh         chan bool
 	stoppedCh      chan bool
 	limitMode      limitMode
 	maxRunningJobs *semaphore.Weighted
 }
 
 func newExecutor() executor {
-	return executor{
+	e := executor{
 		jobFunctions: make(chan jobFunction, 1),
-		stopCh:       make(chan struct{}),
+		stopCh:       make(chan bool, 1),
 		stoppedCh:    make(chan bool, 1),
+	}
+	e.stopCh <- false
+	e.stoppedCh <- false
+	return e
+}
+
+func (e *executor) cleanupBeforeStart() {
+	// if we have a .stop, .start scenario here
+	// stoppedCh should should have true
+	stopped, open := <-e.stoppedCh
+	if stopped {
+		// if the job was already stopped
+		// recreate the stop channel
+		// and the stopped channel
+		e.stopCh = make(chan bool, 1)
+		e.stopCh <- false
+		e.stoppedCh <- false
+	} else if open {
+		e.stoppedCh <- stopped
 	}
 }
 
 func (e *executor) start() {
+	e.cleanupBeforeStart()
 	stopCtx, cancel := context.WithCancel(context.Background())
 	runningJobsWg := sync.WaitGroup{}
 
@@ -112,26 +132,32 @@ func (e *executor) start() {
 					})
 				}
 			}()
-		case <-e.stopCh:
-			cancel()
-			runningJobsWg.Wait()
-			stopped := <-e.stoppedCh
-			if stopped {
-				close(e.stoppedCh)
+		// This logic runs in the case we have a stop signal
+		// we use stopCh to determine whether the job was stopped
+		// if the the channel is open then it means that the job
+		// hasn't been stopped yet.
+		// if the job should be stopped, cancel the job
+		// close the stop channel and set the stopped channel
+		// to true.
+		case stop, open := <-e.stopCh:
+			if stop {
+				cancel()
+				runningJobsWg.Wait()
+				close(e.stopCh)
+				<-e.stoppedCh
+				e.stoppedCh <- true
+			} else if open {
+				e.stopCh <- false
 			}
-			return
 		}
 	}
 }
 
 func (e *executor) stop() {
-	close(e.stopCh)
-}
-
-func (e *executor) setStopped(v bool) {
-	e.stoppedCh <- v
-}
-
-func (e *executor) closeStoppedCh() {
-	close(e.stoppedCh)
+	// set the channel value to true
+	// to make the job stop
+	_, open := <-e.stopCh
+	if open {
+		e.stopCh <- true
+	}
 }
