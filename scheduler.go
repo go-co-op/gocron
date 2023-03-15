@@ -400,11 +400,6 @@ func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	}
 }
 
-func shouldRunAtSpecificTime(job *Job) bool {
-	jobLastRun := job.LastRun()
-	return job.getAtTime(jobLastRun) != 0
-}
-
 func (s *Scheduler) remainingDaysToWeekday(lastRun time.Time, job *Job) int {
 	weekDays := job.Weekdays()
 	sort.Slice(weekDays, func(i, j int) bool {
