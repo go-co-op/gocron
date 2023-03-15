@@ -289,7 +289,10 @@ func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time
 func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMonth int) nextRun {
 	atTime := job.getAtTime(lastRun)
 	natTime := atTime
-	jobDay := time.Date(lastRun.Year(), lastRun.Month(), dayOfMonth, 0, 0, 0, 0, s.Location()).Add(atTime)
+
+	hours, minutes, seconds := s.deconstructDuration(atTime)
+	jobDay := time.Date(lastRun.Year(), lastRun.Month(), dayOfMonth, hours, minutes, seconds, 0, s.Location())
+
 	difference := absDuration(lastRun.Sub(jobDay))
 	next := lastRun
 	if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
@@ -384,14 +387,6 @@ func in(scheduleWeekdays []time.Weekday, weekday time.Weekday) bool {
 }
 
 func (s *Scheduler) calculateDuration(job *Job) time.Duration {
-	if job.neverRan() && shouldRunAtSpecificTime(job) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
-		now := s.time.Now(s.location)
-		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.Location()).Add(job.getFirstAtTime())
-		if now.Before(next) || now.Equal(next) {
-			return next.Sub(now)
-		}
-	}
-
 	interval := job.getInterval()
 	switch job.getUnit() {
 	case milliseconds:
@@ -448,12 +443,16 @@ func absDuration(a time.Duration) time.Duration {
 	return -a
 }
 
+func (s *Scheduler) deconstructDuration(d time.Duration) (hours int, minutes int, seconds int) {
+	hours = int(d.Seconds()) / int(time.Hour/time.Second)
+	minutes = (int(d.Seconds()) % int(time.Hour/time.Second)) / int(time.Minute/time.Second)
+	seconds = int(d.Seconds()) % int(time.Minute/time.Second)
+	return
+}
+
 // roundToMidnightAndAddDSTAware truncates time to midnight and "adds" duration in a DST aware manner
 func (s *Scheduler) roundToMidnightAndAddDSTAware(t time.Time, d time.Duration) time.Time {
-	hours := int(d.Hours())
-	minutes := int(d.Minutes()) - hours*60
-	seconds := int(d.Seconds()) - hours*60*60 - minutes*60
-
+	hours, minutes, seconds := s.deconstructDuration(d)
 	return time.Date(t.Year(), t.Month(), t.Day(), hours, minutes, seconds, 0, s.Location())
 }
 
