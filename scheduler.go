@@ -239,8 +239,6 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 }
 
 func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
-	lastRunRoundedMidnight := s.roundToMidnight(lastRun)
-
 	// Special case: the last day of the month
 	if len(job.daysOfTheMonth) == 1 && job.daysOfTheMonth[0] == -1 {
 		return calculateNextRunForLastDayOfMonth(s, job, lastRun)
@@ -264,7 +262,7 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 
 		return nextRunResult
 	}
-	next := lastRunRoundedMidnight.Add(job.getFirstAtTime()).AddDate(0, job.getInterval(), 0)
+	next := s.roundToMidnightAndAddDSTAware(lastRun, job.getFirstAtTime()).AddDate(0, job.getInterval(), 0)
 	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
@@ -275,7 +273,7 @@ func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time
 	addMonth := job.getInterval()
 	atTime := job.getAtTime(lastRun)
 	if testDate := lastRun.AddDate(0, 0, 1); testDate.Month() != lastRun.Month() &&
-		!s.roundToMidnight(lastRun).Add(atTime).After(lastRun) {
+		!s.roundToMidnightAndAddDSTAware(lastRun, atTime).After(lastRun) {
 		// Our last run was on the last day of this month.
 		addMonth++
 		atTime = job.getFirstAtTime()
@@ -291,7 +289,10 @@ func calculateNextRunForLastDayOfMonth(s *Scheduler, job *Job, lastRun time.Time
 func calculateNextRunForMonth(s *Scheduler, job *Job, lastRun time.Time, dayOfMonth int) nextRun {
 	atTime := job.getAtTime(lastRun)
 	natTime := atTime
-	jobDay := time.Date(lastRun.Year(), lastRun.Month(), dayOfMonth, 0, 0, 0, 0, s.Location()).Add(atTime)
+
+	hours, minutes, seconds := s.deconstructDuration(atTime)
+	jobDay := time.Date(lastRun.Year(), lastRun.Month(), dayOfMonth, hours, minutes, seconds, 0, s.Location())
+
 	difference := absDuration(lastRun.Sub(jobDay))
 	next := lastRun
 	if jobDay.Before(lastRun) { // shouldn't run this month; schedule for next interval minus day difference
@@ -320,13 +321,13 @@ func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
 	if totalDaysDifference > 0 {
 		acTime = job.getFirstAtTime()
 	}
-	next := s.roundToMidnight(lastRun).Add(acTime).AddDate(0, 0, totalDaysDifference)
+	next := s.roundToMidnightAndAddDSTAware(lastRun, acTime).AddDate(0, 0, totalDaysDifference)
 	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
 func (s *Scheduler) calculateWeeks(job *Job, lastRun time.Time) nextRun {
 	totalDaysDifference := int(job.getInterval()) * 7
-	next := s.roundToMidnight(lastRun).Add(job.getFirstAtTime()).AddDate(0, 0, totalDaysDifference)
+	next := s.roundToMidnightAndAddDSTAware(lastRun, job.getFirstAtTime()).AddDate(0, 0, totalDaysDifference)
 	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 
@@ -354,14 +355,14 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) nextRun {
 	if job.getInterval() == 1 {
-		lastRunDayPlusJobAtTime := s.roundToMidnight(lastRun).Add(job.getAtTime(lastRun))
+		lastRunDayPlusJobAtTime := s.roundToMidnightAndAddDSTAware(lastRun, job.getAtTime(lastRun))
 
 		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
 			return nextRun{duration: until(lastRun, lastRunDayPlusJobAtTime), dateTime: lastRunDayPlusJobAtTime}
 		}
 	}
 
-	nextRunAtTime := s.roundToMidnight(lastRun).Add(job.getFirstAtTime()).AddDate(0, 0, job.getInterval()).In(s.Location())
+	nextRunAtTime := s.roundToMidnightAndAddDSTAware(lastRun, job.getFirstAtTime()).AddDate(0, 0, job.getInterval()).In(s.Location())
 	return nextRun{duration: until(lastRun, nextRunAtTime), dateTime: nextRunAtTime}
 }
 
@@ -386,14 +387,6 @@ func in(scheduleWeekdays []time.Weekday, weekday time.Weekday) bool {
 }
 
 func (s *Scheduler) calculateDuration(job *Job) time.Duration {
-	if job.neverRan() && shouldRunAtSpecificTime(job) { // ugly. in order to avoid this we could prohibit setting .At() and allowing only .StartAt() when dealing with Duration types
-		now := s.time.Now(s.location)
-		next := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, s.Location()).Add(job.getFirstAtTime())
-		if now.Before(next) || now.Equal(next) {
-			return next.Sub(now)
-		}
-	}
-
 	interval := job.getInterval()
 	switch job.getUnit() {
 	case milliseconds:
@@ -405,11 +398,6 @@ func (s *Scheduler) calculateDuration(job *Job) time.Duration {
 	default:
 		return time.Duration(interval) * time.Hour
 	}
-}
-
-func shouldRunAtSpecificTime(job *Job) bool {
-	jobLastRun := job.LastRun()
-	return job.getAtTime(jobLastRun) != 0
 }
 
 func (s *Scheduler) remainingDaysToWeekday(lastRun time.Time, job *Job) int {
@@ -429,7 +417,7 @@ func (s *Scheduler) remainingDaysToWeekday(lastRun time.Time, job *Job) int {
 	})
 	// check atTime
 	if equals {
-		if s.roundToMidnight(lastRun).Add(job.getAtTime(lastRun)).After(lastRun) {
+		if s.roundToMidnightAndAddDSTAware(lastRun, job.getAtTime(lastRun)).After(lastRun) {
 			return 0
 		}
 		index++
@@ -450,9 +438,17 @@ func absDuration(a time.Duration) time.Duration {
 	return -a
 }
 
-// roundToMidnight truncates time to midnight
-func (s *Scheduler) roundToMidnight(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, s.Location())
+func (s *Scheduler) deconstructDuration(d time.Duration) (hours int, minutes int, seconds int) {
+	hours = int(d.Seconds()) / int(time.Hour/time.Second)
+	minutes = (int(d.Seconds()) % int(time.Hour/time.Second)) / int(time.Minute/time.Second)
+	seconds = int(d.Seconds()) % int(time.Minute/time.Second)
+	return
+}
+
+// roundToMidnightAndAddDSTAware truncates time to midnight and "adds" duration in a DST aware manner
+func (s *Scheduler) roundToMidnightAndAddDSTAware(t time.Time, d time.Duration) time.Time {
+	hours, minutes, seconds := s.deconstructDuration(d)
+	return time.Date(t.Year(), t.Month(), t.Day(), hours, minutes, seconds, 0, s.Location())
 }
 
 // NextRun datetime when the next Job should run.

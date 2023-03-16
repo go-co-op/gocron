@@ -395,6 +395,71 @@ func TestWeekdayAt(t *testing.T) {
 	})
 }
 
+func TestDaylightSavingsScheduled(t *testing.T) {
+	loc, err := time.LoadLocation("US/Pacific")
+	assert.NoError(t, err)
+
+	fromRFC3339 := func(ts string) time.Time {
+		dt, err := time.Parse(time.RFC3339, ts)
+		assert.NoError(t, err)
+		return dt.In(loc)
+	}
+
+	beforeToEDT := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(2023, 3, 12, 1, 50, 50, 0, loc)
+	}}
+	toEDT := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(2023, 3, 12, 5, 0, 0, 0, loc)
+	}}
+	beforeToEST := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(2022, 11, 6, 1, 50, 50, 0, loc)
+	}}
+	afterToEST := fakeTime{onNow: func(l *time.Location) time.Time {
+		return fromRFC3339("2022-11-06T09:00:01.000Z")
+	}}
+	toEST := fakeTime{onNow: func(l *time.Location) time.Time {
+		return time.Date(2022, 11, 6, 4, 0, 0, 0, loc)
+	}}
+
+	testCases := []struct {
+		description     string
+		ft              fakeTime
+		jobCreateFn     func(s *Scheduler) *Scheduler
+		expectedNextRun time.Time
+	}{
+		{"EST no change", beforeToEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("01:59") }, time.Date(2023, 3, 12, 1, 59, 0, 0, loc)},
+		{"EST->EDT every day", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("20:00") }, time.Date(2023, 3, 12, 20, 0, 0, 0, loc)},
+		{"EST->EDT every 2 week", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("17:00") }, time.Date(2023, 3, 26, 17, 0, 0, 0, loc)},
+		{"EST->EDT every 2 Tuesday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("16:00") }, time.Date(2023, 3, 14, 16, 0, 0, 0, loc)},
+		{"EST->EDT every Sunday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Sunday().At("04:30") }, time.Date(2023, 3, 19, 4, 30, 0, 0, loc)},
+		{"EST->EDT every month", toEDT, func(s *Scheduler) *Scheduler { return s.Every(3).Month(12).At("14:00") }, time.Date(2023, 6, 12, 14, 0, 0, 0, loc)},
+		{"EST->EDT every last day of month", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).MonthLastDay().At("13:00") }, time.Date(2023, 3, 31, 13, 0, 0, 0, loc)},
+
+		{"EDT no change", beforeToEST, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("01:59") }, time.Date(2022, 11, 6, 1, 59, 0, 0, loc)},
+		{"EDT->EST every day", toEST, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("20:00") }, time.Date(2022, 11, 6, 20, 0, 0, 0, loc)},
+		{"EDT->EST every 2 week", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("18:00") }, time.Date(2022, 11, 20, 18, 0, 0, 0, loc)},
+		{"EDT->EST every 2 Tuesday", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("15:00") }, time.Date(2022, 11, 8, 15, 0, 0, 0, loc)},
+		{"EDT->EST every Sunday", afterToEST, func(s *Scheduler) *Scheduler { return s.Every(1).Sunday().At("01:30") }, time.Date(2022, 11, 13, 1, 30, 0, 0, loc)},
+		{"EDT->EST every month", toEST, func(s *Scheduler) *Scheduler { return s.Every(3).Month(6).At("14:30") }, time.Date(2023, 2, 6, 14, 30, 0, 0, loc)},
+		{"EDT->EST every last day of month", toEST, func(s *Scheduler) *Scheduler { return s.Every(1).MonthLastDay().At("13:15") }, time.Date(2022, 11, 30, 13, 15, 0, 0, loc)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(loc)
+			s.time = tc.ft
+
+			job, err := tc.jobCreateFn(s).Do(func() {})
+			assert.NoError(t, err)
+
+			s.setRunning(true)
+			s.scheduleNextRun(job)
+
+			assert.Equal(t, tc.expectedNextRun, job.NextRun())
+		})
+	}
+}
+
 func TestScheduler_Remove(t *testing.T) {
 	t.Run("remove from non-running", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
