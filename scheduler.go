@@ -975,15 +975,8 @@ func (s *Scheduler) Tag(t ...string) *Scheduler {
 // GetAllTags returns all tags.
 func (s *Scheduler) GetAllTags() []string {
 	var tags []string
-	if s.tagsUnique {
-		s.tags.Range(func(key, value interface{}) bool {
-			tags = append(tags, key.(string))
-			return true
-		})
-	} else {
-		for _, job := range s.jobs {
-			tags = append(tags, job.tags...)
-		}
+	for _, job := range s.Jobs() {
+		tags = append(tags, job.Tags()...)
 	}
 	return tags
 }
