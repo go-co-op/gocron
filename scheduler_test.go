@@ -295,6 +295,34 @@ func TestAt(t *testing.T) {
 		assert.Equal(t, atTime, job.NextRun())
 		s.Stop()
 	})
+
+	t.Run("Week() and multiple At() times, 1 in future", func(t *testing.T) {
+		atTime1 := time.Now().UTC().Add(time.Hour * -2).Round(time.Second)
+		atTime2 := time.Now().UTC().Add(time.Hour * -1).Round(time.Second)
+		atTime3 := time.Now().UTC().Add(time.Hour * 1).Round(time.Second)
+
+		s := NewScheduler(time.UTC)
+		job, err := s.Every(1).Week().At(atTime1).At(atTime2).At(atTime3).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		assert.Equal(t, atTime3, job.NextRun())
+		s.Stop()
+	})
+
+	t.Run("Week() and multiple At() times, all in past", func(t *testing.T) {
+		atTime1 := time.Now().UTC().Add(time.Hour * -3).Round(time.Second)
+		atTime2 := time.Now().UTC().Add(time.Hour * -2).Round(time.Second)
+		atTime3 := time.Now().UTC().Add(time.Hour * -1).Round(time.Second)
+
+		s := NewScheduler(time.UTC)
+		job, err := s.Every(1).Week().At(atTime1).At(atTime2).At(atTime3).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		assert.Equal(t, atTime1.Add(time.Hour*168), job.NextRun())
+		s.Stop()
+	})
 }
 
 func TestMultipleAtTimesDecoding(t *testing.T) {
