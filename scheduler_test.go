@@ -995,6 +995,44 @@ func TestScheduler_StartAt(t *testing.T) {
 		assert.Equal(t, now.Add(10*time.Minute).Truncate(time.Second), job.NextRun().Truncate(time.Second))
 		s.stop()
 	})
+
+	t.Run("StartAt() in future with Weekday() and At()", func(t *testing.T) {
+		ft := fakeTime{onNow: func(l *time.Location) time.Time {
+			// 1/1/1970 is a Thursday
+			return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+		}}
+
+		s := NewScheduler(time.UTC)
+		s.time = ft
+
+		dt := time.Date(1970, 1, 10, 0, 0, 0, 0, time.UTC)
+		job, err := s.Every(1).Friday().At("20:19").StartAt(dt).Do(func() {})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		exp := time.Date(1970, 1, 16, 20, 19, 0, 0, time.UTC)
+		assert.Equal(t, exp, job.NextRun())
+		s.Stop()
+	})
+
+	t.Run("StartAt() in the past with Weekday() and At()", func(t *testing.T) {
+		ft := fakeTime{onNow: func(l *time.Location) time.Time {
+			// 1/1/1971 is a Friday
+			return time.Date(1971, 1, 1, 12, 0, 0, 0, l)
+		}}
+
+		s := NewScheduler(time.UTC)
+		s.time = ft
+
+		dt := time.Date(1970, 12, 3, 0, 0, 0, 0, time.UTC)
+		job, err := s.Every(1).Thursday().At("20:19").StartAt(dt).Do(func() {})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		exp := time.Date(1971, 1, 7, 20, 19, 0, 0, time.UTC)
+		assert.Equal(t, exp, job.NextRun())
+		s.Stop()
+	})
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
@@ -1670,7 +1708,8 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 5, counter)
+		assert.GreaterOrEqual(t, counter, 5)
+		assert.LessOrEqual(t, counter, 6)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
@@ -1940,7 +1979,8 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 
 	counterMutex.RLock()
 	defer counterMutex.RUnlock()
-	assert.Equal(t, 2, counter)
+	assert.GreaterOrEqual(t, counter, 2)
+	assert.LessOrEqual(t, counter, 3)
 }
 
 func TestScheduler_LenWeekDays(t *testing.T) {

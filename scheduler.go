@@ -217,7 +217,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 // durationToNextRun calculate how much time to the next run, depending on unit
 func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 	// job can be scheduled with .StartAt()
-	if job.getStartAtTime().After(lastRun) {
+	if job.getFirstAtTime() == 0 && job.getStartAtTime().After(lastRun) {
 		return nextRun{duration: job.getStartAtTime().Sub(s.now()), dateTime: job.getStartAtTime()}
 	}
 
@@ -232,6 +232,9 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 			next = s.calculateWeekday(job, lastRun)
 		} else {
 			next = s.calculateWeeks(job, lastRun)
+		}
+		if next.dateTime.Before(job.getStartAtTime()) {
+			return s.durationToNextRun(job.getStartAtTime(), job)
 		}
 	case months:
 		next = s.calculateMonths(job, lastRun)
