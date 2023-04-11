@@ -198,7 +198,13 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 
 	next := s.durationToNextRun(lastRun, job)
 
-	job.setLastRun(job.NextRun())
+	jobNextRun := job.NextRun()
+	if jobNextRun.After(now) {
+		job.setLastRun(now)
+	} else {
+		job.setLastRun(jobNextRun)
+	}
+
 	if next.dateTime.IsZero() {
 		next.dateTime = lastRun.Add(next.duration)
 		job.setNextRun(next.dateTime)
