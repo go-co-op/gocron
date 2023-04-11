@@ -2,7 +2,6 @@ package gocron
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -255,8 +254,6 @@ func TestAt(t *testing.T) {
 
 		select {
 		case <-time.After(1 * time.Second):
-			log.Println(now.Add(time.Minute))
-			log.Println(dayJob.nextRun)
 			s.stop()
 			assert.Equal(t, now.Add(1*time.Minute), dayJob.nextRun)
 		case <-semaphore:
@@ -947,7 +944,6 @@ func TestScheduler_Stop(t *testing.T) {
 		}()
 
 		s.StartBlocking()
-		log.Println(".Stop() stops the blocking start")
 		assert.False(t, s.IsRunning())
 	})
 }
@@ -1629,11 +1625,11 @@ func TestScheduler_DoParameterValidation(t *testing.T) {
 func TestScheduler_Job(t *testing.T) {
 	s := NewScheduler(time.UTC)
 
-	j1, err := s.Every("1s").Do(func() { log.Println("one") })
+	j1, err := s.Every("1s").Do(func() {})
 	require.NoError(t, err)
 	assert.Equal(t, j1, s.getCurrentJob())
 
-	j2, err := s.Every("1s").Do(func() { log.Println("two") })
+	j2, err := s.Every("1s").Do(func() {})
 	require.NoError(t, err)
 	assert.Equal(t, j2, s.getCurrentJob())
 
@@ -1668,12 +1664,12 @@ func TestScheduler_Update(t *testing.T) {
 		_, err = s.Job(j).CronWithSeconds("*/1 * * * * *").Update()
 		require.NoError(t, err)
 
-		time.Sleep(time.Second)
+		time.Sleep(1200 * time.Millisecond)
 		s.Stop()
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 4, counter)
+		assert.Equal(t, 5, counter)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
@@ -1682,7 +1678,11 @@ func TestScheduler_Update(t *testing.T) {
 		var counterMutex sync.RWMutex
 		counter := 0
 
-		j, err := s.Every(1).Day().SingletonMode().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		j, err := s.Every(1).Day().SingletonMode().Do(func() {
+			counterMutex.Lock()
+			defer counterMutex.Unlock()
+			counter++
+		})
 		require.NoError(t, err)
 
 		s.StartAsync()
@@ -1700,7 +1700,7 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 3, counter)
+		assert.Equal(t, 4, counter)
 	})
 
 	t.Run("update called without job call", func(t *testing.T) {
@@ -1743,6 +1743,27 @@ func TestScheduler_Update(t *testing.T) {
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
 		assert.Equal(t, 4, counter)
+	})
+
+	// Verifies https://github.com/go-co-op/gocron/issues/424
+	t.Run("next run calculated correctly", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		job, err := s.Every(time.Second).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		newInterval := 5 * time.Second
+		_, err = s.Job(job).Every(newInterval).Update()
+		require.NoError(t, err)
+		s.Stop()
+
+		last := job.LastRun().Round(time.Millisecond)
+		actualNext := job.NextRun().Round(time.Millisecond)
+		expectedNext := last.Add(newInterval)
+
+		assert.Equal(t, expectedNext, actualNext)
+
 	})
 }
 
@@ -1906,10 +1927,10 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	var counterMutex sync.RWMutex
 	counter := 0
 
-	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++; log.Println("job 1") })
+	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 	require.NoError(t, err)
 
-	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++; log.Println("job 2") })
+	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 	require.NoError(t, err)
 	s.StartAsync()
 
@@ -2293,9 +2314,7 @@ func TestScheduler_DoWithJobDetails(t *testing.T) {
 	t.Run("run job with details", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		_, err := s.Tag("tag1").Every("100ms").DoWithJobDetails(func(job Job) {
-			log.Printf("job last run: %s, job next run: %s", job.LastRun(), job.NextRun())
-		})
+		_, err := s.Tag("tag1").Every("100ms").DoWithJobDetails(func(job Job) {})
 		require.NoError(t, err)
 		s.StartAsync()
 		time.Sleep(500 * time.Millisecond)
