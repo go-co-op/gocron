@@ -15,7 +15,6 @@ issues:
 linters:
   enable:
     - bodyclose
-    - deadcode
     - errcheck
     - gofmt
     - revive
@@ -25,10 +24,8 @@ linters:
     - ineffassign
     - misspell
     - staticcheck
-    - structcheck
     - typecheck
     - unused
-    - varcheck
 
 output:
   # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"
