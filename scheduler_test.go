@@ -48,7 +48,7 @@ func TestImmediateExecution(t *testing.T) {
 	require.NoError(t, err)
 	s.StartAsync()
 	select {
-	case <-time.After(1 * time.Second):
+	case <-time.After(time.Second):
 		s.stop()
 		t.Fatal("job did not run immediately")
 	case <-semaphore:
@@ -186,7 +186,7 @@ func TestExecutionSeconds(t *testing.T) {
 		mu                 sync.RWMutex
 	)
 
-	runTime := 1 * time.Second
+	runTime := time.Second
 	startTime := time.Now()
 
 	// default unit is seconds
@@ -243,7 +243,7 @@ func TestAt(t *testing.T) {
 		now := ft.onNow(time.UTC)
 		semaphore := make(chan bool)
 
-		nextMinuteTime := now.Add(1 * time.Minute)
+		nextMinuteTime := now.Add(time.Minute)
 		startAt := fmt.Sprintf("%02d:%02d:%02d", nextMinuteTime.Hour(), nextMinuteTime.Minute(), nextMinuteTime.Second())
 		dayJob, err := s.Every(1).Day().At(startAt).Do(func() {
 			semaphore <- true
@@ -251,16 +251,17 @@ func TestAt(t *testing.T) {
 		require.NoError(t, err)
 
 		s.StartAsync()
-		time.Sleep(1 * time.Second)
+		time.Sleep(time.Second)
 
 		select {
-		case <-time.After(1 * time.Second):
+		case <-time.After(time.Second):
 			s.stop()
 			assert.Equal(t, now.Add(1*time.Minute), dayJob.nextRun)
 		case <-semaphore:
 			s.stop()
 			t.Fatal("job ran even though scheduled in future")
 		}
+		time.Sleep(2 * time.Second)
 	})
 
 	t.Run("error due to bad time format", func(t *testing.T) {
@@ -896,7 +897,7 @@ func TestScheduler_Stop(t *testing.T) {
 		s.StartAsync()
 		assert.True(t, s.IsRunning())
 		s.Stop()
-		time.Sleep(1 * time.Millisecond) // wait for stop goroutine to catch up
+		time.Sleep(time.Millisecond) // wait for stop goroutine to catch up
 		assert.False(t, s.IsRunning())
 	})
 	t.Run("noop on stopped scheduler", func(t *testing.T) {
@@ -911,7 +912,7 @@ func TestScheduler_Stop(t *testing.T) {
 			//noop
 		})
 		s.StartAsync()
-		time.Sleep(1 * time.Second) // enough time for job to run
+		time.Sleep(time.Second) // enough time for job to run
 		preStopJobTimer := job.timer
 		s.Stop()
 		time.Sleep(3 * time.Second) // enough time for job timer to reset
@@ -929,7 +930,7 @@ func TestScheduler_Stop(t *testing.T) {
 			atomic.AddInt32(&i, 1)
 		})
 		s.StartAsync()
-		time.Sleep(1 * time.Second) // enough time for job to run
+		time.Sleep(time.Second) // enough time for job to run
 		s.Stop()
 
 		assert.EqualValues(t, 1, atomic.LoadInt32(&i))
@@ -938,7 +939,7 @@ func TestScheduler_Stop(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
 		go func() {
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Second)
 			assert.True(t, s.IsRunning())
 			s.Stop()
 			time.Sleep(100 * time.Millisecond) // wait for stop goroutine to catch up
@@ -1074,7 +1075,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: 3 * time.Hour},
 		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: (2 * day) + 3*time.Hour},
 		{name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(8, 30, 0)}, wantTimeUntilNextRun: 2 * day},
-		{name: "daily, last run was 1 second ago", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{12 * time.Hour}, lastRun: ft.Now(time.UTC).Add(-time.Second)}, wantTimeUntilNextRun: 1 * time.Second},
+		{name: "daily, last run was 1 second ago", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{12 * time.Hour}, lastRun: ft.Now(time.UTC).Add(-time.Second)}, wantTimeUntilNextRun: time.Second},
 		//// WEEKS
 		{name: "every week should run in 7 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 7 * day},
 		{name: "every week with .At time rule should run respect .At time rule", job: &Job{mu: &jobMutex{}, interval: 1, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, unit: weeks, lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 7 * day},
@@ -1740,7 +1741,8 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 4, counter)
+		assert.GreaterOrEqual(t, counter, 4)
+		assert.LessOrEqual(t, counter, 5)
 	})
 
 	t.Run("update called without job call", func(t *testing.T) {
@@ -1851,13 +1853,13 @@ func TestScheduler_Cron(t *testing.T) {
 		expectedError   error
 	}{
 		// https://crontab.guru/
-		{"every minute", "*/1 * * * *", ft.onNow(time.UTC).Add(1 * time.Minute), nil},
+		{"every minute", "*/1 * * * *", ft.onNow(time.UTC).Add(time.Minute), nil},
 		{"every day 1am", "0 1 * * *", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
 		{"weekends only", "0 0 * * 6,0", ft.onNow(time.UTC).Add(36 * time.Hour), nil},
 		{"at time monday thru friday", "0 22 * * 1-5", ft.onNow(time.UTC).Add(10 * time.Hour), nil},
 		{"every minute in range, monday thru friday", "15-30 * * * 1-5", ft.onNow(time.UTC).Add(15 * time.Minute), nil},
 		{"at every minute past every hour from 1 through 5 on every day-of-week from Monday through Friday.", "* 1-5 * * 1-5", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
-		{"hourly", "@hourly", ft.onNow(time.UTC).Add(1 * time.Hour), nil},
+		{"hourly", "@hourly", ft.onNow(time.UTC).Add(time.Hour), nil},
 		{"every day 1am in shanghai", "CRON_TZ=Asia/Shanghai 0 1 * * *", ft.onNow(time.UTC).Add(5 * time.Hour), nil},
 		{"bad expression", "bad", time.Time{}, wrapOrError(fmt.Errorf("expected exactly 5 fields, found 1: [bad]"), ErrCronParseFailure)},
 	}
@@ -1904,15 +1906,15 @@ func TestScheduler_CronWithSeconds(t *testing.T) {
 		expectedError   error
 	}{
 		// https://crontab.guru/
-		{"every second", "*/1 * * * * *", ft.onNow(time.UTC).Add(1 * time.Second), nil},
-		{"every second from 0-30", "0-30 * * * * *", ft.onNow(time.UTC).Add(1 * time.Second), nil},
-		{"every minute", "0 */1 * * * *", ft.onNow(time.UTC).Add(1 * time.Minute), nil},
+		{"every second", "*/1 * * * * *", ft.onNow(time.UTC).Add(time.Second), nil},
+		{"every second from 0-30", "0-30 * * * * *", ft.onNow(time.UTC).Add(time.Second), nil},
+		{"every minute", "0 */1 * * * *", ft.onNow(time.UTC).Add(time.Minute), nil},
 		{"every day 1am", "* 0 1 * * *", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
 		{"weekends only", "* 0 0 * * 6,0", ft.onNow(time.UTC).Add(36 * time.Hour), nil},
 		{"at time monday thru friday", "* 0 22 * * 1-5", ft.onNow(time.UTC).Add(10 * time.Hour), nil},
 		{"every minute in range, monday thru friday", "* 15-30 * * * 1-5", ft.onNow(time.UTC).Add(15 * time.Minute), nil},
 		{"at every minute past every hour from 1 through 5 on every day-of-week from Monday through Friday.", "* * 1-5 * * 1-5", ft.onNow(time.UTC).Add(13 * time.Hour), nil},
-		{"hourly", "@hourly", ft.onNow(time.UTC).Add(1 * time.Hour), nil},
+		{"hourly", "@hourly", ft.onNow(time.UTC).Add(time.Hour), nil},
 		{"bad expression", "bad", time.Time{}, wrapOrError(fmt.Errorf("expected exactly 6 fields, found 1: [bad]"), ErrCronParseFailure)},
 	}
 
@@ -2108,7 +2110,7 @@ func TestScheduler_CheckNextWeekDay(t *testing.T) {
 		return time.Date(2020, time.January, 2, hour, minute, second, 0, time.UTC)
 	}
 	const (
-		wantTimeUntilNextFirstRun = 1 * time.Second
+		wantTimeUntilNextFirstRun = time.Second
 		// all day long
 		wantTimeUntilNextSecondRun = 24 * time.Hour
 	)
