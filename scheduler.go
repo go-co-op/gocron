@@ -336,7 +336,22 @@ func (s *Scheduler) calculateWeekday(job *Job, lastRun time.Time) nextRun {
 
 func (s *Scheduler) calculateWeeks(job *Job, lastRun time.Time) nextRun {
 	totalDaysDifference := int(job.getInterval()) * 7
-	next := s.roundToMidnightAndAddDSTAware(lastRun, job.getFirstAtTime()).AddDate(0, 0, totalDaysDifference)
+
+	var next time.Time
+
+	atTimes := job.atTimes
+	for _, at := range atTimes {
+		n := s.roundToMidnightAndAddDSTAware(lastRun, at)
+		if n.After(s.now()) {
+			next = n
+			break
+		}
+	}
+
+	if next.IsZero() {
+		next = s.roundToMidnightAndAddDSTAware(lastRun, job.getFirstAtTime()).AddDate(0, 0, totalDaysDifference)
+	}
+
 	return nextRun{duration: until(lastRun, next), dateTime: next}
 }
 

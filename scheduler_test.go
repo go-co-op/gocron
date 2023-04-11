@@ -271,6 +271,58 @@ func TestAt(t *testing.T) {
 		assert.EqualError(t, err, ErrUnsupportedTimeFormat.Error())
 		assert.Zero(t, s.Len())
 	})
+
+	t.Run("Week() and At()", func(t *testing.T) {
+		atTime := time.Now().UTC().Add(time.Hour).Round(time.Second)
+
+		s := NewScheduler(time.UTC)
+		job, err := s.Every(1).Week().At(atTime).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		assert.Equal(t, atTime, job.NextRun())
+		s.Stop()
+	})
+
+	t.Run("Week() and At() almost 1 week in future", func(t *testing.T) {
+		atTime := time.Now().UTC().Add(time.Hour * 167).Round(time.Second)
+
+		s := NewScheduler(time.UTC)
+		job, err := s.Every(1).Week().At(atTime).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		assert.Equal(t, atTime, job.NextRun())
+		s.Stop()
+	})
+
+	t.Run("Week() and multiple At() times, 1 in future", func(t *testing.T) {
+		atTime1 := time.Now().UTC().Add(time.Hour * -2).Round(time.Second)
+		atTime2 := time.Now().UTC().Add(time.Hour * -1).Round(time.Second)
+		atTime3 := time.Now().UTC().Add(time.Hour * 1).Round(time.Second)
+
+		s := NewScheduler(time.UTC)
+		job, err := s.Every(1).Week().At(atTime1).At(atTime2).At(atTime3).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		assert.Equal(t, atTime3, job.NextRun())
+		s.Stop()
+	})
+
+	t.Run("Week() and multiple At() times, all in past", func(t *testing.T) {
+		atTime1 := time.Now().UTC().Add(time.Hour * -3).Round(time.Second)
+		atTime2 := time.Now().UTC().Add(time.Hour * -2).Round(time.Second)
+		atTime3 := time.Now().UTC().Add(time.Hour * -1).Round(time.Second)
+
+		s := NewScheduler(time.UTC)
+		job, err := s.Every(1).Week().At(atTime1).At(atTime2).At(atTime3).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+
+		assert.Equal(t, atTime1.Add(time.Hour*168), job.NextRun())
+		s.Stop()
+	})
 }
 
 func TestMultipleAtTimesDecoding(t *testing.T) {
@@ -428,7 +480,7 @@ func TestDaylightSavingsScheduled(t *testing.T) {
 	}{
 		{"EST no change", beforeToEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("01:59") }, time.Date(2023, 3, 12, 1, 59, 0, 0, loc)},
 		{"EST->EDT every day", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("20:00") }, time.Date(2023, 3, 12, 20, 0, 0, 0, loc)},
-		{"EST->EDT every 2 week", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("17:00") }, time.Date(2023, 3, 26, 17, 0, 0, 0, loc)},
+		{"EST->EDT every 2 week", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("17:00") }, time.Date(2023, 3, 12, 17, 0, 0, 0, loc)},
 		{"EST->EDT every 2 Tuesday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("16:00") }, time.Date(2023, 3, 14, 16, 0, 0, 0, loc)},
 		{"EST->EDT every Sunday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Sunday().At("04:30") }, time.Date(2023, 3, 19, 4, 30, 0, 0, loc)},
 		{"EST->EDT every month", toEDT, func(s *Scheduler) *Scheduler { return s.Every(3).Month(12).At("14:00") }, time.Date(2023, 6, 12, 14, 0, 0, 0, loc)},
@@ -436,7 +488,7 @@ func TestDaylightSavingsScheduled(t *testing.T) {
 
 		{"EDT no change", beforeToEST, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("01:59") }, time.Date(2022, 11, 6, 1, 59, 0, 0, loc)},
 		{"EDT->EST every day", toEST, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("20:00") }, time.Date(2022, 11, 6, 20, 0, 0, 0, loc)},
-		{"EDT->EST every 2 week", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("18:00") }, time.Date(2022, 11, 20, 18, 0, 0, 0, loc)},
+		{"EDT->EST every 2 week", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("18:00") }, time.Date(2022, 11, 6, 18, 0, 0, 0, loc)},
 		{"EDT->EST every 2 Tuesday", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("15:00") }, time.Date(2022, 11, 8, 15, 0, 0, 0, loc)},
 		{"EDT->EST every Sunday", afterToEST, func(s *Scheduler) *Scheduler { return s.Every(1).Sunday().At("01:30") }, time.Date(2022, 11, 13, 1, 30, 0, 0, loc)},
 		{"EDT->EST every month", toEST, func(s *Scheduler) *Scheduler { return s.Every(3).Month(6).At("14:30") }, time.Date(2023, 2, 6, 14, 30, 0, 0, loc)},
@@ -1038,7 +1090,7 @@ func TestScheduler_StartAt(t *testing.T) {
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
 	ft := fakeTime{onNow: func(l *time.Location) time.Time {
-		return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
+		return time.Date(2020, 1, 1, 12, 0, 0, 0, l)
 	}}
 
 	day := time.Hour * 24
@@ -1078,7 +1130,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "daily, last run was 1 second ago", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{12 * time.Hour}, lastRun: ft.Now(time.UTC).Add(-time.Second)}, wantTimeUntilNextRun: time.Second},
 		//// WEEKS
 		{name: "every week should run in 7 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 7 * day},
-		{name: "every week with .At time rule should run respect .At time rule", job: &Job{mu: &jobMutex{}, interval: 1, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, unit: weeks, lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 7 * day},
+		{name: "every week with .At time rule should run respect .At time rule", job: &Job{mu: &jobMutex{}, interval: 1, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, unit: weeks, lastRun: januaryFirst2020At(9, 31, 0)}, wantTimeUntilNextRun: 7*day - time.Minute},
 		{name: "every two weeks at 09:30AM should run in 14 days at 09:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 14 * day},
 		{name: "every 31 weeks ran at jan 1st at midnight should run at August 5, 2020", job: &Job{mu: &jobMutex{}, interval: 31, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31 * 7 * day},
 		// MONTHS
