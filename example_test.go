@@ -351,6 +351,15 @@ func ExampleScheduler_Friday() {
 	// Friday
 }
 
+func ExampleScheduler_GetAllTags() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every(1).Second().Tag("tag1").Do(task)
+	_, _ = s.Every(1).Second().Tag("tag2").Do(task)
+	fmt.Println(s.GetAllTags())
+	// Output:
+	// [tag1 tag2]
+}
+
 func ExampleScheduler_Hour() {
 	s := gocron.NewScheduler(time.UTC)
 

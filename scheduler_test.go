@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -2318,5 +2319,68 @@ func TestScheduler_DoWithJobDetails(t *testing.T) {
 		require.NoError(t, err)
 		s.StartAsync()
 		time.Sleep(500 * time.Millisecond)
+	})
+}
+
+func TestScheduler_GetAllTags(t *testing.T) {
+	t.Run("tags unique", func(t *testing.T) {
+		testCases := []struct {
+			description string
+			tags        []string
+			expected    []string
+		}{
+			{"no tags", []string{}, nil},
+			{"one tag", []string{"tag1"}, []string{"tag1"}},
+			{"two tags", []string{"tag1", "tag2"}, []string{"tag1", "tag2"}},
+			{"two tags with duplicates", []string{"tag1", "tag2", "tag1"}, []string{"tag1", "tag2"}},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.description, func(t *testing.T) {
+				s := NewScheduler(time.UTC)
+				s.TagsUnique()
+
+				for _, tag := range tc.tags {
+					_, err := s.Tag(tag).Every("100ms").Do(func() {})
+					require.NoError(t, err)
+				}
+
+				tags := s.GetAllTags()
+				sort.Strings(tc.expected)
+				sort.Strings(tags)
+
+				assert.Equal(t, tc.expected, tags)
+			})
+		}
+	})
+
+	t.Run("tags not unique", func(t *testing.T) {
+		testCases := []struct {
+			description string
+			tags        []string
+			expected    []string
+		}{
+			{"no tags", []string{}, nil},
+			{"one tag", []string{"tag1"}, []string{"tag1"}},
+			{"two tags", []string{"tag1", "tag2"}, []string{"tag1", "tag2"}},
+			{"two tags with duplicates", []string{"tag1", "tag2", "tag1"}, []string{"tag1", "tag2", "tag1"}},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.description, func(t *testing.T) {
+				s := NewScheduler(time.UTC)
+
+				for _, tag := range tc.tags {
+					_, err := s.Tag(tag).Every("100ms").Do(func() {})
+					require.NoError(t, err)
+				}
+
+				tags := s.GetAllTags()
+				sort.Strings(tc.expected)
+				sort.Strings(tags)
+
+				assert.Equal(t, tc.expected, tags)
+			})
+		}
 	})
 }
