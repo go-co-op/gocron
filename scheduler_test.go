@@ -2,7 +2,6 @@ package gocron
 
 import (
 	"fmt"
-	"log"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -909,7 +908,7 @@ func TestScheduler_Stop(t *testing.T) {
 		t.Parallel()
 		s := NewScheduler(time.UTC)
 		job, _ := s.Every(3).Second().Do(func() {
-			//noop
+			// noop
 		})
 		s.StartAsync()
 		time.Sleep(1 * time.Second) // enough time for job to run
@@ -1038,7 +1037,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: (2 * day) + 3*time.Hour},
 		{name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(8, 30, 0)}, wantTimeUntilNextRun: 2 * day},
 		{name: "daily, last run was 1 second ago", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{12 * time.Hour}, lastRun: ft.Now(time.UTC).Add(-time.Second)}, wantTimeUntilNextRun: 1 * time.Second},
-		//// WEEKS
+		// // WEEKS
 		{name: "every week should run in 7 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 7 * day},
 		{name: "every week with .At time rule should run respect .At time rule", job: &Job{mu: &jobMutex{}, interval: 1, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, unit: weeks, lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 7 * day},
 		{name: "every two weeks at 09:30AM should run in 14 days at 09:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 14 * day},
@@ -1070,7 +1069,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "every last day of the month started on december 31 should run on january 31 of the next year", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31 * day},
 		{name: "every last day of 2 months started on december 31, 2018 should run on february 28, 2019", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31*day + 28*day},
 		{name: "every last day of 2 months started on december 31, 2019 should run on february 29, 2020", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31*day + 29*day},
-		//// WEEKDAYS
+		// // WEEKDAYS
 		{name: "every weekday starting on one day before it should run this weekday", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
 		{name: "every weekday starting on same weekday should run in 7 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 7 * day},
 		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: &Job{mu: &jobMutex{}, interval: 2, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: day},
