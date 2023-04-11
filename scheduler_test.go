@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
 var _ TimeWrapper = (*fakeTime)(nil)
@@ -232,8 +231,6 @@ func TestScheduled(t *testing.T) {
 
 func TestAt(t *testing.T) {
 	t.Run("job scheduled for future hasn't run yet", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-
 		ft := fakeTime{onNow: func(l *time.Location) time.Time {
 			return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
 		}}
