@@ -966,6 +966,22 @@ func (s *Scheduler) Tag(t ...string) *Scheduler {
 	return s
 }
 
+// GetAllTags returns all tags.
+func (s *Scheduler) GetAllTags() []string {
+	var tags []string
+	if s.tagsUnique {
+		s.tags.Range(func(key, value interface{}) bool {
+			tags = append(tags, key.(string))
+			return true
+		})
+	} else {
+		for _, job := range s.jobs {
+			tags = append(tags, job.tags...)
+		}
+	}
+	return tags
+}
+
 // StartAt schedules the next run of the Job. If this time is in the past, the configured interval will be used
 // to calculate the next future time
 func (s *Scheduler) StartAt(t time.Time) *Scheduler {
