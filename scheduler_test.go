@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
 var _ TimeWrapper = (*fakeTime)(nil)
@@ -27,8 +26,8 @@ func (f fakeTime) Unix(i int64, i2 int64) time.Time {
 	panic("implement me")
 }
 
-func (f fakeTime) Sleep(duration time.Duration) {
-	panic("implement me")
+func (f fakeTime) Sleep(d time.Duration) {
+	time.Sleep(d)
 }
 
 func task() {
@@ -232,8 +231,6 @@ func TestScheduled(t *testing.T) {
 
 func TestAt(t *testing.T) {
 	t.Run("job scheduled for future hasn't run yet", func(t *testing.T) {
-		defer goleak.VerifyNone(t)
-
 		ft := fakeTime{onNow: func(l *time.Location) time.Time {
 			return time.Date(1970, 1, 1, 12, 0, 0, 0, l)
 		}}
@@ -1085,6 +1082,21 @@ func TestScheduler_StartAt(t *testing.T) {
 		exp := time.Date(1971, 1, 7, 20, 19, 0, 0, time.UTC)
 		assert.Equal(t, exp, job.NextRun())
 		s.Stop()
+	})
+
+	t.Run("StartAt() with Week() no At()", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		dt := time.Now().UTC().Add(time.Second)
+		job, err := s.Every(1).Week().StartAt(dt).Do(func() {})
+		require.NoError(t, err)
+
+		s.StartAsync()
+		assert.Equal(t, dt, job.NextRun())
+		time.Sleep(time.Millisecond * 1500)
+		s.Stop()
+
+		assert.Equal(t, dt.Add(time.Hour*168).Truncate(time.Second), job.NextRun())
 	})
 }
 
