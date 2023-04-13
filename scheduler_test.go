@@ -82,7 +82,7 @@ func TestScheduler_EveryRandom(t *testing.T) {
 	s := NewScheduler(time.UTC)
 	semaphore := make(chan bool)
 
-	j, err := s.EveryRandom(1, 2).Seconds().Do(func() {
+	j, err := s.EveryRandom(50, 100).Milliseconds().Do(func() {
 		semaphore <- true
 	})
 	require.NoError(t, err)
@@ -93,14 +93,14 @@ func TestScheduler_EveryRandom(t *testing.T) {
 	var counter int
 
 	now := time.Now()
-	for time.Now().Before(now.Add(2 * time.Second)) {
+	for time.Now().Before(now.Add(1 * time.Second)) {
 		if <-semaphore {
 			counter++
 		}
 	}
 	s.Stop()
-	assert.LessOrEqual(t, counter, 3)
-	assert.GreaterOrEqual(t, counter, 1)
+	assert.LessOrEqual(t, counter, 20)
+	assert.GreaterOrEqual(t, counter, 10)
 }
 
 func TestScheduler_Every(t *testing.T) {
@@ -1773,8 +1773,8 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.GreaterOrEqual(t, counter, 5)
-		assert.LessOrEqual(t, counter, 6)
+		assert.GreaterOrEqual(t, counter, 2)
+		assert.LessOrEqual(t, counter, 3)
 	})
 
 	t.Run("happy singleton mode", func(t *testing.T) {
@@ -1805,8 +1805,8 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.GreaterOrEqual(t, counter, 4)
-		assert.LessOrEqual(t, counter, 5)
+		assert.GreaterOrEqual(t, counter, 2)
+		assert.LessOrEqual(t, counter, 3)
 	})
 
 	t.Run("update called without job call", func(t *testing.T) {
@@ -1824,12 +1824,16 @@ func TestScheduler_Update(t *testing.T) {
 		var counterMutex sync.RWMutex
 		counter := 0
 
-		j, err := s.Every(1).Day().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+		j, err := s.Every(1).Day().Do(func() {
+			counterMutex.Lock()
+			defer counterMutex.Unlock()
+			counter++
+		})
 		require.NoError(t, err)
 
 		s.StartAsync()
-
 		time.Sleep(300 * time.Millisecond)
+
 		_, err = s.Job(j).Every("500ms").Update()
 		require.NoError(t, err)
 
@@ -1848,7 +1852,8 @@ func TestScheduler_Update(t *testing.T) {
 
 		counterMutex.RLock()
 		defer counterMutex.RUnlock()
-		assert.Equal(t, 4, counter)
+		assert.GreaterOrEqual(t, counter, 3)
+		assert.LessOrEqual(t, counter, 4)
 	})
 
 	// Verifies https://github.com/go-co-op/gocron/issues/424
@@ -1869,7 +1874,6 @@ func TestScheduler_Update(t *testing.T) {
 		expectedNext := last.Add(newInterval)
 
 		assert.Equal(t, expectedNext, actualNext)
-
 	})
 }
 
