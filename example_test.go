@@ -439,6 +439,7 @@ func ExampleScheduler_LimitRunsTo() {
 	j, _ := s.Every(1).Second().LimitRunsTo(1).Do(task)
 	s.StartAsync()
 
+	time.Sleep(time.Millisecond * 100)
 	fmt.Println(j.RunCount())
 	// Output:
 	// 1

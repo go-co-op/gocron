@@ -1185,6 +1185,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.time = ft
+			tc.job.runCount = &atomic.Int64{}
 			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})
@@ -2255,7 +2256,7 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 						assert.Equal(t, wantTimeUntilNextRunTwoWeeksLessOneDay, got)
 					}
 				}
-				job.runCount++
+				job.runCount.Add(1)
 			}
 		})
 	}
