@@ -51,7 +51,8 @@ type jobFunction struct {
 	ctx            context.Context    // for cancellation
 	cancel         context.CancelFunc // for cancellation
 	isRunning      *atomic.Bool       // whether the job func is currently being run
-	runCount       *atomic.Int64      // number of times the job ran
+	runStartCount  *atomic.Int64      // number of times the job was started
+	runFinishCount *atomic.Int64      // number of times the job was finished
 }
 
 type eventListeners struct {
@@ -75,7 +76,8 @@ func (jf *jobFunction) copy() jobFunction {
 		ctx:            jf.ctx,
 		cancel:         jf.cancel,
 		isRunning:      jf.isRunning,
-		runCount:       jf.runCount,
+		runStartCount:  jf.runStartCount,
+		runFinishCount: jf.runFinishCount,
 	}
 	cp.parameters = append(cp.parameters, jf.parameters...)
 	return cp
@@ -108,10 +110,11 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		lastRun:  time.Time{},
 		nextRun:  time.Time{},
 		jobFunction: jobFunction{
-			ctx:       ctx,
-			cancel:    cancel,
-			isRunning: &atomic.Bool{},
-			runCount:  &atomic.Int64{},
+			ctx:            ctx,
+			cancel:         cancel,
+			isRunning:      &atomic.Bool{},
+			runStartCount:  &atomic.Int64{},
+			runFinishCount: &atomic.Int64{},
 		},
 		tags:              []string{},
 		startsImmediately: startImmediately,
@@ -394,7 +397,7 @@ func (j *Job) SingletonMode() {
 func (j *Job) shouldRun() bool {
 	j.mu.RLock()
 	defer j.mu.RUnlock()
-	return !j.runConfig.finiteRuns || j.runCount.Load() < int64(j.runConfig.maxRuns)
+	return !j.runConfig.finiteRuns || j.runStartCount.Load() < int64(j.runConfig.maxRuns)
 }
 
 // LastRun returns the time the job was run last
@@ -421,11 +424,18 @@ func (j *Job) setNextRun(t time.Time) {
 	j.nextRun = t
 }
 
-// RunCount returns the number of time the job ran so far
+// RunCount returns the number of times the job has been started
 func (j *Job) RunCount() int {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	return int(j.runCount.Load())
+	return int(j.runStartCount.Load())
+}
+
+// FinishedRunCount returns the number of times the job has finished running
+func (j *Job) FinishedRunCount() int {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	return int(j.runFinishCount.Load())
 }
 
 func (j *Job) stop() {

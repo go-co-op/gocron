@@ -41,12 +41,13 @@ func newExecutor() executor {
 }
 
 func runJob(f jobFunction) {
-	f.runCount.Add(1)
+	f.runStartCount.Add(1)
 	f.isRunning.Store(true)
 	callJobFunc(f.eventListeners.onBeforeJobExecution)
 	callJobFuncWithParams(f.function, f.parameters)
 	callJobFunc(f.eventListeners.onAfterJobExecution)
 	f.isRunning.Store(false)
+	f.runFinishCount.Add(1)
 }
 
 func (jf *jobFunction) singletonRunner() {
