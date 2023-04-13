@@ -188,7 +188,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 			}
 		}
 	} else {
-		lastRun = job.LastRun()
+		lastRun = job.NextRun()
 	}
 
 	if !job.shouldRun() {
@@ -602,18 +602,17 @@ func (s *Scheduler) runContinuous(job *Job) {
 	} else {
 		s.run(job)
 	}
-
-	nextRun := next.dateTime.Sub(s.now())
-	if nextRun < 0 {
-		time.Sleep(absDuration(nextRun))
+	nr := next.dateTime.Sub(s.now())
+	if nr < 0 {
+		time.Sleep(absDuration(nr))
 		shouldRun, next := s.scheduleNextRun(job)
 		if !shouldRun {
 			return
 		}
-		nextRun = next.dateTime.Sub(s.now())
+		nr = next.dateTime.Sub(s.now())
 	}
 
-	job.setTimer(s.timer(nextRun, func() {
+	job.setTimer(s.timer(nr, func() {
 		if !next.dateTime.IsZero() {
 			for {
 				n := s.now().UnixNano() - next.dateTime.UnixNano()
