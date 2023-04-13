@@ -21,9 +21,10 @@ func Test_ExecutorExecute(t *testing.T) {
 			assert.Equal(t, arg, "test")
 			wg.Done()
 		},
-		parameters: []any{"test"},
-		isRunning:  &atomic.Bool{},
-		runCount:   &atomic.Int64{},
+		parameters:     []any{"test"},
+		isRunning:      &atomic.Bool{},
+		runStartCount:  &atomic.Int64{},
+		runFinishCount: &atomic.Int64{},
 	}
 
 	wg.Wait()
@@ -52,9 +53,10 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 			a := make([]string, 0)
 			a[0] = "This will panic"
 		},
-		parameters: nil,
-		isRunning:  &atomic.Bool{},
-		runCount:   &atomic.Int64{},
+		parameters:     nil,
+		isRunning:      &atomic.Bool{},
+		runStartCount:  &atomic.Int64{},
+		runFinishCount: &atomic.Int64{},
 	}
 
 	wg.Wait()

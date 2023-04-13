@@ -186,8 +186,8 @@ func TestJob_shouldRunAgain(t *testing.T) {
 			j := &Job{
 				mu: &jobMutex{},
 				jobFunction: jobFunction{
-					runConfig: tt.runConfig,
-					runCount:  runCount,
+					runConfig:     tt.runConfig,
+					runStartCount: runCount,
 				},
 			}
 			if got := j.shouldRun(); got != tt.want {
@@ -201,9 +201,9 @@ func TestJob_LimitRunsTo(t *testing.T) {
 	j, _ := NewScheduler(time.Local).Every(1).Second().Do(func() {})
 	j.LimitRunsTo(2)
 	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
-	j.runCount.Add(1)
+	j.runStartCount.Add(1)
 	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
-	j.runCount.Add(1)
+	j.runStartCount.Add(1)
 	assert.Equal(t, j.shouldRun(), false, "Not expecting it to run again")
 }
 
@@ -219,7 +219,7 @@ func TestJob_CommonExports(t *testing.T) {
 
 	assert.False(t, j.NextRun().IsZero())
 
-	j.runCount.Store(5)
+	j.runStartCount.Store(5)
 	assert.Equal(t, 5, j.RunCount())
 
 	lastRun := time.Now()

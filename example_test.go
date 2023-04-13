@@ -23,6 +23,18 @@ func ExampleJob_Error() {
 	// the given time format is not supported
 }
 
+func ExampleJob_FinishedRunCount() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	go func() {
+		for {
+			fmt.Println("Count of finished job runs", job.FinishedRunCount())
+			time.Sleep(time.Second)
+		}
+	}()
+	s.StartAsync()
+}
+
 func ExampleJob_IsRunning() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every(10).Seconds().Do(func() { time.Sleep(2 * time.Second) })
