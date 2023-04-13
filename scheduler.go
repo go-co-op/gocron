@@ -588,7 +588,6 @@ func (s *Scheduler) run(job *Job) {
 	}
 
 	s.executor.jobFunctions <- job.jobFunction.copy()
-	job.runCount++
 }
 
 func (s *Scheduler) runContinuous(job *Job) {
@@ -1264,6 +1263,10 @@ func (s *Scheduler) Update() (*Job, error) {
 
 	if job.runWithDetails {
 		return s.DoWithJobDetails(job.function, job.parameters...)
+	}
+
+	if job.runConfig.mode == singletonMode {
+		job.SingletonMode()
 	}
 
 	return s.Do(job.function, job.parameters...)

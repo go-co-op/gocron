@@ -1,8 +1,8 @@
 package gocron
 
 import (
-	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +15,6 @@ func Test_ExecutorExecute(t *testing.T) {
 	wg.Add(1)
 	go e.start()
 
-	var runState = int64(0)
 	e.jobFunctions <- jobFunction{
 		name: "test_fn",
 		function: func(arg string) {
@@ -23,7 +22,8 @@ func Test_ExecutorExecute(t *testing.T) {
 			wg.Done()
 		},
 		parameters: []any{"test"},
-		runState:   &runState,
+		isRunning:  &atomic.Bool{},
+		runCount:   &atomic.Int64{},
 	}
 
 	wg.Wait()
@@ -34,9 +34,6 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	panicHandled := make(chan bool, 1)
 
 	handler := func(jobName string, recoverData any) {
-		fmt.Println("PanicHandler called:")
-		fmt.Println("panic in " + jobName)
-		fmt.Println(recoverData)
 		panicHandled <- true
 	}
 
@@ -48,7 +45,6 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	wg.Add(1)
 	go e.start()
 
-	var runState = int64(0)
 	e.jobFunctions <- jobFunction{
 		name: "test_fn",
 		function: func() {
@@ -57,7 +53,8 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 			a[0] = "This will panic"
 		},
 		parameters: nil,
-		runState:   &runState,
+		isRunning:  &atomic.Bool{},
+		runCount:   &atomic.Int64{},
 	}
 
 	wg.Wait()

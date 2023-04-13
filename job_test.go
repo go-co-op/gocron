@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -180,12 +181,14 @@ func TestJob_shouldRunAgain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			runCount := &atomic.Int64{}
+			runCount.Store(int64(tt.runCount))
 			j := &Job{
 				mu: &jobMutex{},
 				jobFunction: jobFunction{
 					runConfig: tt.runConfig,
+					runCount:  runCount,
 				},
-				runCount: tt.runCount,
 			}
 			if got := j.shouldRun(); got != tt.want {
 				t.Errorf("Job.shouldRunAgain() = %v, want %v", got, tt.want)
@@ -198,9 +201,9 @@ func TestJob_LimitRunsTo(t *testing.T) {
 	j, _ := NewScheduler(time.Local).Every(1).Second().Do(func() {})
 	j.LimitRunsTo(2)
 	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
-	j.runCount++
+	j.runCount.Add(1)
 	assert.Equal(t, j.shouldRun(), true, "Expecting it to run again")
-	j.runCount++
+	j.runCount.Add(1)
 	assert.Equal(t, j.shouldRun(), false, "Not expecting it to run again")
 }
 
@@ -216,7 +219,7 @@ func TestJob_CommonExports(t *testing.T) {
 
 	assert.False(t, j.NextRun().IsZero())
 
-	j.runCount = 5
+	j.runCount.Store(5)
 	assert.Equal(t, 5, j.RunCount())
 
 	lastRun := time.Now()

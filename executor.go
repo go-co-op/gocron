@@ -40,6 +40,29 @@ func newExecutor() executor {
 	}
 }
 
+func runJob(f jobFunction) {
+	f.runCount.Add(1)
+	f.isRunning.Store(true)
+	callJobFunc(f.eventListeners.onBeforeJobExecution)
+	callJobFuncWithParams(f.function, f.parameters)
+	callJobFunc(f.eventListeners.onAfterJobExecution)
+	f.isRunning.Store(false)
+}
+
+func (jf *jobFunction) singletonRunner() {
+	for {
+		select {
+		case <-jf.ctx.Done():
+			return
+		default:
+			if jf.singletonQueue.Load() != 0 {
+				runJob(*jf)
+				jf.singletonQueue.Add(-1)
+			}
+		}
+	}
+}
+
 func (e *executor) start() {
 	stopCtx, cancel := context.WithCancel(context.Background())
 	runningJobsWg := sync.WaitGroup{}
@@ -79,7 +102,6 @@ func (e *executor) start() {
 
 							if err := e.maxRunningJobs.Acquire(f.ctx, 1); err != nil {
 								break
-
 							}
 						}
 					}
@@ -87,29 +109,11 @@ func (e *executor) start() {
 					defer e.maxRunningJobs.Release(1)
 				}
 
-				runJob := func() {
-					f.incrementRunState()
-					callJobFunc(f.eventListeners.onBeforeJobExecution)
-					callJobFuncWithParams(f.function, f.parameters)
-					callJobFunc(f.eventListeners.onAfterJobExecution)
-					f.decrementRunState()
-				}
-
 				switch f.runConfig.mode {
 				case defaultMode:
-					runJob()
+					runJob(f)
 				case singletonMode:
-					_, _, _ = f.limiter.Do("main", func() (any, error) {
-						select {
-						case <-stopCtx.Done():
-							return nil, nil
-						case <-f.ctx.Done():
-							return nil, nil
-						default:
-						}
-						runJob()
-						return nil, nil
-					})
+					f.singletonQueue.Add(1)
 				}
 			}()
 		case <-e.stopCh:
