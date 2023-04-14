@@ -313,7 +313,7 @@ func TestAt(t *testing.T) {
 		atTime3 := time.Now().UTC().Add(time.Hour * -1).Round(time.Second)
 
 		s := NewScheduler(time.UTC)
-		job, err := s.Every(1).Week().At(atTime1).At(atTime2).At(atTime3).Do(func() {})
+		job, err := s.Week().At(atTime1).At(atTime2).At(atTime3).Every(1).Do(func() {})
 		require.NoError(t, err)
 		s.StartAsync()
 
@@ -512,11 +512,11 @@ func TestScheduler_Remove(t *testing.T) {
 	t.Run("remove from non-running", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.TagsUnique()
-		_, err := s.Every(1).Minute().Tag("tag1").Do(task)
+		_, err := s.Minute().Tag("tag1").Every(1).Do(task)
 		require.NoError(t, err)
 		_, err = s.Every(1).Minute().Do(taskWithParams, 1, "hello")
 		require.NoError(t, err)
-		_, err = s.Every(1).Minute().Do(task)
+		_, err = s.Minute().Every(1).Do(task)
 		require.NoError(t, err)
 
 		assert.Equal(t, 3, s.Len(), "Incorrect number of jobs")
@@ -1732,17 +1732,17 @@ func TestScheduler_Job(t *testing.T) {
 
 	j1, err := s.Every("1s").Do(func() {})
 	require.NoError(t, err)
-	assert.Equal(t, j1, s.getCurrentJob())
+	assert.Equal(t, j1, s.jobs[len(s.jobs)-1])
 
 	j2, err := s.Every("1s").Do(func() {})
 	require.NoError(t, err)
-	assert.Equal(t, j2, s.getCurrentJob())
+	assert.Equal(t, j2, s.jobs[len(s.jobs)-1])
 
 	s.Job(j1)
-	assert.Equal(t, j1, s.getCurrentJob())
+	assert.Equal(t, j1, s.jobs[len(s.jobs)-1])
 
 	s.Job(j2)
-	assert.Equal(t, j2, s.getCurrentJob())
+	assert.Equal(t, j2, s.jobs[len(s.jobs)-1])
 }
 
 func TestScheduler_Update(t *testing.T) {
@@ -2038,10 +2038,18 @@ func TestScheduler_WaitForSchedules(t *testing.T) {
 	var counterMutex sync.RWMutex
 	counter := 0
 
-	_, err := s.Every("1s").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err := s.Every("1s").Do(func() {
+		counterMutex.Lock()
+		defer counterMutex.Unlock()
+		counter++
+	})
 	require.NoError(t, err)
 
-	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
+	_, err = s.CronWithSeconds("*/1 * * * * *").Do(func() {
+		counterMutex.Lock()
+		defer counterMutex.Unlock()
+		counter++
+	})
 	require.NoError(t, err)
 	s.StartAsync()
 
@@ -2433,65 +2441,98 @@ func TestScheduler_DoWithJobDetails(t *testing.T) {
 	})
 }
 
-func TestScheduler_GetAllTags(t *testing.T) {
-	t.Run("tags unique", func(t *testing.T) {
-		testCases := []struct {
-			description string
-			tags        []string
-			expected    []string
-		}{
-			{"no tags", []string{}, nil},
-			{"one tag", []string{"tag1"}, []string{"tag1"}},
-			{"two tags", []string{"tag1", "tag2"}, []string{"tag1", "tag2"}},
-			{"two tags with duplicates", []string{"tag1", "tag2", "tag1"}, []string{"tag1", "tag2"}},
-		}
+func TestScheduler_GetAllTags_Unique(t *testing.T) {
+	testCases := []struct {
+		description   string
+		tags          []string
+		expected      []string
+		expectedError error
+	}{
+		{"unique: no tags", []string{}, nil, nil},
+		{"unique: one tag", []string{"tag1"}, []string{"tag1"}, nil},
+		{"unique: two tags", []string{"tag1", "tag2"}, []string{"tag1", "tag2"}, nil},
+		{"unique: two tags with duplicates", []string{"tag1", "tag2", "tag1"}, nil, ErrTagsUnique("tag1")},
+	}
 
-		for _, tc := range testCases {
-			t.Run(tc.description, func(t *testing.T) {
-				s := NewScheduler(time.UTC)
-				s.TagsUnique()
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			s.TagsUnique()
 
-				for _, tag := range tc.tags {
-					_, err := s.Tag(tag).Every("100ms").Do(func() {})
-					require.NoError(t, err)
-				}
+			_, err := s.Tag(tc.tags...).Every("100ms").Do(func() {})
+			if tc.expectedError == nil {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, tc.expectedError.Error())
+			}
 
-				tags := s.GetAllTags()
-				sort.Strings(tc.expected)
-				sort.Strings(tags)
+			tags := s.GetAllTags()
+			sort.Strings(tc.expected)
+			sort.Strings(tags)
 
-				assert.Equal(t, tc.expected, tags)
-			})
-		}
-	})
+			assert.Equal(t, tc.expected, tags)
+		})
+	}
+}
 
-	t.Run("tags not unique", func(t *testing.T) {
-		testCases := []struct {
-			description string
-			tags        []string
-			expected    []string
-		}{
-			{"no tags", []string{}, nil},
-			{"one tag", []string{"tag1"}, []string{"tag1"}},
-			{"two tags", []string{"tag1", "tag2"}, []string{"tag1", "tag2"}},
-			{"two tags with duplicates", []string{"tag1", "tag2", "tag1"}, []string{"tag1", "tag2", "tag1"}},
-		}
+func TestScheduler_GetAllTags_NotUnique(t *testing.T) {
+	testCases := []struct {
+		description string
+		tags        []string
+		expected    []string
+	}{
+		{"no tags", []string{}, nil},
+		{"one tag", []string{"tag1"}, []string{"tag1"}},
+		{"two tags", []string{"tag1", "tag2"}, []string{"tag1", "tag2"}},
+		{"two tags with duplicates", []string{"tag1", "tag2", "tag1"}, []string{"tag1", "tag2", "tag1"}},
+	}
 
-		for _, tc := range testCases {
-			t.Run(tc.description, func(t *testing.T) {
-				s := NewScheduler(time.UTC)
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
 
-				for _, tag := range tc.tags {
-					_, err := s.Tag(tag).Every("100ms").Do(func() {})
-					require.NoError(t, err)
-				}
+			_, err := s.Tag(tc.tags...).Every("100ms").Do(func() {})
+			require.NoError(t, err)
 
-				tags := s.GetAllTags()
-				sort.Strings(tc.expected)
-				sort.Strings(tags)
+			tags := s.GetAllTags()
+			sort.Strings(tc.expected)
+			sort.Strings(tags)
 
-				assert.Equal(t, tc.expected, tags)
-			})
-		}
-	})
+			assert.Equal(t, tc.expected, tags)
+		})
+	}
+}
+
+func TestScheduler_ChainOrder(t *testing.T) {
+	s := NewScheduler(time.UTC)
+
+	func1 := func() { panic("func 1 not implemented") }
+	func2 := func() { panic("func 2 not implemented") }
+	func3 := func() { panic("func 3 not implemented") }
+
+	funcs := []any{func1, func2, func3}
+
+	_, err := s.Tag("1").SingletonMode().Milliseconds().EveryRandom(100, 200).Do(func1)
+	require.NoError(t, err)
+
+	_, err = s.Monday().Every(4).Tag("2").Do(func2)
+	require.NoError(t, err)
+
+	_, err = s.Months(1).Tag("3").Every(1).SingletonMode().At("1:00").Do(func3)
+	require.NoError(t, err)
+
+	require.Len(t, s.jobs, 3)
+	for i, j := range s.jobs {
+		assert.Equal(t, fmt.Sprint(funcs[i]), fmt.Sprint(j.function))
+	}
+
+	err = s.RemoveByTag("2")
+	require.NoError(t, err)
+
+	require.Len(t, s.jobs, 2)
+	funcs = append(funcs[:1], funcs[2])
+	for i, j := range s.jobs {
+		assert.Equal(t, fmt.Sprint(funcs[i]), fmt.Sprint(j.function))
+	}
+
 }
