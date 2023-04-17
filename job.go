@@ -41,18 +41,20 @@ type random struct {
 }
 
 type jobFunction struct {
-	eventListeners                    // additional functions to allow run 'em during job performing
-	function       any                // task's function
-	parameters     []any              // task's function parameters
-	parametersLen  int                // length of the passed parameters
-	name           string             // nolint the function name to run
-	runConfig      runConfig          // configuration for how many times to run the job
-	singletonQueue *atomic.Int64      // limits inflight runs of a job to one
-	ctx            context.Context    // for cancellation
-	cancel         context.CancelFunc // for cancellation
-	isRunning      *atomic.Bool       // whether the job func is currently being run
-	runStartCount  *atomic.Int64      // number of times the job was started
-	runFinishCount *atomic.Int64      // number of times the job was finished
+	eventListeners                       // additional functions to allow run 'em during job performing
+	function          any                // task's function
+	parameters        []any              // task's function parameters
+	parametersLen     int                // length of the passed parameters
+	name              string             // nolint the function name to run
+	runConfig         runConfig          // configuration for how many times to run the job
+	singletonQueue    *atomic.Int64      // limits inflight runs of a job to one
+	singletonRunnerOn *atomic.Bool       // whether the runner function for singleton is running
+	ctx               context.Context    // for cancellation
+	cancel            context.CancelFunc // for cancellation
+	isRunning         *atomic.Bool       // whether the job func is currently being run
+	runStartCount     *atomic.Int64      // number of times the job was started
+	runFinishCount    *atomic.Int64      // number of times the job was finished
+	singletonWg       *sync.WaitGroup    // used by singleton runner
 }
 
 type eventListeners struct {
@@ -66,18 +68,20 @@ type jobMutex struct {
 
 func (jf *jobFunction) copy() jobFunction {
 	cp := jobFunction{
-		eventListeners: jf.eventListeners,
-		function:       jf.function,
-		parameters:     nil,
-		parametersLen:  jf.parametersLen,
-		name:           jf.name,
-		runConfig:      jf.runConfig,
-		singletonQueue: jf.singletonQueue,
-		ctx:            jf.ctx,
-		cancel:         jf.cancel,
-		isRunning:      jf.isRunning,
-		runStartCount:  jf.runStartCount,
-		runFinishCount: jf.runFinishCount,
+		eventListeners:    jf.eventListeners,
+		function:          jf.function,
+		parameters:        nil,
+		parametersLen:     jf.parametersLen,
+		name:              jf.name,
+		runConfig:         jf.runConfig,
+		singletonQueue:    jf.singletonQueue,
+		ctx:               jf.ctx,
+		cancel:            jf.cancel,
+		isRunning:         jf.isRunning,
+		runStartCount:     jf.runStartCount,
+		runFinishCount:    jf.runFinishCount,
+		singletonWg:       jf.singletonWg,
+		singletonRunnerOn: jf.singletonRunnerOn,
 	}
 	cp.parameters = append(cp.parameters, jf.parameters...)
 	return cp
@@ -110,11 +114,12 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		lastRun:  time.Time{},
 		nextRun:  time.Time{},
 		jobFunction: jobFunction{
-			ctx:            ctx,
-			cancel:         cancel,
-			isRunning:      &atomic.Bool{},
-			runStartCount:  &atomic.Int64{},
-			runFinishCount: &atomic.Int64{},
+			ctx:               ctx,
+			cancel:            cancel,
+			isRunning:         &atomic.Bool{},
+			runStartCount:     &atomic.Int64{},
+			runFinishCount:    &atomic.Int64{},
+			singletonRunnerOn: &atomic.Bool{},
 		},
 		tags:              []string{},
 		startsImmediately: startImmediately,
@@ -389,7 +394,7 @@ func (j *Job) SingletonMode() {
 	defer j.mu.Unlock()
 	j.runConfig.mode = singletonMode
 	j.jobFunction.singletonQueue = &atomic.Int64{}
-	go j.jobFunction.singletonRunner()
+	j.jobFunction.singletonWg = &sync.WaitGroup{}
 }
 
 // shouldRun evaluates if this job should run again

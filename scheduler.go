@@ -93,6 +93,11 @@ func (s *Scheduler) StartAsync() {
 
 // start starts the scheduler, scheduling and running jobs
 func (s *Scheduler) start() {
+	stopCtx, cancel := context.WithCancel(context.Background())
+	s.executor.ctx = stopCtx
+	s.executor.cancel = cancel
+	s.executor.jobsWg = &sync.WaitGroup{}
+
 	go s.executor.start()
 	s.setRunning(true)
 	s.runJobs(s.Jobs())
@@ -100,6 +105,11 @@ func (s *Scheduler) start() {
 
 func (s *Scheduler) runJobs(jobs []*Job) {
 	for _, job := range jobs {
+		ctx, cancel := context.WithCancel(context.Background())
+		job.mu.Lock()
+		job.ctx = ctx
+		job.cancel = cancel
+		job.mu.Unlock()
 		s.runContinuous(job)
 	}
 }
