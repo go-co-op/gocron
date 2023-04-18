@@ -92,12 +92,7 @@ func (s *Scheduler) StartAsync() {
 
 // start starts the scheduler, scheduling and running jobs
 func (s *Scheduler) start() {
-	stopCtx, cancel := context.WithCancel(context.Background())
-	s.executor.ctx = stopCtx
-	s.executor.cancel = cancel
-	s.executor.jobsWg = &sync.WaitGroup{}
-
-	go s.executor.start()
+	s.executor.start()
 	s.setRunning(true)
 	s.runJobs(s.Jobs())
 }

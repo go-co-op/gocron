@@ -308,16 +308,24 @@ func TestAt(t *testing.T) {
 	})
 
 	t.Run("Week() and multiple At() times, all in past", func(t *testing.T) {
-		atTime1 := time.Now().UTC().Add(time.Hour * -6).Round(time.Second)
-		atTime2 := time.Now().UTC().Add(time.Hour * -5).Round(time.Second)
-		atTime3 := time.Now().UTC().Add(time.Hour * -4).Round(time.Second)
+		tm := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
+
+		ft := fakeTime{onNow: func(l *time.Location) time.Time {
+			return tm
+		}}
+
+		atTime1 := tm.Add(time.Hour * -6).Round(time.Second)
+		atTime2 := tm.Add(time.Hour * -5).Round(time.Second)
+		atTime3 := tm.Add(time.Hour * -4).Round(time.Second)
 
 		s := NewScheduler(time.UTC)
+		s.time = ft
+
 		job, err := s.Week().At(atTime1).At(atTime2).At(atTime3).Every(1).Do(func() {})
 		require.NoError(t, err)
 		s.StartAsync()
 
-		assert.Equal(t, atTime1.Add(time.Hour*24), job.NextRun())
+		assert.Equal(t, atTime1.Add(time.Hour*168), job.NextRun())
 		s.Stop()
 	})
 }
@@ -1595,7 +1603,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		// 200ms - jobs 1 & 3 run
 		// 300ms - jobs 2 & 3 run, job 1 hits the limit and waits
 		{
-			"wait mode", 2, WaitMode, 7, false,
+			"wait mode", 2, WaitMode, 8, false,
 			func() {
 				semaphore <- true
 				time.Sleep(100 * time.Millisecond)
@@ -1604,7 +1612,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 
 		//// Same as above - this confirms the same behavior when jobs are removed rather than the scheduler being stopped
 		{
-			"wait mode - with job removal", 2, WaitMode, 7, true,
+			"wait mode - with job removal", 2, WaitMode, 8, true,
 			func() {
 				semaphore <- true
 				time.Sleep(100 * time.Millisecond)

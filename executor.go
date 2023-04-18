@@ -43,12 +43,10 @@ func newExecutor() executor {
 	e := executor{
 		jobFunctions:         make(chan jobFunction, 1),
 		singletonWgs:         &sync.Map{},
-		wg:                   &sync.WaitGroup{},
 		limitModeFuncRunning: &atomic.Bool{},
 		limitModeQueueMu:     &sync.Mutex{},
 		limitModeRunningJobs: &atomic.Int64{},
 	}
-	e.wg.Add(1)
 	return e
 }
 
@@ -117,6 +115,19 @@ func (e *executor) limitModeRunner() {
 }
 
 func (e *executor) start() {
+	e.wg = &sync.WaitGroup{}
+	e.wg.Add(1)
+
+	stopCtx, cancel := context.WithCancel(context.Background())
+	e.ctx = stopCtx
+	e.cancel = cancel
+
+	e.jobsWg = &sync.WaitGroup{}
+
+	go e.run()
+}
+
+func (e *executor) run() {
 	for {
 		select {
 		case f := <-e.jobFunctions:
