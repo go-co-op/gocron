@@ -1,7 +1,6 @@
 package gocron
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -11,14 +10,10 @@ import (
 
 func Test_ExecutorExecute(t *testing.T) {
 	e := newExecutor()
-	stopCtx, cancel := context.WithCancel(context.Background())
-	e.ctx = stopCtx
-	e.cancel = cancel
-	e.jobsWg = &sync.WaitGroup{}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go e.start()
+	e.start()
 
 	e.jobFunctions <- jobFunction{
 		name: "test_fn",
@@ -46,14 +41,10 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	SetPanicHandler(handler)
 
 	e := newExecutor()
-	stopCtx, cancel := context.WithCancel(context.Background())
-	e.ctx = stopCtx
-	e.cancel = cancel
-	e.jobsWg = &sync.WaitGroup{}
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	go e.start()
+	e.start()
 
 	e.jobFunctions <- jobFunction{
 		name: "test_fn",
