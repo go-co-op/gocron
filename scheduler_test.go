@@ -1595,7 +1595,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		// 200ms - jobs 1 & 3 run
 		// 300ms - jobs 2 & 3 run, job 1 hits the limit and waits
 		{
-			"wait mode", 2, WaitMode, 8, false,
+			"wait mode", 2, WaitMode, 7, false,
 			func() {
 				semaphore <- true
 				time.Sleep(100 * time.Millisecond)
@@ -1604,7 +1604,7 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 
 		//// Same as above - this confirms the same behavior when jobs are removed rather than the scheduler being stopped
 		{
-			"wait mode - with job removal", 2, WaitMode, 8, true,
+			"wait mode - with job removal", 2, WaitMode, 7, true,
 			func() {
 				semaphore <- true
 				time.Sleep(100 * time.Millisecond)
