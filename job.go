@@ -451,6 +451,7 @@ func (j *Job) stop() {
 	}
 	if j.cancel != nil {
 		j.cancel()
+		j.ctx, j.cancel = context.WithCancel(context.Background())
 	}
 }
 

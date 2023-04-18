@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"golang.org/x/sync/semaphore"
 )
 
 type limitMode int8
@@ -70,7 +69,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 // SetMaxConcurrentJobs limits how many jobs can be running at the same time.
 // This is useful when running resource intensive jobs and a precise start time is not critical.
 func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
-	s.executor.maxRunningJobs = semaphore.NewWeighted(int64(n))
+	s.executor.limitModeMaxRunningJobs = n
 	s.executor.limitMode = mode
 }
 
@@ -595,7 +594,7 @@ func (s *Scheduler) runContinuous(job *Job) {
 	}
 	nr := next.dateTime.Sub(s.now())
 	if nr < 0 {
-		time.Sleep(absDuration(nr))
+		job.setLastRun(s.now())
 		shouldRun, next := s.scheduleNextRun(job)
 		if !shouldRun {
 			return
@@ -1252,7 +1251,6 @@ func (s *Scheduler) Update() (*Job, error) {
 	}
 	s.updateJob = false
 	job.stop()
-	job.ctx, job.cancel = context.WithCancel(context.Background())
 	job.setStartsImmediately(false)
 
 	if job.runWithDetails {

@@ -3,22 +3,29 @@
 [![CI State](https://github.com/go-co-op/gocron/actions/workflows/go_test.yml/badge.svg?branch=main&event=push)](https://github.com/go-co-op/gocron/actions)
 ![Go Report Card](https://goreportcard.com/badge/github.com/go-co-op/gocron) [![Go Doc](https://godoc.org/github.com/go-co-op/gocron?status.svg)](https://pkg.go.dev/github.com/go-co-op/gocron)
 
-gocron is a job scheduling package which lets you run Go functions at pre-determined intervals using a simple, human-friendly syntax.
+gocron is a job scheduling package which lets you run Go functions at pre-determined intervals 
+using a simple, human-friendly syntax.
 
-gocron is a Golang scheduler implementation similar to the Ruby module [clockwork](https://github.com/tomykaira/clockwork) and the Python job scheduling package [schedule](https://github.com/dbader/schedule).
+gocron is a Golang scheduler implementation similar to the Ruby module 
+[clockwork](https://github.com/tomykaira/clockwork) and the Python job scheduling package [schedule](https://github.com/dbader/schedule).
 
 See also these two great articles that were used for design input:
 
 - [Rethinking Cron](http://adam.herokuapp.com/past/2010/4/13/rethinking_cron/)
 - [Replace Cron with Clockwork](http://adam.herokuapp.com/past/2010/6/30/replace_cron_with_clockwork/)
 
-If you want to chat, you can find us at Slack! [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
+If you want to chat, you can find us at Slack! 
+[<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
 ## Concepts
 
-- **Scheduler**: The scheduler tracks all the jobs assigned to it and makes sure they are passed to the executor when ready to be run. The scheduler is able to manage overall aspects of job behavior like limiting how many jobs are running at one time.
-- **Job**: The job is simply aware of the task (go function) it's provided and is therefore only able to perform actions related to that task like preventing itself from overruning a previous task that is taking a long time.
-- **Executor**: The executor, as it's name suggests, is simply responsible for calling the task (go function) that the job hands to it when sent by the scheduler.
+- **Scheduler**: The scheduler tracks all the jobs assigned to it and makes sure they are passed to the executor when
+  ready to be run. The scheduler is able to manage overall aspects of job behavior like limiting how many jobs 
+  are running at one time.
+- **Job**: The job is simply aware of the task (go function) it's provided and is therefore only able to perform
+  actions related to that task like preventing itself from overruning a previous task that is taking a long time.
+- **Executor**: The executor, as it's name suggests, is simply responsible for calling the task (go function) that
+  the job hands to it when sent by the scheduler.
 
 ## Examples
 

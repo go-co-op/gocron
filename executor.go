@@ -3,8 +3,7 @@ package gocron
 import (
 	"context"
 	"sync"
-
-	"golang.org/x/sync/semaphore"
+	"sync/atomic"
 )
 
 const (
@@ -25,21 +24,29 @@ const (
 )
 
 type executor struct {
-	jobFunctions   chan jobFunction   // the chan upon which the jobFunctions are passed in from the scheduler
-	ctx            context.Context    // used to tell the executor to stop
-	cancel         context.CancelFunc // used to tell the executor to stop
-	wg             *sync.WaitGroup    // used by the scheduler to wait for the executor to stop
-	jobsWg         *sync.WaitGroup    // used by the executor to wait for all jobs to finish
-	singletonWgs   *sync.Map          // used by the executor to wait for the singleton runners to complete
-	limitMode      limitMode          // when SetMaxConcurrentJobs() is set upon the scheduler
-	maxRunningJobs *semaphore.Weighted
+	jobFunctions chan jobFunction   // the chan upon which the jobFunctions are passed in from the scheduler
+	ctx          context.Context    // used to tell the executor to stop
+	cancel       context.CancelFunc // used to tell the executor to stop
+	wg           *sync.WaitGroup    // used by the scheduler to wait for the executor to stop
+	jobsWg       *sync.WaitGroup    // used by the executor to wait for all jobs to finish
+	singletonWgs *sync.Map          // used by the executor to wait for the singleton runners to complete
+
+	limitMode               limitMode     // when SetMaxConcurrentJobs() is set upon the scheduler
+	limitModeMaxRunningJobs int           // stores the maximum number of concurrently running jobs
+	limitModeFuncRunning    *atomic.Bool  // tracks whether the function for handling limited run jobs is running
+	limitModeQueue          []jobFunction // queues the limited jobs for running when able per limit mode
+	limitModeQueueMu        *sync.Mutex   // mutex for the queue
+	limitModeRunningJobs    *atomic.Int64 // tracks the count of running jobs to check against the max
 }
 
 func newExecutor() executor {
 	e := executor{
-		jobFunctions: make(chan jobFunction, 1),
-		singletonWgs: &sync.Map{},
-		wg:           &sync.WaitGroup{},
+		jobFunctions:         make(chan jobFunction, 1),
+		singletonWgs:         &sync.Map{},
+		wg:                   &sync.WaitGroup{},
+		limitModeFuncRunning: &atomic.Bool{},
+		limitModeQueueMu:     &sync.Mutex{},
+		limitModeRunningJobs: &atomic.Int64{},
 	}
 	e.wg.Add(1)
 	return e
@@ -73,13 +80,57 @@ func (jf *jobFunction) singletonRunner() {
 	}
 }
 
+func (e *executor) limitModeRunner() {
+	for {
+		select {
+		case <-e.ctx.Done():
+			e.limitModeQueueMu.Lock()
+			e.limitModeQueue = nil
+			e.limitModeQueueMu.Unlock()
+			e.limitModeFuncRunning.Store(false)
+			return
+		default:
+			e.limitModeQueueMu.Lock()
+			if e.limitModeQueue != nil && len(e.limitModeQueue) > 0 && e.limitModeRunningJobs.Load() < int64(e.limitModeMaxRunningJobs) {
+				jf := e.limitModeQueue[0]
+				e.limitModeQueue = e.limitModeQueue[1:]
+				e.limitModeQueueMu.Unlock()
+
+				e.limitModeRunningJobs.Store(e.limitModeRunningJobs.Load() + 1)
+
+				select {
+				case <-jf.ctx.Done():
+					continue
+				default:
+					e.jobsWg.Add(1)
+					go func() {
+						defer e.jobsWg.Done()
+						runJob(jf)
+						e.limitModeRunningJobs.Store(e.limitModeRunningJobs.Load() - 1)
+					}()
+				}
+			} else {
+				e.limitModeQueueMu.Unlock()
+			}
+		}
+	}
+}
+
 func (e *executor) start() {
 	for {
 		select {
 		case f := <-e.jobFunctions:
+
 			e.jobsWg.Add(1)
 			go func() {
 				defer e.jobsWg.Done()
+
+				if e.limitModeMaxRunningJobs > 0 {
+					if !e.limitModeFuncRunning.Load() {
+						go e.limitModeRunner()
+						e.limitModeFuncRunning.Store(true)
+					}
+				}
 
 				panicHandlerMutex.RLock()
 				defer panicHandlerMutex.RUnlock()
@@ -92,28 +143,20 @@ func (e *executor) start() {
 					}()
 				}
 
-				if e.maxRunningJobs != nil {
-					if !e.maxRunningJobs.TryAcquire(1) {
-
-						switch e.limitMode {
-						case RescheduleMode:
-							return
-						case WaitMode:
-							select {
-							case <-e.ctx.Done():
-								return
-							case <-f.ctx.Done():
-								return
-							default:
-							}
-
-							if err := e.maxRunningJobs.Acquire(f.ctx, 1); err != nil {
-								break
-							}
+				if e.limitModeMaxRunningJobs > 0 {
+					switch e.limitMode {
+					case RescheduleMode:
+						e.limitModeQueueMu.Lock()
+						if e.limitModeQueue == nil || len(e.limitModeQueue) < e.limitModeMaxRunningJobs {
+							e.limitModeQueue = append(e.limitModeQueue, f)
 						}
+						e.limitModeQueueMu.Unlock()
+					case WaitMode:
+						e.limitModeQueueMu.Lock()
+						e.limitModeQueue = append(e.limitModeQueue, f)
+						e.limitModeQueueMu.Unlock()
 					}
-
-					defer e.maxRunningJobs.Release(1)
+					return
 				}
 
 				switch f.runConfig.mode {
