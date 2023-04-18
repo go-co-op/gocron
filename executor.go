@@ -102,8 +102,8 @@ func (e *executor) limitModeRunner() {
 				default:
 					e.jobsWg.Add(1)
 					go func() {
-						defer e.jobsWg.Done()
 						runJob(jf)
+						e.jobsWg.Done()
 						e.limitModeRunningJobs.Store(e.limitModeRunningJobs.Load() - 1)
 					}()
 				}

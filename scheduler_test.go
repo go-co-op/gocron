@@ -1651,7 +1651,6 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 				s.RemoveByReference(j1)
 				s.RemoveByReference(j2)
 				s.RemoveByReference(j3)
-				defer s.Stop()
 			} else {
 				s.Stop()
 			}
@@ -1670,6 +1669,10 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 
 			assert.GreaterOrEqual(t, counter, tc.expectedRuns-1)
 			assert.LessOrEqual(t, counter, tc.expectedRuns+1)
+
+			if tc.removeJobs {
+				s.Stop()
+			}
 		})
 	}
 }
