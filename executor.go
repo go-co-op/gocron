@@ -58,6 +58,7 @@ func newExecutor() executor {
 		limitModeFuncsRunning: &atomic.Int64{},
 		limitModeFuncWg:       &sync.WaitGroup{},
 		limitModeRunningJobs:  &atomic.Int64{},
+		limitModeQueue:        make(chan jobFunction, 1000),
 	}
 	return e
 }
@@ -116,7 +117,6 @@ func (e *executor) start() {
 	e.cancel = cancel
 
 	e.jobsWg = &sync.WaitGroup{}
-	e.limitModeQueue = make(chan jobFunction, 1000)
 
 	e.stopped = &atomic.Bool{}
 	go e.run()
