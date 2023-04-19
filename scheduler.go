@@ -68,6 +68,8 @@ func NewScheduler(loc *time.Location) *Scheduler {
 
 // SetMaxConcurrentJobs limits how many jobs can be running at the same time.
 // This is useful when running resource intensive jobs and a precise start time is not critical.
+//
+// Note: WaitMode and RescheduleMode provide details on usage and potential risks.
 func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
 	s.executor.limitModeMaxRunningJobs = n
 	s.executor.limitMode = mode
@@ -780,6 +782,16 @@ func (s *Scheduler) LimitRunsTo(i int) *Scheduler {
 
 // SingletonMode prevents a new job from starting if the prior job has not yet
 // completed its run
+//
+// Warning: do not use this mode if your jobs will continue to stack
+// up beyond the ability of the limit workers to keep up. An example of
+// what NOT to do:
+//
+//	 s.Every("1s").SingletonMode().Do(func() {
+//	     // this will result in an ever-growing number of goroutines
+//		   // blocked trying to send to the buffered channel
+//	     time.Sleep(10 * time.Minute)
+//	 })
 func (s *Scheduler) SingletonMode() *Scheduler {
 	job := s.getCurrentJob()
 	job.SingletonMode()
@@ -788,6 +800,19 @@ func (s *Scheduler) SingletonMode() *Scheduler {
 
 // SingletonModeAll prevents new jobs from starting if the prior instance of the
 // particular job has not yet completed its run
+//
+// Warning: do not use this mode if your jobs will continue to stack
+// up beyond the ability of the limit workers to keep up. An example of
+// what NOT to do:
+//
+//	 s := gocron.NewScheduler(time.UTC)
+//	 s.SingletonModeAll()
+//
+//	 s.Every("1s").Do(func() {
+//	     // this will result in an ever-growing number of goroutines
+//		   // blocked trying to send to the buffered channel
+//	     time.Sleep(10 * time.Minute)
+//	 })
 func (s *Scheduler) SingletonModeAll() {
 	s.singletonMode = true
 }

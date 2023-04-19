@@ -20,6 +20,17 @@ const (
 	// job execution order isn't guaranteed. For example, a job that
 	// executes frequently may pile up in the wait queue and be executed
 	// many times back to back when the queue opens.
+	//
+	// Warning: do not use this mode if your jobs will continue to stack
+	// up beyond the ability of the limit workers to keep up. An example of
+	// what NOT to do:
+	//
+	//     s.Every("1s").Do(func() {
+	//         // this will result in an ever-growing number of goroutines
+	//    	   // blocked trying to send to the buffered channel
+	//         time.Sleep(10 * time.Minute)
+	//     })
+
 	WaitMode
 )
 
