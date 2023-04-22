@@ -649,10 +649,14 @@ func (s *Scheduler) RunByTagWithDelay(tag string, d time.Duration) error {
 // Remove specific Job by function
 //
 // Removing a job stops that job's timer. However, if a job has already
-// been started by by the job's timer before being removed, there is no way to stop
-// it through gocron as https://pkg.go.dev/time#Timer.Stop explains.
-// The job function would need to have implemented a means of
-// stopping, e.g. using a context.WithCancel().
+// been started by the job's timer before being removed, the only way to stop
+// it through gocron is to use DoWithJobDetails and access the job's Context which
+// informs you when the job has been canceled.
+//
+// Alternatively, the job function would need to have implemented a means of
+// stopping, e.g. using a context.WithCancel() passed as params to Do method.
+//
+// The above are based on what the underlying library suggests https://pkg.go.dev/time#Timer.Stop.
 func (s *Scheduler) Remove(job any) {
 	fName := getFunctionName(job)
 	j := s.findJobByTaskName(fName)
