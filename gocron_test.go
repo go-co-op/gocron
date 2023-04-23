@@ -157,7 +157,6 @@ func Test_callJobFuncWithParams(t *testing.T) {
 			if err != nil && !tt.err {
 				t.Fatalf("unexpected panic: %s", err.Error())
 			}
-
 		})
 	}
 }

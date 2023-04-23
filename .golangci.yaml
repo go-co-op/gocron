@@ -17,12 +17,14 @@ linters:
     - bodyclose
     - errcheck
     - gofmt
-    - revive
+    - gofumpt
+    - goimports
     - gosec
     - gosimple
     - govet
     - ineffassign
     - misspell
+    - revive
     - staticcheck
     - typecheck
     - unused
@@ -44,3 +46,5 @@ output:
 linters-settings:
   golint:
     min-confidence: 0.8
+
+fix: true
