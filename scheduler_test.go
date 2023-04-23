@@ -966,7 +966,7 @@ func TestScheduler_Stop(t *testing.T) {
 		t.Parallel()
 		s := NewScheduler(time.UTC)
 		job, _ := s.Every(3).Second().Do(func() {
-			//noop
+			// noop
 		})
 		s.StartAsync()
 		time.Sleep(time.Second) // enough time for job to run
@@ -2546,5 +2546,4 @@ func TestScheduler_ChainOrder(t *testing.T) {
 	for i, j := range s.jobs {
 		assert.Equal(t, fmt.Sprint(funcs[i]), fmt.Sprint(j.function))
 	}
-
 }

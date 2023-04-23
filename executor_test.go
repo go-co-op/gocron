@@ -64,5 +64,4 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 
 	state := <-panicHandled
 	assert.Equal(t, state, true)
-
 }
