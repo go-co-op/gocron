@@ -1,6 +1,8 @@
 package gocron
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -257,5 +259,29 @@ func TestJob_SetEventListeners(t *testing.T) {
 		assert.True(t, jobRanPassed)
 		assert.True(t, beforeCallbackPassed)
 		assert.True(t, afterCallbackPassed)
+	})
+}
+
+func TestJob_Context(t *testing.T) {
+	t.Run("Context returns the job's context", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		job, err := s.Tag("tag1").Every("100ms").Do(func() {})
+		require.NoError(t, err)
+		assert.NotNil(t, job.Context())
+		assert.Equal(t, job.ctx, job.Context())
+	})
+}
+
+func TestJob_Stop(t *testing.T) {
+	t.Run("stop calls the cancel function", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		job, err := s.Tag("tag1").Every("100ms").Do(func() {})
+		require.NoError(t, err)
+
+		jobCtx := job.ctx
+		assert.Nil(t, jobCtx.Err())
+
+		job.stop()
+		assert.True(t, errors.Is(jobCtx.Err(), context.Canceled))
 	})
 }

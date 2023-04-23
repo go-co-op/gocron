@@ -293,6 +293,11 @@ func (j *Job) Error() error {
 	return j.error
 }
 
+// Context returns the job's context. The context controls cancellation.
+func (j *Job) Context() context.Context {
+	return j.ctx
+}
+
 // Tag allows you to add arbitrary labels to a Job that do not
 // impact the functionality of the Job
 func (j *Job) Tag(tags ...string) {
