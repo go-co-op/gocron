@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron"
+	"github.com/redis/go-redis/v9"
 )
 
 var task = func() {}
@@ -20,7 +21,7 @@ func ExampleJob_Error() {
 	j := s.Jobs()[0]
 	fmt.Println(j.Error())
 	// Output:
-	// the given time format is not supported
+	// gocron: the given time format is not supported
 }
 
 func ExampleJob_FinishedRunCount() {
@@ -185,7 +186,7 @@ func ExampleJob_Weekday() {
 	fmt.Println(err)
 	// Output:
 	// Monday
-	// job not scheduled weekly on a weekday
+	// gocron: job not scheduled weekly on a weekday
 }
 
 func ExampleJob_Weekdays() {
@@ -823,7 +824,7 @@ func ExampleScheduler_TagsUnique() {
 
 	fmt.Println(err)
 	// Output:
-	// a non-unique tag was set on the job: foo
+	// gocron: a non-unique tag was set on the job: foo
 }
 
 func ExampleScheduler_TaskPresent() {
@@ -921,6 +922,24 @@ func ExampleScheduler_Weeks() {
 	_, _ = s.Every(1).Weeks().Do(task)
 
 	_, _ = s.Every(2).Weeks().Monday().Wednesday().Friday().Do(task)
+}
+
+func ExampleScheduler_WithDistributedLocker() {
+	redisOptions := &redis.Options{
+		Addr: "localhost:6379",
+	}
+	redisClient := redis.NewClient(redisOptions)
+	locker, err := gocron.NewRedisLocker(redisClient)
+	if err != nil {
+		// handle the error
+	}
+
+	s := gocron.NewScheduler(time.UTC)
+	s.WithDistributedLocker(locker)
+	_, err = s.Every("500ms").Do(task)
+	if err != nil {
+		// handle the error
+	}
 }
 
 // ---------------------------------------------------------------------

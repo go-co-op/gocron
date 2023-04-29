@@ -49,6 +49,8 @@ type executor struct {
 	limitModeQueue          chan jobFunction // pass job functions to the limit mode workers
 	limitModeRunningJobs    *atomic.Int64    // tracks the count of running jobs to check against the max
 	stopped                 *atomic.Bool     // allow workers to drain the buffered limitModeQueue
+
+	distributedLocker Locker // support running jobs across multiple instances
 }
 
 func newExecutor() executor {
@@ -170,6 +172,15 @@ func (e *executor) run() {
 
 				switch f.runConfig.mode {
 				case defaultMode:
+					if e.distributedLocker != nil {
+						l, err := e.distributedLocker.Lock(f.ctx, f.name)
+						if err != nil || l == nil {
+							return
+						}
+						defer func() {
+							_ = l.Unlock(f.ctx)
+						}()
+					}
 					runJob(f)
 				case singletonMode:
 					e.singletonWgs.Store(f.singletonWg, struct{}{})

@@ -32,7 +32,10 @@ If you want to chat, you can find us at Slack!
 ```golang
 s := gocron.NewScheduler(time.UTC)
 
-s.Every(5).Seconds().Do(func(){ ... })
+job, err := s.Every(5).Seconds().Do(func(){ ... })
+if err != nil {
+	// handle the error related to setting up the job
+}
 
 // strings parse to duration
 s.Every("5m").Do(func(){ ... })
@@ -82,11 +85,12 @@ For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go
 
 There are several options available to restrict how jobs run:
 
-| Mode            | Function                 | Behavior                                                                        |
-| --------------- | ------------------------ | ------------------------------------------------------------------------------- |
-| Default         |                          | jobs are rescheduled at every interval                                          |
-| Job singleton   | `SingletonMode()`        | a long running job will not be rescheduled until the current run is completed   |
-| Scheduler limit | `SetMaxConcurrentJobs()` | set a collective maximum number of concurrent jobs running across the scheduler |
+| Mode                | Function                  | Behavior                                                                                             |
+|---------------------|---------------------------|------------------------------------------------------------------------------------------------------|
+| Default             |                           | jobs are rescheduled at every interval                                                               |
+| Job singleton       | `SingletonMode()`         | a long running job will not be rescheduled until the current run is completed                        |
+| Scheduler limit     | `SetMaxConcurrentJobs()`  | set a collective maximum number of concurrent jobs running across the scheduler                      |
+| Distributed locking | `WithDistributedLocker()` | prevents the same job from being run more than once when running multiple instances of the scheduler |
 
 ## Tags
 

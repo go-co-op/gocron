@@ -1385,3 +1385,12 @@ func (s *Scheduler) StopBlockingChan() {
 	}
 	s.startBlockingStopChanMutex.Unlock()
 }
+
+// WithDistributedLocker prevents the same job from being run more than once
+// when multiple schedulers are trying to schedule the same job.
+//
+// NOTE - this does NOT work with jobs using any of the limiting functions:
+// SingletonMode, SingletonModeAll or SetMaxConcurrentJobs
+func (s *Scheduler) WithDistributedLocker(l Locker) {
+	s.executor.distributedLocker = l
+}

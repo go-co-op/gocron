@@ -6,6 +6,7 @@ fmt:
 	@go list -f {{.Dir}} ./... | xargs -I{} gofmt -w -s {}
 
 lint:
+	@grep "^func " example_test.go | sort -c
 	@golangci-lint run
 
 test:

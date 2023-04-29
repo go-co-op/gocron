@@ -469,7 +469,7 @@ func (j *Job) IsRunning() bool {
 	return j.isRunning.Load()
 }
 
-// you must lock the job before calling copy
+// you must Lock the job before calling copy
 func (j *Job) copy() Job {
 	return Job{
 		mu:                &jobMutex{},
