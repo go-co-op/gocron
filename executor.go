@@ -179,7 +179,7 @@ func (e *executor) run() {
 							return
 						}
 						defer func() {
-							durationToNextRun := f.jobFuncNextRun.Sub(time.Now())
+							durationToNextRun := time.Until(f.jobFuncNextRun)
 							if durationToNextRun > time.Second*5 {
 								durationToNextRun = time.Second * 5
 							}
