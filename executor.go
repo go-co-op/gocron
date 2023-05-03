@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -178,6 +179,14 @@ func (e *executor) run() {
 							return
 						}
 						defer func() {
+							durationToNextRun := f.jobFuncNextRun.Sub(time.Now())
+							if durationToNextRun > time.Second*5 {
+								durationToNextRun = time.Second * 5
+							}
+							if durationToNextRun > time.Millisecond*100 {
+								timeToSleep := time.Duration(float64(durationToNextRun) * 0.9)
+								time.Sleep(timeToSleep)
+							}
 							_ = l.Unlock(f.ctx)
 						}()
 					}

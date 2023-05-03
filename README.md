@@ -117,7 +117,8 @@ s.RunByTag("tag")
 ## FAQ
 
 - Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
-  - A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+  - A: Use the scheduler option `WithDistributedLocker` and either use an implemented backend or implement your own
+  - and contribute it back in a PR (we hope)!
 
 - Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
   - A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.

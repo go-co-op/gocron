@@ -28,7 +28,6 @@ func TestEnableDistributedLocking(t *testing.T) {
 	resultChan := make(chan int, 10)
 	f := func(schedulerInstance int) {
 		resultChan <- schedulerInstance
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: strings.TrimPrefix(uri, "redis://")})

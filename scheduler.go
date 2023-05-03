@@ -15,7 +15,7 @@ import (
 type limitMode int8
 
 // Scheduler struct stores a list of Jobs and the location of time used by the Scheduler,
-// and implements the sort. any for sorting Jobs, by the time of nextRun
+// and implements the sort. any for sorting Jobs, by the time of jobFuncNextRun
 type Scheduler struct {
 	jobsMutex sync.RWMutex
 	jobs      []*Job
