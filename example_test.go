@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/go-co-op/gocron"
-	"github.com/redis/go-redis/v9"
 )
 
 var task = func() {}
@@ -925,21 +924,21 @@ func ExampleScheduler_Weeks() {
 }
 
 func ExampleScheduler_WithDistributedLocker() {
-	redisOptions := &redis.Options{
-		Addr: "localhost:6379",
-	}
-	redisClient := redis.NewClient(redisOptions)
-	locker, err := gocron.NewRedisLocker(redisClient)
-	if err != nil {
-		// handle the error
-	}
-
-	s := gocron.NewScheduler(time.UTC)
-	s.WithDistributedLocker(locker)
-	_, err = s.Every("500ms").Do(task)
-	if err != nil {
-		// handle the error
-	}
+	//redisOptions := &redis.Options{
+	//	Addr: "localhost:6379",
+	//}
+	//redisClient := redis.NewClient(redisOptions)
+	//locker, err := redislock.NewRedisLocker(redisClient)
+	//if err != nil {
+	//	// handle the error
+	//}
+	//
+	//s := gocron.NewScheduler(time.UTC)
+	//s.WithDistributedLocker(locker)
+	//_, err = s.Every("500ms").Do(task)
+	//if err != nil {
+	//	// handle the error
+	//}
 }
 
 // ---------------------------------------------------------------------

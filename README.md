@@ -92,6 +92,10 @@ There are several options available to restrict how jobs run:
 | Scheduler limit            | `SetMaxConcurrentJobs()`  | set a collective maximum number of concurrent jobs running across the scheduler                      |
 | Distributed locking (BETA) | `WithDistributedLocker()` | prevents the same job from being run more than once when running multiple instances of the scheduler |
 
+## Distributed Locker Implementations
+
+- Redis: [redis.go](lockers/redislock/redislock.go) `go get github.com/go-co-op/gocron/lockers/redislock`
+
 ## Tags
 
 Jobs may have arbitrary tags added which can be useful when tracking many jobs.
