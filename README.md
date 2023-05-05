@@ -32,7 +32,10 @@ If you want to chat, you can find us at Slack!
 ```golang
 s := gocron.NewScheduler(time.UTC)
 
-s.Every(5).Seconds().Do(func(){ ... })
+job, err := s.Every(5).Seconds().Do(func(){ ... })
+if err != nil {
+	// handle the error related to setting up the job
+}
 
 // strings parse to duration
 s.Every("5m").Do(func(){ ... })
@@ -82,11 +85,12 @@ For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go
 
 There are several options available to restrict how jobs run:
 
-| Mode            | Function                 | Behavior                                                                        |
-| --------------- | ------------------------ | ------------------------------------------------------------------------------- |
-| Default         |                          | jobs are rescheduled at every interval                                          |
-| Job singleton   | `SingletonMode()`        | a long running job will not be rescheduled until the current run is completed   |
-| Scheduler limit | `SetMaxConcurrentJobs()` | set a collective maximum number of concurrent jobs running across the scheduler |
+| Mode                       | Function                  | Behavior                                                                                             |
+|----------------------------|---------------------------|------------------------------------------------------------------------------------------------------|
+| Default                    |                           | jobs are rescheduled at every interval                                                               |
+| Job singleton              | `SingletonMode()`         | a long running job will not be rescheduled until the current run is completed                        |
+| Scheduler limit            | `SetMaxConcurrentJobs()`  | set a collective maximum number of concurrent jobs running across the scheduler                      |
+| Distributed locking (BETA) | `WithDistributedLocker()` | prevents the same job from being run more than once when running multiple instances of the scheduler |
 
 ## Tags
 
@@ -113,7 +117,9 @@ s.RunByTag("tag")
 ## FAQ
 
 - Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
-  - A: We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+  - We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
+  - A2: Currently in BETA (please provide feedback): Use the scheduler option `WithDistributedLocker` and either use an implemented backend
+    or implement your own and contribute it back in a PR (we hope)!
 
 - Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
   - A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.

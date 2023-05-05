@@ -15,7 +15,7 @@ import (
 type limitMode int8
 
 // Scheduler struct stores a list of Jobs and the location of time used by the Scheduler,
-// and implements the sort. any for sorting Jobs, by the time of nextRun
+// and implements the sort. any for sorting Jobs, by the time of jobFuncNextRun
 type Scheduler struct {
 	jobsMutex sync.RWMutex
 	jobs      []*Job
@@ -1384,4 +1384,24 @@ func (s *Scheduler) StopBlockingChan() {
 		s.startBlockingStopChan <- struct{}{}
 	}
 	s.startBlockingStopChanMutex.Unlock()
+}
+
+// WithDistributedLocker prevents the same job from being run more than once
+// when multiple schedulers are trying to schedule the same job.
+//
+// NOTE - This is currently in BETA. Please provide any feedback on your usage
+// and open bugs with any issues.
+//
+// One strategy to reduce splay in the job execution times when using
+// intervals (e.g. 1s, 1m, 1h), on each scheduler instance, is to use
+// StartAt with time.Now().Round(interval) to start the job at the
+// next interval boundary.
+//
+// Another strategy is to use the Cron or CronWithSeconds methods as they
+// use the same behavior described above using StartAt.
+//
+// NOTE - the Locker will NOT lock jobs using any of the limiting functions:
+// SingletonMode, SingletonModeAll or SetMaxConcurrentJobs
+func (s *Scheduler) WithDistributedLocker(l Locker) {
+	s.executor.distributedLocker = l
 }

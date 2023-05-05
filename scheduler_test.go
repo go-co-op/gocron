@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -2546,4 +2547,79 @@ func TestScheduler_ChainOrder(t *testing.T) {
 	for i, j := range s.jobs {
 		assert.Equal(t, fmt.Sprint(funcs[i]), fmt.Sprint(j.function))
 	}
+}
+
+var _ Locker = (*locker)(nil)
+
+type locker struct {
+	mu    sync.Mutex
+	store map[string]struct{}
+}
+
+func (l *locker) Lock(_ context.Context, key string) (Lock, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, ok := l.store[key]; ok {
+		return nil, ErrFailedToObtainLock
+	}
+	l.store[key] = struct{}{}
+	return &lock{key: key, locker: l}, nil
+}
+
+var _ Lock = (*lock)(nil)
+
+type lock struct {
+	key    string
+	locker *locker
+}
+
+func (l *lock) Unlock(_ context.Context) error {
+	l.locker.mu.Lock()
+	defer l.locker.mu.Unlock()
+	delete(l.locker.store, l.key)
+	return nil
+}
+
+func TestScheduler_EnableDistributedLocking(t *testing.T) {
+	resultChan := make(chan int, 10)
+	f := func(schedulerInstance int) {
+		resultChan <- schedulerInstance
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	l := &locker{
+		store: make(map[string]struct{}, 0),
+	}
+
+	s1 := NewScheduler(time.UTC)
+	s1.WithDistributedLocker(l)
+	_, err := s1.Every("500ms").Do(f, 1)
+	require.NoError(t, err)
+
+	s2 := NewScheduler(time.UTC)
+	s2.WithDistributedLocker(l)
+	_, err = s2.Every("500ms").Do(f, 2)
+	require.NoError(t, err)
+
+	s3 := NewScheduler(time.UTC)
+	s3.WithDistributedLocker(l)
+	_, err = s3.Every("500ms").Do(f, 3)
+	require.NoError(t, err)
+
+	s1.StartAsync()
+	s2.StartAsync()
+	s3.StartAsync()
+
+	time.Sleep(1700 * time.Millisecond)
+
+	s1.Stop()
+	s2.Stop()
+	s3.Stop()
+	close(resultChan)
+
+	var results []int
+	for r := range resultChan {
+		results = append(results, r)
+	}
+	assert.Len(t, results, 4)
 }

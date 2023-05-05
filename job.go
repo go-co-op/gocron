@@ -55,7 +55,8 @@ type jobFunction struct {
 	runStartCount     *atomic.Int64      // number of times the job was started
 	runFinishCount    *atomic.Int64      // number of times the job was finished
 	singletonWg       *sync.WaitGroup    // used by singleton runner
-	stopped           *atomic.Bool
+	stopped           *atomic.Bool       // tracks whether the job is currently stopped
+	jobFuncNextRun    time.Time          // the next time the job is scheduled to run
 }
 
 type eventListeners struct {
@@ -84,6 +85,7 @@ func (jf *jobFunction) copy() jobFunction {
 		singletonWg:       jf.singletonWg,
 		singletonRunnerOn: jf.singletonRunnerOn,
 		stopped:           jf.stopped,
+		jobFuncNextRun:    jf.jobFuncNextRun,
 	}
 	cp.parameters = append(cp.parameters, jf.parameters...)
 	return cp
@@ -435,6 +437,7 @@ func (j *Job) setNextRun(t time.Time) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.nextRun = t
+	j.jobFunction.jobFuncNextRun = t
 }
 
 // RunCount returns the number of times the job has been started
@@ -469,7 +472,7 @@ func (j *Job) IsRunning() bool {
 	return j.isRunning.Load()
 }
 
-// you must lock the job before calling copy
+// you must Lock the job before calling copy
 func (j *Job) copy() Job {
 	return Job{
 		mu:                &jobMutex{},

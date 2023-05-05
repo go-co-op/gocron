@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -49,6 +50,8 @@ type executor struct {
 	limitModeQueue          chan jobFunction // pass job functions to the limit mode workers
 	limitModeRunningJobs    *atomic.Int64    // tracks the count of running jobs to check against the max
 	stopped                 *atomic.Bool     // allow workers to drain the buffered limitModeQueue
+
+	distributedLocker Locker // support running jobs across multiple instances
 }
 
 func newExecutor() executor {
@@ -170,6 +173,23 @@ func (e *executor) run() {
 
 				switch f.runConfig.mode {
 				case defaultMode:
+					if e.distributedLocker != nil {
+						l, err := e.distributedLocker.Lock(f.ctx, f.name)
+						if err != nil || l == nil {
+							return
+						}
+						defer func() {
+							durationToNextRun := time.Until(f.jobFuncNextRun)
+							if durationToNextRun > time.Second*5 {
+								durationToNextRun = time.Second * 5
+							}
+							if durationToNextRun > time.Millisecond*100 {
+								timeToSleep := time.Duration(float64(durationToNextRun) * 0.9)
+								time.Sleep(timeToSleep)
+							}
+							_ = l.Unlock(f.ctx)
+						}()
+					}
 					runJob(f)
 				case singletonMode:
 					e.singletonWgs.Store(f.singletonWg, struct{}{})
