@@ -188,10 +188,10 @@ github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o
 github.com/stvp/tempredis v0.0.0-20181119212430-b82af8480203 h1:QVqDTf3h2WHt08YuiTGPZLls0Wq99X9bWd0Q5ZSBesM=
 github.com/stvp/tempredis v0.0.0-20181119212430-b82af8480203/go.mod h1:oqN97ltKNihBbwlX8dLpwxCl3+HnXKV/R0e+sRLd9C8=
 github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
-github.com/testcontainers/testcontainers-go v0.0.0-20230424150504-5185956fa1de h1:gaOmmytMpo7biJeedaBb/A+C+yylPxRBTxEzxsleIVQ=
-github.com/testcontainers/testcontainers-go v0.0.0-20230424150504-5185956fa1de/go.mod h1:06ElgudaiCzj7oHlKy2f/Osmsr2kaLK+bfWU4CdiUqY=
-github.com/testcontainers/testcontainers-go/modules/redis v0.0.0-20230424150504-5185956fa1de h1:7PhmUZ/ldTX/6KVrr71aKvhFF+y6h+6FCGORW1AlFzg=
-github.com/testcontainers/testcontainers-go/modules/redis v0.0.0-20230424150504-5185956fa1de/go.mod h1:qwEVNfsWRS1JPM4liD82b8UXD1tVQ0rI791uLYnZJNg=
+github.com/testcontainers/testcontainers-go v0.0.0-20230503220718-0df60de8ccd8 h1:atmQux3l6blXSWP4HA4UiUO0VASfsLQr5A1uRtDdg/A=
+github.com/testcontainers/testcontainers-go v0.0.0-20230503220718-0df60de8ccd8/go.mod h1:LTa6q4eygL67Y8LvAmjaUGIiFZlZ+VYvHOWjXLWP8Vg=
+github.com/testcontainers/testcontainers-go/modules/redis v0.0.0-20230503220718-0df60de8ccd8 h1:kEUyp6sS3XIvtfSou6+XJMUBzB9qXUHgnRdzjPPgTqQ=
+github.com/testcontainers/testcontainers-go/modules/redis v0.0.0-20230503220718-0df60de8ccd8/go.mod h1:kOYoiN2wIJsIxSyrfGYvsw5v2HgHRSTlyj0R44L3JFM=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/vishvananda/netlink v1.1.0/go.mod h1:cTgwzPIzzgDAYoQrMm0EdrjRUBkTqKYppBueQtXaqoE=
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=

@@ -7,10 +7,10 @@ require (
 	github.com/go-redsync/redsync/v4 v4.8.1
 	github.com/redis/go-redis/v9 v9.0.4
 	github.com/stretchr/testify v1.8.2
-	github.com/testcontainers/testcontainers-go/modules/redis v0.0.0-20230424150504-5185956fa1de
+	github.com/testcontainers/testcontainers-go/modules/redis v0.0.0-20230503220718-0df60de8ccd8
 )
 
-replace github.com/testcontainers/testcontainers-go v0.19.0 => github.com/testcontainers/testcontainers-go v0.0.0-20230424150504-5185956fa1de
+replace github.com/testcontainers/testcontainers-go v0.19.0 => github.com/testcontainers/testcontainers-go v0.0.0-20230503220718-0df60de8ccd8
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
