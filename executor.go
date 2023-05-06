@@ -105,7 +105,7 @@ func (e *executor) limitModeRunner() {
 			return
 		case jf := <-e.limitModeQueue:
 			if !e.stopped.Load() {
-				runJob(jf)
+				e.runJob(jf)
 			}
 		}
 	}
@@ -123,6 +123,37 @@ func (e *executor) start() {
 
 	e.stopped = &atomic.Bool{}
 	go e.run()
+}
+
+func (e *executor) runJob(f jobFunction) {
+	switch f.runConfig.mode {
+	case defaultMode:
+		if e.distributedLocker != nil {
+			l, err := e.distributedLocker.Lock(f.ctx, f.name)
+			if err != nil || l == nil {
+				return
+			}
+			defer func() {
+				durationToNextRun := time.Until(f.jobFuncNextRun)
+				if durationToNextRun > time.Second*5 {
+					durationToNextRun = time.Second * 5
+				}
+				if durationToNextRun > time.Millisecond*100 {
+					timeToSleep := time.Duration(float64(durationToNextRun) * 0.9)
+					time.Sleep(timeToSleep)
+				}
+				_ = l.Unlock(f.ctx)
+			}()
+		}
+		runJob(f)
+	case singletonMode:
+		e.singletonWgs.Store(f.singletonWg, struct{}{})
+
+		if !f.singletonRunnerOn.Load() {
+			go f.singletonRunner()
+		}
+		f.singletonQueue <- struct{}{}
+	}
 }
 
 func (e *executor) run() {
@@ -171,34 +202,7 @@ func (e *executor) run() {
 					return
 				}
 
-				switch f.runConfig.mode {
-				case defaultMode:
-					if e.distributedLocker != nil {
-						l, err := e.distributedLocker.Lock(f.ctx, f.name)
-						if err != nil || l == nil {
-							return
-						}
-						defer func() {
-							durationToNextRun := time.Until(f.jobFuncNextRun)
-							if durationToNextRun > time.Second*5 {
-								durationToNextRun = time.Second * 5
-							}
-							if durationToNextRun > time.Millisecond*100 {
-								timeToSleep := time.Duration(float64(durationToNextRun) * 0.9)
-								time.Sleep(timeToSleep)
-							}
-							_ = l.Unlock(f.ctx)
-						}()
-					}
-					runJob(f)
-				case singletonMode:
-					e.singletonWgs.Store(f.singletonWg, struct{}{})
-
-					if !f.singletonRunnerOn.Load() {
-						go f.singletonRunner()
-					}
-					f.singletonQueue <- struct{}{}
-				}
+				e.runJob(f)
 			}()
 		case <-e.ctx.Done():
 			e.jobsWg.Wait()

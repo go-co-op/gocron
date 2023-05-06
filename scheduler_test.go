@@ -2581,6 +2581,14 @@ func (l *lock) Unlock(_ context.Context) error {
 }
 
 func TestScheduler_EnableDistributedLocking(t *testing.T) {
+	runTestWithDistributedLocking(t, 0)
+}
+
+func TestScheduler_EnableMaxConcurrentJobs(t *testing.T) {
+	runTestWithDistributedLocking(t, 10)
+}
+
+func runTestWithDistributedLocking(t *testing.T, maxConcurrentJobs int) {
 	resultChan := make(chan int, 10)
 	f := func(schedulerInstance int) {
 		resultChan <- schedulerInstance
@@ -2591,30 +2599,24 @@ func TestScheduler_EnableDistributedLocking(t *testing.T) {
 		store: make(map[string]struct{}, 0),
 	}
 
-	s1 := NewScheduler(time.UTC)
-	s1.WithDistributedLocker(l)
-	_, err := s1.Every("500ms").Do(f, 1)
-	require.NoError(t, err)
-
-	s2 := NewScheduler(time.UTC)
-	s2.WithDistributedLocker(l)
-	_, err = s2.Every("500ms").Do(f, 2)
-	require.NoError(t, err)
-
-	s3 := NewScheduler(time.UTC)
-	s3.WithDistributedLocker(l)
-	_, err = s3.Every("500ms").Do(f, 3)
-	require.NoError(t, err)
-
-	s1.StartAsync()
-	s2.StartAsync()
-	s3.StartAsync()
-
+	schedulers := make([]*Scheduler, 0)
+	for i := 0; i < 3; i++ {
+		s := NewScheduler(time.UTC)
+		s.WithDistributedLocker(l)
+		if maxConcurrentJobs > 0 {
+			s.SetMaxConcurrentJobs(maxConcurrentJobs, WaitMode)
+		}
+		_, err := s.Every("500ms").Do(f, 1)
+		require.NoError(t, err)
+		schedulers = append(schedulers, s)
+	}
+	for i := range schedulers {
+		schedulers[i].StartAsync()
+	}
 	time.Sleep(1700 * time.Millisecond)
-
-	s1.Stop()
-	s2.Stop()
-	s3.Stop()
+	for i := range schedulers {
+		schedulers[i].Stop()
+	}
 	close(resultChan)
 
 	var results []int
