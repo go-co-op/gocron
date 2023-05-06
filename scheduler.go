@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -22,8 +23,7 @@ type Scheduler struct {
 
 	locationMutex sync.RWMutex
 	location      *time.Location
-	runningMutex  sync.RWMutex
-	running       bool // represents if the scheduler is running at the moment or not
+	running       *atomic.Bool // represents if the scheduler is running at the moment or not
 
 	time     TimeWrapper // wrapper around time.Time
 	timer    func(d time.Duration, f func()) *time.Timer
@@ -58,7 +58,7 @@ func NewScheduler(loc *time.Location) *Scheduler {
 	return &Scheduler{
 		jobs:       make([]*Job, 0),
 		location:   loc,
-		running:    false,
+		running:    &atomic.Bool{},
 		time:       &trueTime{},
 		executor:   &executor,
 		tagsUnique: false,
@@ -111,16 +111,12 @@ func (s *Scheduler) runJobs(jobs []*Job) {
 }
 
 func (s *Scheduler) setRunning(b bool) {
-	s.runningMutex.Lock()
-	defer s.runningMutex.Unlock()
-	s.running = b
+	s.running.Store(b)
 }
 
 // IsRunning returns true if the scheduler is running
 func (s *Scheduler) IsRunning() bool {
-	s.runningMutex.RLock()
-	defer s.runningMutex.RUnlock()
-	return s.running
+	return s.running.Load()
 }
 
 // Jobs returns the list of Jobs from the Scheduler
