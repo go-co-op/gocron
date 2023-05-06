@@ -61,6 +61,9 @@ s.Every(2).MonthLastDay().Do(func(){ ... })
 // cron expressions supported
 s.Cron("*/1 * * * *").Do(task) // every minute
 
+// cron second-level expressions supported
+s.CronWithSeconds("*/1 * * * * *").Do(task) // every second
+
 // you can start running the scheduler in two different ways:
 // starts the scheduler asynchronously
 s.StartAsync()
