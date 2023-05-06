@@ -1377,7 +1377,7 @@ func (s *Scheduler) CustomTimer(customTimer func(d time.Duration, f func()) *tim
 func (s *Scheduler) StopBlockingChan() {
 	s.startBlockingStopChanMutex.Lock()
 	if s.startBlockingStopChan != nil {
-		s.startBlockingStopChan <- struct{}{}
+		close(s.startBlockingStopChan)
 	}
 	s.startBlockingStopChanMutex.Unlock()
 }
