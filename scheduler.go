@@ -868,10 +868,10 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) stop() {
-	s.setRunning(false)
 	s.stopJobs(s.jobs)
 	s.executor.stop()
 	s.StopBlockingChan()
+	s.setRunning(false)
 }
 
 func (s *Scheduler) stopJobs(jobs []*Job) {
@@ -1376,8 +1376,9 @@ func (s *Scheduler) CustomTimer(customTimer func(d time.Duration, f func()) *tim
 
 func (s *Scheduler) StopBlockingChan() {
 	s.startBlockingStopChanMutex.Lock()
-	if s.startBlockingStopChan != nil {
+	if s.IsRunning() && s.startBlockingStopChan != nil {
 		close(s.startBlockingStopChan)
+		s.startBlockingStopChan = nil
 	}
 	s.startBlockingStopChanMutex.Unlock()
 }
