@@ -1378,7 +1378,6 @@ func (s *Scheduler) StopBlockingChan() {
 	s.startBlockingStopChanMutex.Lock()
 	if s.IsRunning() && s.startBlockingStopChan != nil {
 		close(s.startBlockingStopChan)
-		s.startBlockingStopChan = nil
 	}
 	s.startBlockingStopChanMutex.Unlock()
 }
