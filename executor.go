@@ -96,7 +96,6 @@ func (jf *jobFunction) singletonRunner() {
 }
 
 func (e *executor) limitModeRunner() {
-	e.limitModeFuncWg.Add(1)
 	for {
 		select {
 		case <-e.ctx.Done():
@@ -169,6 +168,7 @@ func (e *executor) run() {
 				if countRunning < int64(e.limitModeMaxRunningJobs) {
 					diff := int64(e.limitModeMaxRunningJobs) - countRunning
 					for i := int64(0); i < diff; i++ {
+						e.limitModeFuncWg.Add(1)
 						go e.limitModeRunner()
 						e.limitModeFuncsRunning.Add(1)
 					}
