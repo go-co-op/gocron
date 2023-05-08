@@ -48,6 +48,7 @@ type executor struct {
 	limitModeFuncsRunning   *atomic.Int64    // tracks the count of limited mode funcs running
 	limitModeFuncWg         *sync.WaitGroup  // allow the executor to wait for limit mode functions to wrap up
 	limitModeQueue          chan jobFunction // pass job functions to the limit mode workers
+	limitModeQueueMu        *sync.Mutex      // for protecting the limitModeQueue
 	limitModeRunningJobs    *atomic.Int64    // tracks the count of running jobs to check against the max
 	stopped                 *atomic.Bool     // allow workers to drain the buffered limitModeQueue
 
@@ -61,7 +62,7 @@ func newExecutor() executor {
 		limitModeFuncsRunning: &atomic.Int64{},
 		limitModeFuncWg:       &sync.WaitGroup{},
 		limitModeRunningJobs:  &atomic.Int64{},
-		limitModeQueue:        make(chan jobFunction, 1000),
+		limitModeQueueMu:      &sync.Mutex{},
 	}
 	return e
 }
@@ -121,6 +122,10 @@ func (e *executor) start() {
 	e.jobsWg = &sync.WaitGroup{}
 
 	e.stopped = &atomic.Bool{}
+
+	e.limitModeQueueMu.Lock()
+	e.limitModeQueue = make(chan jobFunction, 1000)
+	e.limitModeQueueMu.Unlock()
 	go e.run()
 }
 
@@ -232,5 +237,8 @@ func (e *executor) stop() {
 	}
 	if e.limitModeMaxRunningJobs > 0 {
 		e.limitModeFuncWg.Wait()
+		e.limitModeQueueMu.Lock()
+		e.limitModeQueue = nil
+		e.limitModeQueueMu.Unlock()
 	}
 }
