@@ -194,10 +194,16 @@ func (e *executor) run() {
 					switch e.limitMode {
 					case RescheduleMode:
 						if e.limitModeRunningJobs.Load() < int64(e.limitModeMaxRunningJobs) {
-							e.limitModeQueue <- f
+							select {
+							case e.limitModeQueue <- f:
+							case <-e.ctx.Done():
+							}
 						}
 					case WaitMode:
-						e.limitModeQueue <- f
+						select {
+						case e.limitModeQueue <- f:
+						case <-e.ctx.Done():
+						}
 					}
 					return
 				}
