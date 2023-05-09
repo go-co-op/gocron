@@ -762,15 +762,14 @@ func ExampleScheduler_StartImmediately() {
 
 func ExampleScheduler_Stop() {
 	s := gocron.NewScheduler(time.UTC)
-	_, _ = s.Every(1).Second().Do(task)
 	s.StartAsync()
 	s.Stop()
 	fmt.Println(s.IsRunning())
 
 	s = gocron.NewScheduler(time.UTC)
-
+	_, _ = s.Every(1).Second().Do(task)
 	go func() {
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 		s.Stop()
 	}()
 
