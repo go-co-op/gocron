@@ -995,6 +995,7 @@ func TestScheduler_Stop(t *testing.T) {
 	})
 	t.Run("stops a running scheduler calling .Stop()", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
+		s.Every("1s").Do(func() {})
 
 		go func() {
 			time.Sleep(time.Second)
