@@ -88,16 +88,16 @@ For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go
 
 There are several options available to restrict how jobs run:
 
-| Mode                       | Function                  | Behavior                                                                                             |
-|----------------------------|---------------------------|------------------------------------------------------------------------------------------------------|
-| Default                    |                           | jobs are rescheduled at every interval                                                               |
-| Job singleton              | `SingletonMode()`         | a long running job will not be rescheduled until the current run is completed                        |
-| Scheduler limit            | `SetMaxConcurrentJobs()`  | set a collective maximum number of concurrent jobs running across the scheduler                      |
-| Distributed locking (BETA) | `WithDistributedLocker()` | prevents the same job from being run more than once when running multiple instances of the scheduler |
+| Mode                | Function                  | Behavior                                                                                             |
+|---------------------|---------------------------|------------------------------------------------------------------------------------------------------|
+| Default             |                           | jobs are rescheduled at every interval                                                               |
+| Job singleton       | `SingletonMode()`         | a long running job will not be rescheduled until the current run is completed                        |
+| Scheduler limit     | `SetMaxConcurrentJobs()`  | set a collective maximum number of concurrent jobs running across the scheduler                      |
+| Distributed locking | `WithDistributedLocker()` | prevents the same job from being run more than once when running multiple instances of the scheduler |
 
 ## Distributed Locker Implementations
 
-- Redis: [redis.go](lockers/redislock/redislock.go) `go get github.com/go-co-op/gocron/lockers/redislock`
+- Redis: [redislock](lockers/redislock/README.md) `go get github.com/go-co-op/gocron/lockers/redislock`
 
 ## Tags
 
@@ -125,8 +125,8 @@ s.RunByTag("tag")
 
 - Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
   - We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
-  - A2: Currently in BETA (please provide feedback): Use the scheduler option `WithDistributedLocker` and either use an implemented backend
-    or implement your own and contribute it back in a PR (we hope)!
+  - A2: Use the scheduler option `WithDistributedLocker` and either use an implemented [backend](lockers)
+    or implement your own and contribute it back in a PR!
 
 - Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
   - A: We recommend using a means of canceling your job, e.g. a `context.WithCancel()`.
