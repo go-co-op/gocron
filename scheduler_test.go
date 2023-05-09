@@ -2690,7 +2690,6 @@ func TestScheduler_WithDistributedLocker_With_Name(t *testing.T) {
 }
 
 func TestScheduler_StartBlocking(t *testing.T) {
-
 	t.Run("start blocking without jobs panics", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
