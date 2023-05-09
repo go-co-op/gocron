@@ -2626,60 +2626,65 @@ func runTestWithDistributedLocking(t *testing.T, maxConcurrentJobs int) {
 	assert.Len(t, results, 4)
 }
 
-func TestDistributedJobWithName(t *testing.T) {
-	runDistributedJobWithName(t, "foo", 4)
-}
-
-func TestDistributedJobWithEmptyName(t *testing.T) {
-	// The distributed locking will use the function funcName as its lock key
-	// if the job funcName is empty. So the result will be 8 instead of 4 since
-	// they are regarded as different jobs.
-	runDistributedJobWithName(t, "", 8)
-}
-
-func runDistributedJobWithName(t *testing.T, name string, expectedResult int) {
-	resultChan := make(chan int, 10)
-	f1 := func(schedulerInstance int) {
-		resultChan <- schedulerInstance
-		time.Sleep(100 * time.Millisecond)
-	}
-	f2 := func(schedulerInstance int) {
-		resultChan <- schedulerInstance
-		time.Sleep(100 * time.Millisecond)
+func TestScheduler_WithDistributedLocker_With_Name(t *testing.T) {
+	testCases := []struct {
+		description string
+		name        string
+		expected    int
+	}{
+		{"with job name set", "foo", 4},
+		// The distributed locking will use the function funcName as its lock key
+		// if the job funcName is empty. So the result will be 8 instead of 4 since
+		// they are regarded as different jobs.
+		{"without job name", "", 8},
 	}
 
-	l := &locker{
-		store: make(map[string]struct{}, 0),
-	}
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			resultChan := make(chan int, 10)
+			f1 := func(schedulerInstance int) {
+				resultChan <- schedulerInstance
+				time.Sleep(100 * time.Millisecond)
+			}
+			f2 := func(schedulerInstance int) {
+				resultChan <- schedulerInstance
+				time.Sleep(100 * time.Millisecond)
+			}
 
-	schedulers := make([]*Scheduler, 0)
+			l := &locker{
+				store: make(map[string]struct{}, 0),
+			}
 
-	var err error
-	var job *Job
-	for i := 0; i < 2; i++ {
-		s := NewScheduler(time.UTC)
-		s.WithDistributedLocker(l)
-		if i%2 == 0 {
-			job, err = s.Every("500ms").Name(name).Do(f1, 1)
-		} else {
-			job, err = s.Every("500ms").Name(name).Do(f2, 1)
-		}
-		require.NoError(t, err)
-		require.Equal(t, job.jobName, name)
-		schedulers = append(schedulers, s)
-	}
-	for i := range schedulers {
-		schedulers[i].StartAsync()
-	}
-	time.Sleep(1700 * time.Millisecond)
-	for i := range schedulers {
-		schedulers[i].Stop()
-	}
-	close(resultChan)
+			schedulers := make([]*Scheduler, 0)
 
-	var results []int
-	for r := range resultChan {
-		results = append(results, r)
+			var err error
+			var job *Job
+			for i := 0; i < 2; i++ {
+				s := NewScheduler(time.UTC)
+				s.WithDistributedLocker(l)
+				if i%2 == 0 {
+					job, err = s.Every("500ms").Name(tc.name).Do(f1, 1)
+				} else {
+					job, err = s.Every("500ms").Name(tc.name).Do(f2, 1)
+				}
+				require.NoError(t, err)
+				require.Equal(t, job.jobName, tc.name)
+				schedulers = append(schedulers, s)
+			}
+			for i := range schedulers {
+				schedulers[i].StartAsync()
+			}
+			time.Sleep(1700 * time.Millisecond)
+			for i := range schedulers {
+				schedulers[i].Stop()
+			}
+			close(resultChan)
+
+			var results []int
+			for r := range resultChan {
+				results = append(results, r)
+			}
+			assert.Len(t, results, tc.expected)
+		})
 	}
-	assert.Len(t, results, expectedResult)
 }

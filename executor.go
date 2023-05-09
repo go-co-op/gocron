@@ -133,9 +133,7 @@ func (e *executor) runJob(f jobFunction) {
 	switch f.runConfig.mode {
 	case defaultMode:
 		lockKey := f.jobName
-		// Use the function funcName as the lock key if no lock key is provided
-		// via the Scheduler.SetJobLockKey() method
-		if f.jobName == "" {
+		if lockKey == "" {
 			lockKey = f.funcName
 		}
 		if e.distributedLocker != nil {
