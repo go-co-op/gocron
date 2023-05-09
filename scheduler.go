@@ -88,7 +88,7 @@ func (s *Scheduler) StartBlocking() {
 		time.Sleep(time.Second)
 		if len(s.Jobs()) == 0 {
 			// panic here because if we don't, a panic will result due to a deadlock
-			// as the all goroutines will be asleep as no jobs are being published
+			// as all the goroutines will be asleep as no jobs are being published
 			// to the executor from the scheduler. This way, the panic message will
 			// be clearer to the end user.
 			panic("StartBlocking cannot be called with zero jobs in the Scheduler")
