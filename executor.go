@@ -132,11 +132,11 @@ func (e *executor) start() {
 func (e *executor) runJob(f jobFunction) {
 	switch f.runConfig.mode {
 	case defaultMode:
-		lockKey := f.lockKey
-		// Use the function name as the lock key if no lock key is provided
+		lockKey := f.jobName
+		// Use the function funcName as the lock key if no lock key is provided
 		// via the Scheduler.SetJobLockKey() method
-		if f.lockKey == "" {
-			lockKey = f.name
+		if f.jobName == "" {
+			lockKey = f.funcName
 		}
 		if e.distributedLocker != nil {
 			l, err := e.distributedLocker.Lock(f.ctx, lockKey)
@@ -196,7 +196,7 @@ func (e *executor) run() {
 				if panicHandler != nil {
 					defer func() {
 						if r := recover(); r != any(nil) {
-							panicHandler(f.name, r)
+							panicHandler(f.funcName, r)
 						}
 					}()
 				}

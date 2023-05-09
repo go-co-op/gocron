@@ -2631,8 +2631,8 @@ func TestDistributedJobWithName(t *testing.T) {
 }
 
 func TestDistributedJobWithEmptyName(t *testing.T) {
-	// The distributed locking will use the function name as its lock key
-	// if the job name is empty. So the result will be 8 instead of 4 since
+	// The distributed locking will use the function funcName as its lock key
+	// if the job funcName is empty. So the result will be 8 instead of 4 since
 	// they are regarded as different jobs.
 	runDistributedJobWithName(t, "", 8)
 }
@@ -2653,16 +2653,19 @@ func runDistributedJobWithName(t *testing.T, name string, expectedResult int) {
 	}
 
 	schedulers := make([]*Scheduler, 0)
+
+	var err error
+	var job *Job
 	for i := 0; i < 2; i++ {
 		s := NewScheduler(time.UTC)
 		s.WithDistributedLocker(l)
 		if i%2 == 0 {
-			_, err := s.Every("500ms").SetJobLockKey(name).Do(f1, 1)
-			require.NoError(t, err)
+			job, err = s.Every("500ms").Name(name).Do(f1, 1)
 		} else {
-			_, err := s.Every("500ms").SetJobLockKey(name).Do(f2, 1)
-			require.NoError(t, err)
+			job, err = s.Every("500ms").Name(name).Do(f2, 1)
 		}
+		require.NoError(t, err)
+		require.Equal(t, job.jobName, name)
 		schedulers = append(schedulers, s)
 	}
 	for i := range schedulers {

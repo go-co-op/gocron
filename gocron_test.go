@@ -181,7 +181,7 @@ func Test_getFunctionName(t *testing.T) {
 		want string
 	}{
 		{
-			name: "test get function name",
+			name: "test get function funcName",
 			args: args{
 				fn: Test_getFunctionName,
 			},

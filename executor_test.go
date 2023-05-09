@@ -16,7 +16,7 @@ func Test_ExecutorExecute(t *testing.T) {
 	e.start()
 
 	e.jobFunctions <- jobFunction{
-		name: "test_fn",
+		funcName: "test_fn",
 		function: func(arg string) {
 			assert.Equal(t, arg, "test")
 			wg.Done()
@@ -47,7 +47,7 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 	e.start()
 
 	e.jobFunctions <- jobFunction{
-		name: "test_fn",
+		funcName: "test_fn",
 		function: func() {
 			defer wg.Done()
 			a := make([]string, 0)
