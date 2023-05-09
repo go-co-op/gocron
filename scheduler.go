@@ -77,11 +77,23 @@ func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
 
 // StartBlocking starts all jobs and blocks the current thread.
 // This blocking method can be stopped with Stop() from a separate goroutine.
+//
+// NOTE - This will panic if called with zero jobs in the scheduler.
 func (s *Scheduler) StartBlocking() {
 	s.StartAsync()
 	s.startBlockingStopChanMutex.Lock()
 	s.startBlockingStopChan = make(chan struct{}, 1)
 	s.startBlockingStopChanMutex.Unlock()
+	if len(s.Jobs()) == 0 {
+		time.Sleep(time.Second)
+		if len(s.Jobs()) == 0 {
+			// panic here because if we don't, a panic will result due to a deadlock
+			// as the all goroutines will be asleep as no jobs are being published
+			// to the executor from the scheduler. This way, the panic message will
+			// be clearer to the end user.
+			panic("StartBlocking cannot be called with zero jobs in the Scheduler")
+		}
+	}
 	<-s.startBlockingStopChan
 }
 
