@@ -45,6 +45,7 @@ type jobFunction struct {
 	function          any                // task's function
 	parameters        []any              // task's function parameters
 	parametersLen     int                // length of the passed parameters
+	lockKey           string             // key of the distributed lock
 	name              string             // nolint the function name to run
 	runConfig         runConfig          // configuration for how many times to run the job
 	singletonQueue    chan struct{}      // queues jobs for the singleton runner to handle
@@ -75,6 +76,7 @@ func (jf *jobFunction) copy() jobFunction {
 		parameters:        nil,
 		parametersLen:     jf.parametersLen,
 		name:              jf.name,
+		lockKey:           jf.lockKey,
 		runConfig:         jf.runConfig,
 		singletonQueue:    jf.singletonQueue,
 		ctx:               jf.ctx,

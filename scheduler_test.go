@@ -2625,3 +2625,58 @@ func runTestWithDistributedLocking(t *testing.T, maxConcurrentJobs int) {
 	}
 	assert.Len(t, results, 4)
 }
+
+func TestDistributedJobWithName(t *testing.T) {
+	runDistributedJobWithName(t, "foo", 4)
+}
+
+func TestDistributedJobWithEmptyName(t *testing.T) {
+	// The distributed locking will use the function name as its lock key
+	// if the job name is empty. So the result will be 8 instead of 4 since
+	// they are regarded as different jobs.
+	runDistributedJobWithName(t, "", 8)
+}
+
+func runDistributedJobWithName(t *testing.T, name string, expectedResult int) {
+	resultChan := make(chan int, 10)
+	f1 := func(schedulerInstance int) {
+		resultChan <- schedulerInstance
+		time.Sleep(100 * time.Millisecond)
+	}
+	f2 := func(schedulerInstance int) {
+		resultChan <- schedulerInstance
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	l := &locker{
+		store: make(map[string]struct{}, 0),
+	}
+
+	schedulers := make([]*Scheduler, 0)
+	for i := 0; i < 2; i++ {
+		s := NewScheduler(time.UTC)
+		s.WithDistributedLocker(l)
+		if i%2 == 0 {
+			_, err := s.Every("500ms").SetJobLockKey(name).Do(f1, 1)
+			require.NoError(t, err)
+		} else {
+			_, err := s.Every("500ms").SetJobLockKey(name).Do(f2, 1)
+			require.NoError(t, err)
+		}
+		schedulers = append(schedulers, s)
+	}
+	for i := range schedulers {
+		schedulers[i].StartAsync()
+	}
+	time.Sleep(1700 * time.Millisecond)
+	for i := range schedulers {
+		schedulers[i].Stop()
+	}
+	close(resultChan)
+
+	var results []int
+	for r := range resultChan {
+		results = append(results, r)
+	}
+	assert.Len(t, results, expectedResult)
+}

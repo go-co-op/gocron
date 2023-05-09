@@ -126,6 +126,14 @@ func (s *Scheduler) Jobs() []*Job {
 	return s.jobs
 }
 
+// SetJobLockKey sets the lock key of the current job to prevent running jobs
+// more than once between multiple instances when the distributed lock is enabled.
+func (s *Scheduler) SetJobLockKey(name string) *Scheduler {
+	job := s.getCurrentJob()
+	job.lockKey = name
+	return s
+}
+
 func (s *Scheduler) setJobs(jobs []*Job) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()

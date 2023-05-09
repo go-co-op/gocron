@@ -132,8 +132,14 @@ func (e *executor) start() {
 func (e *executor) runJob(f jobFunction) {
 	switch f.runConfig.mode {
 	case defaultMode:
+		lockKey := f.lockKey
+		// Use the function name as the lock key if no lock key is provided
+		// via the Scheduler.SetJobLockKey() method
+		if f.lockKey == "" {
+			lockKey = f.name
+		}
 		if e.distributedLocker != nil {
-			l, err := e.distributedLocker.Lock(f.ctx, f.name)
+			l, err := e.distributedLocker.Lock(f.ctx, lockKey)
 			if err != nil || l == nil {
 				return
 			}
