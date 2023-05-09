@@ -132,8 +132,12 @@ func (e *executor) start() {
 func (e *executor) runJob(f jobFunction) {
 	switch f.runConfig.mode {
 	case defaultMode:
+		lockKey := f.jobName
+		if lockKey == "" {
+			lockKey = f.funcName
+		}
 		if e.distributedLocker != nil {
-			l, err := e.distributedLocker.Lock(f.ctx, f.name)
+			l, err := e.distributedLocker.Lock(f.ctx, lockKey)
 			if err != nil || l == nil {
 				return
 			}
@@ -190,7 +194,7 @@ func (e *executor) run() {
 				if panicHandler != nil {
 					defer func() {
 						if r := recover(); r != any(nil) {
-							panicHandler(f.name, r)
+							panicHandler(f.funcName, r)
 						}
 					}()
 				}

@@ -28,7 +28,7 @@ var (
 // SetPanicHandler sets the global panicHandler to the given function.
 // Leaving it nil or setting it to nil disables automatic panic handling.
 // If the panicHandler is not nil, any panic that occurs during executing a job will be recovered
-// and the panicHandlerFunc will be called with the job's name and the recover data.
+// and the panicHandlerFunc will be called with the job's funcName and the recover data.
 func SetPanicHandler(handler PanicHandlerFunc) {
 	panicHandlerMutex.Lock()
 	defer panicHandlerMutex.Unlock()

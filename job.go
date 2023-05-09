@@ -45,7 +45,8 @@ type jobFunction struct {
 	function          any                // task's function
 	parameters        []any              // task's function parameters
 	parametersLen     int                // length of the passed parameters
-	name              string             // nolint the function name to run
+	jobName           string             // key of the distributed lock
+	funcName          string             // the name of the function - e.g. main.func1
 	runConfig         runConfig          // configuration for how many times to run the job
 	singletonQueue    chan struct{}      // queues jobs for the singleton runner to handle
 	singletonRunnerOn *atomic.Bool       // whether the runner function for singleton is running
@@ -74,7 +75,8 @@ func (jf *jobFunction) copy() jobFunction {
 		function:          jf.function,
 		parameters:        nil,
 		parametersLen:     jf.parametersLen,
-		name:              jf.name,
+		funcName:          jf.funcName,
+		jobName:           jf.jobName,
 		runConfig:         jf.runConfig,
 		singletonQueue:    jf.singletonQueue,
 		ctx:               jf.ctx,
@@ -133,6 +135,16 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		job.SingletonMode()
 	}
 	return job
+}
+
+// Name sets the name of the current job.
+//
+// If the scheduler is running using WithDistributedLocker(),
+// the job name is used as the distributed lock key.
+func (j *Job) Name(name string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.jobName = name
 }
 
 func (j *Job) setRandomInterval(a, b int) {

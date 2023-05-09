@@ -126,6 +126,16 @@ func (s *Scheduler) Jobs() []*Job {
 	return s.jobs
 }
 
+// Name sets the name of the current job.
+//
+// If the scheduler is running using WithDistributedLocker(), the job name is used
+// as the distributed lock key.
+func (s *Scheduler) Name(name string) *Scheduler {
+	job := s.getCurrentJob()
+	job.jobName = name
+	return s
+}
+
 func (s *Scheduler) setJobs(jobs []*Job) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()
@@ -658,7 +668,7 @@ func (s *Scheduler) Remove(job any) {
 	j := s.findJobByTaskName(fName)
 	s.removeJobsUniqueTags(j)
 	s.removeByCondition(func(someJob *Job) bool {
-		return someJob.name == fName
+		return someJob.funcName == fName
 	})
 }
 
@@ -674,7 +684,7 @@ func (s *Scheduler) RemoveByReference(job *Job) {
 
 func (s *Scheduler) findJobByTaskName(name string) *Job {
 	for _, job := range s.Jobs() {
-		if job.name == name {
+		if job.funcName == name {
 			return job
 		}
 	}
@@ -820,7 +830,7 @@ func (s *Scheduler) SingletonModeAll() {
 // TaskPresent checks if specific job's function was added to the scheduler.
 func (s *Scheduler) TaskPresent(j any) bool {
 	for _, job := range s.Jobs() {
-		if job.name == getFunctionName(j) {
+		if job.funcName == getFunctionName(j) {
 			return true
 		}
 	}
@@ -915,10 +925,10 @@ func (s *Scheduler) doCommon(jobFun any, params ...any) (*Job, error) {
 	}
 
 	fname := getFunctionName(jobFun)
-	if job.name != fname {
+	if job.funcName != fname {
 		job.function = jobFun
 		job.parameters = params
-		job.name = fname
+		job.funcName = fname
 	}
 
 	f := reflect.ValueOf(jobFun)
