@@ -1406,8 +1406,13 @@ func (s *Scheduler) StopBlockingChan() {
 // Another strategy is to use the Cron or CronWithSeconds methods as they
 // use the same behavior described above using StartAt.
 //
-// NOTE - the Locker will NOT lock jobs using any of the limiting functions:
-// SingletonMode, SingletonModeAll or SetMaxConcurrentJobs
+// NOTE - the Locker will NOT lock jobs using the singleton options:
+// SingletonMode, or SingletonModeAll
+//
+// NOTE - beware of potential race conditions when running the Locker
+// with SetMaxConcurrentJobs and WaitMode as jobs are not guaranteed
+// to be locked when each scheduler's is below its limit and able
+// to run the job.
 func (s *Scheduler) WithDistributedLocker(l Locker) {
 	s.executor.distributedLocker = l
 }
