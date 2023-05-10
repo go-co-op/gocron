@@ -82,7 +82,12 @@ func (s *Scheduler) StartBlocking() {
 	s.startBlockingStopChanMutex.Lock()
 	s.startBlockingStopChan = make(chan struct{}, 1)
 	s.startBlockingStopChanMutex.Unlock()
+
 	<-s.startBlockingStopChan
+
+	s.startBlockingStopChanMutex.Lock()
+	s.startBlockingStopChan = nil
+	s.startBlockingStopChanMutex.Unlock()
 }
 
 // StartAsync starts all jobs without blocking the current thread
