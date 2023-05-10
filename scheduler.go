@@ -82,7 +82,12 @@ func (s *Scheduler) StartBlocking() {
 	s.startBlockingStopChanMutex.Lock()
 	s.startBlockingStopChan = make(chan struct{}, 1)
 	s.startBlockingStopChanMutex.Unlock()
+
 	<-s.startBlockingStopChan
+
+	s.startBlockingStopChanMutex.Lock()
+	s.startBlockingStopChan = nil
+	s.startBlockingStopChanMutex.Unlock()
 }
 
 // StartAsync starts all jobs without blocking the current thread
@@ -878,10 +883,10 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) stop() {
-	s.setRunning(false)
 	s.stopJobs(s.jobs)
 	s.executor.stop()
 	s.StopBlockingChan()
+	s.setRunning(false)
 }
 
 func (s *Scheduler) stopJobs(jobs []*Job) {
@@ -1386,8 +1391,8 @@ func (s *Scheduler) CustomTimer(customTimer func(d time.Duration, f func()) *tim
 
 func (s *Scheduler) StopBlockingChan() {
 	s.startBlockingStopChanMutex.Lock()
-	if s.startBlockingStopChan != nil {
-		s.startBlockingStopChan <- struct{}{}
+	if s.IsRunning() && s.startBlockingStopChan != nil {
+		close(s.startBlockingStopChan)
 	}
 	s.startBlockingStopChanMutex.Unlock()
 }
