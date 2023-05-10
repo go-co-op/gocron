@@ -617,7 +617,10 @@ func (s *Scheduler) runContinuous(job *Job) {
 				if n >= 0 {
 					break
 				}
-				s.time.Sleep(time.Duration(n))
+				select {
+				case <-s.executor.ctx.Done():
+				case <-time.After(time.Duration(n)):
+				}
 			}
 		}
 		s.runContinuous(job)
