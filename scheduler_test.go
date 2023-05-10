@@ -270,10 +270,15 @@ func TestAt(t *testing.T) {
 		assert.Zero(t, s.Len())
 	})
 
+	testTime := time.Date(2000, 1, 10, 12, 0, 0, 0, time.UTC)
+	ft := fakeTime{onNow: func(l *time.Location) time.Time {
+		return testTime
+	}}
 	t.Run("Week() and At()", func(t *testing.T) {
-		atTime := time.Now().UTC().Add(time.Hour).Round(time.Second)
+		atTime := testTime.Add(time.Hour).Round(time.Second)
 
 		s := NewScheduler(time.UTC)
+		s.time = ft
 		job, err := s.Every(1).Week().At(atTime).Do(func() {})
 		require.NoError(t, err)
 		s.StartAsync()
@@ -283,9 +288,10 @@ func TestAt(t *testing.T) {
 	})
 
 	t.Run("Week() and At() almost 1 week in future", func(t *testing.T) {
-		atTime := time.Now().UTC().Add(time.Hour * 167).Round(time.Second)
+		atTime := testTime.Add(time.Hour * 167).Round(time.Second)
 
 		s := NewScheduler(time.UTC)
+		s.time = ft
 		job, err := s.Every(1).Week().At(atTime).Do(func() {})
 		require.NoError(t, err)
 		s.StartAsync()
@@ -295,11 +301,12 @@ func TestAt(t *testing.T) {
 	})
 
 	t.Run("Week() and multiple At() times, 1 in future", func(t *testing.T) {
-		atTime1 := time.Now().UTC().Add(time.Hour * -2).Round(time.Second)
-		atTime2 := time.Now().UTC().Add(time.Hour * -1).Round(time.Second)
-		atTime3 := time.Now().UTC().Add(time.Hour * 1).Round(time.Second)
+		atTime1 := testTime.Add(time.Hour * -2).Round(time.Second)
+		atTime2 := testTime.Add(time.Hour * -1).Round(time.Second)
+		atTime3 := testTime.Add(time.Hour * 1).Round(time.Second)
 
 		s := NewScheduler(time.UTC)
+		s.time = ft
 		job, err := s.Every(1).Week().At(atTime1).At(atTime2).At(atTime3).Do(func() {})
 		require.NoError(t, err)
 		s.StartAsync()
@@ -309,15 +316,9 @@ func TestAt(t *testing.T) {
 	})
 
 	t.Run("Week() and multiple At() times, all in past", func(t *testing.T) {
-		tm := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
-
-		ft := fakeTime{onNow: func(l *time.Location) time.Time {
-			return tm
-		}}
-
-		atTime1 := tm.Add(time.Hour * -6).Round(time.Second)
-		atTime2 := tm.Add(time.Hour * -5).Round(time.Second)
-		atTime3 := tm.Add(time.Hour * -4).Round(time.Second)
+		atTime1 := testTime.Add(time.Hour * -6).Round(time.Second)
+		atTime2 := testTime.Add(time.Hour * -5).Round(time.Second)
+		atTime3 := testTime.Add(time.Hour * -4).Round(time.Second)
 
 		s := NewScheduler(time.UTC)
 		s.time = ft
