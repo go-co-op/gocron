@@ -148,7 +148,10 @@ func (e *executor) runJob(f jobFunction) {
 				}
 				if durationToNextRun > time.Millisecond*100 {
 					timeToSleep := time.Duration(float64(durationToNextRun) * 0.9)
-					time.Sleep(timeToSleep)
+					select {
+					case <-e.ctx.Done():
+					case <-time.After(timeToSleep):
+					}
 				}
 				_ = l.Unlock(f.ctx)
 			}()
