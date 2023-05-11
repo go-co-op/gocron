@@ -97,7 +97,7 @@ There are several options available to restrict how jobs run:
 
 ## Distributed Locker Implementations
 
-- Redis: [redislock](lockers/redislock/README.md) `go get github.com/go-co-op/gocron/lockers/redislock`
+- Redis: [redislock](https://github.com/go-co-op/gocron-redis-lock) `go get github.com/go-co-op/gocron-redis-lock`
 
 ## Tags
 
@@ -125,7 +125,7 @@ s.RunByTag("tag")
 
 - Q: I'm running multiple pods on a distributed environment. How can I make a job not run once per pod causing duplication?
   - We recommend using your own lock solution within the jobs themselves (you could use [Redis](https://redis.io/topics/distlock), for example)
-  - A2: Use the scheduler option `WithDistributedLocker` and either use an implemented [backend](lockers)
+  - A2: Use the scheduler option `WithDistributedLocker` and either use an implemented [backend](#distributed-locker-implementations)
     or implement your own and contribute it back in a PR!
 
 - Q: I've removed my job from the scheduler, but how can I stop a long-running job that has already been triggered?
