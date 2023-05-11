@@ -6,10 +6,10 @@ import (
 	"math/rand"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/robfig/cron/v3"
+	"go.uber.org/atomic"
 )
 
 // Job struct stores the information necessary to run a Job
@@ -42,8 +42,8 @@ type random struct {
 
 type jobFunction struct {
 	eventListeners                       // additional functions to allow run 'em during job performing
-	function          any                // task's function
-	parameters        []any              // task's function parameters
+	function          interface{}        // task's function
+	parameters        []interface{}      // task's function parameters
 	parametersLen     int                // length of the passed parameters
 	jobName           string             // key of the distributed lock
 	funcName          string             // the name of the function - e.g. main.func1
@@ -61,8 +61,8 @@ type jobFunction struct {
 }
 
 type eventListeners struct {
-	onBeforeJobExecution any // performs before job executing
-	onAfterJobExecution  any // performs after job executing
+	onBeforeJobExecution interface{} // performs before job executing
+	onAfterJobExecution  interface{} // performs after job executing
 }
 
 type jobMutex struct {
@@ -122,11 +122,11 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		jobFunction: jobFunction{
 			ctx:               ctx,
 			cancel:            cancel,
-			isRunning:         &atomic.Bool{},
-			runStartCount:     &atomic.Int64{},
-			runFinishCount:    &atomic.Int64{},
-			singletonRunnerOn: &atomic.Bool{},
-			stopped:           &atomic.Bool{},
+			isRunning:         atomic.NewBool(false),
+			runStartCount:     atomic.NewInt64(0),
+			runFinishCount:    atomic.NewInt64(0),
+			singletonRunnerOn: atomic.NewBool(false),
+			stopped:           atomic.NewBool(false),
 		},
 		tags:              []string{},
 		startsImmediately: startImmediately,
@@ -336,7 +336,7 @@ func (j *Job) Tags() []string {
 }
 
 // SetEventListeners accepts two functions that will be called, one before and one after the job is run
-func (j *Job) SetEventListeners(onBeforeJobExecution any, onAfterJobExecution any) {
+func (j *Job) SetEventListeners(onBeforeJobExecution interface{}, onAfterJobExecution interface{}) {
 	j.eventListeners = eventListeners{
 		onBeforeJobExecution: onBeforeJobExecution,
 		onAfterJobExecution:  onAfterJobExecution,

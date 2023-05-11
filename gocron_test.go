@@ -109,8 +109,8 @@ func TestParseTime(t *testing.T) {
 
 func Test_callJobFuncWithParams(t *testing.T) {
 	type args struct {
-		jobFunc any
-		params  []any
+		jobFunc interface{}
+		params  []interface{}
 	}
 	tests := []struct {
 		name string
@@ -128,14 +128,14 @@ func Test_callJobFuncWithParams(t *testing.T) {
 			name: "test call func with single arg",
 			args: args{
 				jobFunc: func(arg string) {},
-				params:  []any{"test"},
+				params:  []interface{}{"test"},
 			},
 		},
 		{
 			name: "test call func with wrong arg type",
 			args: args{
 				jobFunc: func(arg int) {},
-				params:  []any{"test"},
+				params:  []interface{}{"test"},
 			},
 			err: true,
 		},
@@ -143,7 +143,7 @@ func Test_callJobFuncWithParams(t *testing.T) {
 			name: "test call func with wrong arg count",
 			args: args{
 				jobFunc: func(arg int) {},
-				params:  []any{},
+				params:  []interface{}{},
 			},
 			err: true,
 		},
@@ -173,7 +173,7 @@ func panicFnToErr(fn func()) (err error) {
 
 func Test_getFunctionName(t *testing.T) {
 	type args struct {
-		fn any
+		fn interface{}
 	}
 	tests := []struct {
 		name string

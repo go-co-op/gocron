@@ -17,7 +17,7 @@ import (
 
 // PanicHandlerFunc represents a type that can be set to handle panics occurring
 // during job execution.
-type PanicHandlerFunc func(jobName string, recoverData any)
+type PanicHandlerFunc func(jobName string, recoverData interface{})
 
 // The global panic handler
 var (
@@ -88,13 +88,13 @@ const (
 	crontab
 )
 
-func callJobFunc(jobFunc any) {
+func callJobFunc(jobFunc interface{}) {
 	if jobFunc != nil {
 		reflect.ValueOf(jobFunc).Call([]reflect.Value{})
 	}
 }
 
-func callJobFuncWithParams(jobFunc any, params []any) {
+func callJobFuncWithParams(jobFunc interface{}, params []interface{}) {
 	f := reflect.ValueOf(jobFunc)
 	if len(params) != f.Type().NumIn() {
 		return
@@ -106,7 +106,7 @@ func callJobFuncWithParams(jobFunc any, params []any) {
 	f.Call(in)
 }
 
-func getFunctionName(fn any) string {
+func getFunctionName(fn interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 

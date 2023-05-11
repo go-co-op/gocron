@@ -946,7 +946,7 @@ func ExampleScheduler_WithDistributedLocker() {
 // ---------------------------------------------------------------------
 
 func ExampleSetPanicHandler() {
-	gocron.SetPanicHandler(func(jobName string, _ any) {
+	gocron.SetPanicHandler(func(jobName string, _ interface{}) {
 		fmt.Printf("Panic in job: %s", jobName)
 		fmt.Println("do something to handle the panic")
 	})

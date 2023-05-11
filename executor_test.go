@@ -2,10 +2,10 @@ package gocron
 
 import (
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 )
 
 func Test_ExecutorExecute(t *testing.T) {
@@ -21,10 +21,10 @@ func Test_ExecutorExecute(t *testing.T) {
 			assert.Equal(t, arg, "test")
 			wg.Done()
 		},
-		parameters:     []any{"test"},
-		isRunning:      &atomic.Bool{},
-		runStartCount:  &atomic.Int64{},
-		runFinishCount: &atomic.Int64{},
+		parameters:     []interface{}{"test"},
+		isRunning:      atomic.NewBool(false),
+		runStartCount:  atomic.NewInt64(0),
+		runFinishCount: atomic.NewInt64(0),
 	}
 
 	wg.Wait()
@@ -34,7 +34,7 @@ func Test_ExecutorExecute(t *testing.T) {
 func Test_ExecutorPanicHandling(t *testing.T) {
 	panicHandled := make(chan bool, 1)
 
-	handler := func(jobName string, recoverData any) {
+	handler := func(jobName string, recoverData interface{}) {
 		panicHandled <- true
 	}
 
@@ -54,9 +54,9 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 			a[0] = "This will panic"
 		},
 		parameters:     nil,
-		isRunning:      &atomic.Bool{},
-		runStartCount:  &atomic.Int64{},
-		runFinishCount: &atomic.Int64{},
+		isRunning:      atomic.NewBool(false),
+		runStartCount:  atomic.NewInt64(0),
+		runFinishCount: atomic.NewInt64(0),
 	}
 
 	wg.Wait()

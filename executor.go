@@ -3,8 +3,9 @@ package gocron
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"go.uber.org/atomic"
 )
 
 const (
@@ -59,9 +60,9 @@ func newExecutor() executor {
 	e := executor{
 		jobFunctions:          make(chan jobFunction, 1),
 		singletonWgs:          &sync.Map{},
-		limitModeFuncsRunning: &atomic.Int64{},
+		limitModeFuncsRunning: atomic.NewInt64(0),
 		limitModeFuncWg:       &sync.WaitGroup{},
-		limitModeRunningJobs:  &atomic.Int64{},
+		limitModeRunningJobs:  atomic.NewInt64(0),
 		limitModeQueueMu:      &sync.Mutex{},
 	}
 	return e
@@ -100,7 +101,7 @@ func (e *executor) limitModeRunner() {
 	for {
 		select {
 		case <-e.ctx.Done():
-			e.limitModeFuncsRunning.Add(-1)
+			e.limitModeFuncsRunning.Inc()
 			e.limitModeFuncWg.Done()
 			return
 		case jf := <-e.limitModeQueue:
@@ -121,7 +122,7 @@ func (e *executor) start() {
 
 	e.jobsWg = &sync.WaitGroup{}
 
-	e.stopped = &atomic.Bool{}
+	e.stopped = atomic.NewBool(false)
 
 	e.limitModeQueueMu.Lock()
 	e.limitModeQueue = make(chan jobFunction, 1000)
@@ -182,7 +183,7 @@ func (e *executor) run() {
 					for i := int64(0); i < diff; i++ {
 						e.limitModeFuncWg.Add(1)
 						go e.limitModeRunner()
-						e.limitModeFuncsRunning.Add(1)
+						e.limitModeFuncsRunning.Inc()
 					}
 				}
 			}
@@ -196,7 +197,7 @@ func (e *executor) run() {
 
 				if panicHandler != nil {
 					defer func() {
-						if r := recover(); r != any(nil) {
+						if r := recover(); r != nil {
 							panicHandler(f.funcName, r)
 						}
 					}()
@@ -235,7 +236,7 @@ func (e *executor) stop() {
 	e.cancel()
 	e.wg.Wait()
 	if e.singletonWgs != nil {
-		e.singletonWgs.Range(func(key, value any) bool {
+		e.singletonWgs.Range(func(key, value interface{}) bool {
 			if wg, ok := key.(*sync.WaitGroup); ok {
 				wg.Wait()
 			}
