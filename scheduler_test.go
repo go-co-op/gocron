@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 )
 
 var _ TimeWrapper = (*fakeTime)(nil)
@@ -60,7 +60,7 @@ func TestImmediateExecution(t *testing.T) {
 func TestScheduler_Every_InvalidInterval(t *testing.T) {
 	testCases := []struct {
 		description   string
-		interval      any
+		interval      interface{}
 		expectedError string
 	}{
 		{"zero", 0, ErrInvalidInterval.Error()},
@@ -336,27 +336,27 @@ func TestMultipleAtTimesDecoding(t *testing.T) {
 	exp := []time.Duration{_getHours(1), _getHours(3), _getHours(4), _getHours(7), _getHours(15)}
 	testCases := []struct {
 		name   string
-		params []any
+		params []interface{}
 		result []time.Duration
 	}{
 		{
 			name:   "multiple simple strings",
-			params: []any{"03:00", "15:00", "01:00", "07:00", "04:00"},
+			params: []interface{}{"03:00", "15:00", "01:00", "07:00", "04:00"},
 			result: exp,
 		},
 		{
 			name:   "single string separated by semicolons",
-			params: []any{"03:00;15:00;01:00;07:00;04:00"},
+			params: []interface{}{"03:00;15:00;01:00;07:00;04:00"},
 			result: exp,
 		},
 		{
 			name:   "interpolation of semicolons string, time.Time and simple string",
-			params: []any{"03:00;15:00;01:00", time.Date(0, 0, 0, 7, 0, 0, 0, time.UTC), "04:00"},
+			params: []interface{}{"03:00;15:00;01:00", time.Date(0, 0, 0, 7, 0, 0, 0, time.UTC), "04:00"},
 			result: exp,
 		},
 		{
 			name:   "repeated values on input don't get duplicated after decoding",
-			params: []any{"03:00;15:00;01:00;07:00;04:00;01:00"},
+			params: []interface{}{"03:00;15:00;01:00;07:00;04:00;01:00"},
 			result: exp,
 		},
 	}
@@ -903,7 +903,7 @@ func TestClearUnique(t *testing.T) {
 	// be stopped on s.Clear()
 	assert.Equal(t, 1, counter)
 
-	s.tags.Range(func(key, value any) bool {
+	s.tags.Range(func(key, value interface{}) bool {
 		assert.FailNow(t, "map should be empty")
 		return true
 	})
@@ -981,18 +981,18 @@ func TestScheduler_Stop(t *testing.T) {
 	})
 	t.Run("waits for jobs to finish processing before returning .Stop()", func(t *testing.T) {
 		t.Parallel()
-		i := int32(0)
+		i := atomic.NewInt64(0)
 
 		s := NewScheduler(time.UTC)
 		s.Every(10).Second().Do(func() {
 			time.Sleep(2 * time.Second)
-			atomic.AddInt32(&i, 1)
+			i.Add(1)
 		})
 		s.StartAsync()
 		time.Sleep(time.Second) // enough time for job to run
 		s.Stop()
 
-		assert.EqualValues(t, 1, atomic.LoadInt32(&i))
+		assert.EqualValues(t, 1, i.Load())
 	})
 	t.Run("stops a running scheduler calling .Stop()", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
@@ -1195,7 +1195,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.time = ft
-			tc.job.runStartCount = &atomic.Int64{}
+			tc.job.runStartCount = atomic.NewInt64(0)
 			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})
@@ -1360,7 +1360,7 @@ func TestRunJobsWithLimit(t *testing.T) {
 			require.LessOrEqual(t, counter, 1)
 		}
 
-		s.tags.Range(func(key, value any) bool {
+		s.tags.Range(func(key, value interface{}) bool {
 			assert.FailNow(t, "map should be empty")
 			return true
 		})
@@ -1443,13 +1443,13 @@ func TestScheduler_SingletonMode(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
-			var trigger int32
+			trigger := atomic.NewInt64(0)
 
 			j, err := s.Every("100ms").SingletonMode().Do(func() {
-				if atomic.LoadInt32(&trigger) == 1 {
+				if trigger.Load() == 1 {
 					t.Fatal("Restart should not occur")
 				}
-				atomic.AddInt32(&trigger, 1)
+				trigger.Add(1)
 				time.Sleep(300 * time.Millisecond)
 			})
 			require.NoError(t, err)
@@ -1480,13 +1480,13 @@ func TestScheduler_SingletonModeAll(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			s.SingletonModeAll()
 
-			var trigger int32
+			trigger := atomic.NewInt64(0)
 
 			j, err := s.Every("100ms").Do(func() {
-				if atomic.LoadInt32(&trigger) == 1 {
+				if trigger.Load() == 1 {
 					t.Fatal("Restart should not occur")
 				}
-				atomic.AddInt32(&trigger, 1)
+				trigger.Add(1)
 				time.Sleep(300 * time.Millisecond)
 			})
 			require.NoError(t, err)
@@ -1722,10 +1722,10 @@ func TestScheduler_MultipleTagsChained(t *testing.T) {
 func TestScheduler_DoParameterValidation(t *testing.T) {
 	testCases := []struct {
 		description string
-		parameters  []any
+		parameters  []interface{}
 	}{
-		{"less than expected", []any{"p1"}},
-		{"more than expected", []any{"p1", "p2", "p3"}},
+		{"less than expected", []interface{}{"p1"}},
+		{"more than expected", []interface{}{"p1", "p2", "p3"}},
 	}
 
 	for _, tc := range testCases {
@@ -2422,15 +2422,15 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 func TestScheduler_DoWithJobDetails(t *testing.T) {
 	testCases := []struct {
 		description   string
-		jobFunc       any
-		params        []any
+		jobFunc       interface{}
+		params        []interface{}
 		expectedError string
 	}{
-		{"no error", func(foo, bar string, job Job) {}, []any{"foo", "bar"}, ""},
-		{"too few params", func(foo, bar string, job Job) {}, []any{"foo"}, ErrWrongParams.Error()},
-		{"too many params", func(foo, bar string, job Job) {}, []any{"foo", "bar", "baz"}, ErrWrongParams.Error()},
-		{"jobFunc doesn't have Job param", func(foo, bar string) {}, []any{"foo"}, ErrDoWithJobDetails.Error()},
-		{"jobFunc has Job param but not last param", func(job Job, foo, bar string) {}, []any{"foo", "bar"}, ErrDoWithJobDetails.Error()},
+		{"no error", func(foo, bar string, job Job) {}, []interface{}{"foo", "bar"}, ""},
+		{"too few params", func(foo, bar string, job Job) {}, []interface{}{"foo"}, ErrWrongParams.Error()},
+		{"too many params", func(foo, bar string, job Job) {}, []interface{}{"foo", "bar", "baz"}, ErrWrongParams.Error()},
+		{"jobFunc doesn't have Job param", func(foo, bar string) {}, []interface{}{"foo"}, ErrDoWithJobDetails.Error()},
+		{"jobFunc has Job param but not last param", func(job Job, foo, bar string) {}, []interface{}{"foo", "bar"}, ErrDoWithJobDetails.Error()},
 	}
 
 	for _, tc := range testCases {
@@ -2524,7 +2524,7 @@ func TestScheduler_ChainOrder(t *testing.T) {
 	func2 := func() { panic("func 2 not implemented") }
 	func3 := func() { panic("func 3 not implemented") }
 
-	funcs := []any{func1, func2, func3}
+	funcs := []interface{}{func1, func2, func3}
 
 	_, err := s.Tag("1").SingletonMode().Milliseconds().EveryRandom(100, 200).Do(func1)
 	require.NoError(t, err)

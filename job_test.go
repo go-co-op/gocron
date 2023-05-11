@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 )
 
 func TestTags(t *testing.T) {
@@ -183,7 +183,7 @@ func TestJob_shouldRunAgain(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runCount := &atomic.Int64{}
+			runCount := atomic.NewInt64(0)
 			runCount.Store(int64(tt.runCount))
 			j := &Job{
 				mu: &jobMutex{},
