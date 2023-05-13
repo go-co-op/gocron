@@ -134,7 +134,7 @@ func (s *Scheduler) Jobs() []*Job {
 // Name sets the name of the current job.
 //
 // If the scheduler is running using WithDistributedLocker(), the job name is used
-// as the distributed lock key.
+// as the distributed lock key. If the job name is not set, the function name is used as the distributed lock key.
 func (s *Scheduler) Name(name string) *Scheduler {
 	job := s.getCurrentJob()
 	job.jobName = name
