@@ -32,6 +32,8 @@ If you want to chat, you can find us at Slack!
 ```golang
 s := gocron.NewScheduler(time.UTC)
 
+// Every starts the job immediately and then runs at the 
+// specified interval
 job, err := s.Every(5).Seconds().Do(func(){ ... })
 if err != nil {
 	// handle the error related to setting up the job
