@@ -600,6 +600,9 @@ func (s *Scheduler) runContinuous(job *Job) {
 	if !job.getStartsImmediately() {
 		job.setStartsImmediately(true)
 	} else {
+		//if job.neverRan() {
+		//	job.setLastRun(s.now())
+		//}
 		s.run(job)
 	}
 	nr := next.dateTime.Sub(s.now())

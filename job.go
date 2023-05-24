@@ -24,6 +24,7 @@ type Job struct {
 	atTimes           []time.Duration // optional time(s) at which this Job runs when interval is day
 	startAtTime       time.Time       // optional time at which the Job starts
 	error             error           // error related to Job
+	previousRun       time.Time       // datetime of the run before last run
 	lastRun           time.Time       // datetime of last run
 	nextRun           time.Time       // datetime of next run
 	scheduledWeekdays []time.Weekday  // Specific days of the week to start on
@@ -435,6 +436,7 @@ func (j *Job) LastRun() time.Time {
 }
 
 func (j *Job) setLastRun(t time.Time) {
+	j.previousRun = j.lastRun
 	j.lastRun = t
 }
 
@@ -450,6 +452,13 @@ func (j *Job) setNextRun(t time.Time) {
 	defer j.mu.Unlock()
 	j.nextRun = t
 	j.jobFunction.jobFuncNextRun = t
+}
+
+// PreviousRun returns the job run time previous to LastRun
+func (j *Job) PreviousRun() time.Time {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	return j.previousRun
 }
 
 // RunCount returns the number of times the job has been started
@@ -498,6 +507,7 @@ func (j *Job) copy() Job {
 		error:             j.error,
 		lastRun:           j.lastRun,
 		nextRun:           j.nextRun,
+		previousRun:       j.previousRun,
 		scheduledWeekdays: j.scheduledWeekdays,
 		daysOfTheMonth:    j.daysOfTheMonth,
 		tags:              j.tags,

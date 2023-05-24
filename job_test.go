@@ -285,3 +285,40 @@ func TestJob_Stop(t *testing.T) {
 		assert.True(t, errors.Is(jobCtx.Err(), context.Canceled))
 	})
 }
+
+func TestJob_PreviousRun(t *testing.T) {
+	t.Run("at time", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		atTime := time.Now().UTC().Add(time.Millisecond * 150)
+		_, err := s.Every(1).Day().At(atTime).DoWithJobDetails(func(job Job) {
+			assert.Zero(t, job.PreviousRun())
+			assert.Equal(t, atTime.Truncate(time.Second), job.LastRun())
+		})
+		require.NoError(t, err)
+		s.StartAsync()
+		time.Sleep(500 * time.Millisecond)
+		s.Stop()
+	})
+
+	t.Run("duration", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		var counter int
+		var lastRunTime time.Time
+		var mu sync.Mutex
+		_, err := s.Every("250ms").DoWithJobDetails(func(job Job) {
+			mu.Lock()
+			defer mu.Unlock()
+			if counter == 0 {
+				assert.Zero(t, job.PreviousRun())
+				lastRunTime = job.LastRun()
+			} else {
+				assert.Equalf(t, lastRunTime, job.PreviousRun(), "last lastRun and previous")
+			}
+			counter++
+		})
+		require.NoError(t, err)
+		s.StartAsync()
+		time.Sleep(450 * time.Millisecond)
+		s.Stop()
+	})
+}

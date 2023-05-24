@@ -84,6 +84,14 @@ func ExampleJob_NextRun() {
 	s.StartAsync()
 }
 
+func ExampleJob_PreviousRun() {
+	s := gocron.NewScheduler(time.UTC)
+	job, _ := s.Every(1).Second().Do(task)
+	s.StartAsync()
+
+	fmt.Println("Previous run:", job.PreviousRun())
+}
+
 func ExampleJob_RunCount() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
