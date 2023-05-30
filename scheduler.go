@@ -205,7 +205,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 		// Increment startAtTime to the future
 		if !job.startAtTime.IsZero() && job.startAtTime.Before(now) {
 			duration := s.durationToNextRun(job.startAtTime, job).duration
-			job.startAtTime = job.startAtTime.Add(duration)
+			job.setStartAtTime(job.startAtTime.Add(duration))
 			if job.startAtTime.Before(now) {
 				diff := now.Sub(job.startAtTime)
 				duration := s.durationToNextRun(job.startAtTime, job).duration
@@ -213,7 +213,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 				if diff%duration != 0 {
 					count++
 				}
-				job.startAtTime = job.startAtTime.Add(duration * count)
+				job.setStartAtTime(job.startAtTime.Add(duration * count))
 			}
 		}
 	} else {
