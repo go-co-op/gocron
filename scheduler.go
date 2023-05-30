@@ -77,7 +77,12 @@ func (s *Scheduler) SetMaxConcurrentJobs(n int, mode limitMode) {
 
 // StartBlocking starts all jobs and blocks the current thread.
 // This blocking method can be stopped with Stop() from a separate goroutine.
+//
+// There must be at least 1 job in the scheduler or a panic will occur.
 func (s *Scheduler) StartBlocking() {
+	if len(s.Jobs()) == 0 {
+		panic("gocron: scheduler must have at least 1 job before calling StartBlocking")
+	}
 	s.StartAsync()
 	s.startBlockingStopChanMutex.Lock()
 	s.startBlockingStopChan = make(chan struct{}, 1)
