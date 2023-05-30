@@ -1894,6 +1894,20 @@ func TestScheduler_Update(t *testing.T) {
 
 		assert.Equal(t, expectedNext, actualNext)
 	})
+
+	// Verifies https://github.com/go-co-op/gocron/issues/499
+	t.Run("at time is not set when updating incompatible unit jobs", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		startAt := time.Now().UTC().Add(time.Millisecond * 250)
+		j, err := s.Every(24 * time.Hour).StartAt(startAt).Do(func() {})
+		require.NoError(t, err)
+		s.StartAsync()
+		time.Sleep(time.Millisecond * 500)
+
+		_, err = s.Job(j).StartAt(startAt.Add(1 * time.Second)).Update()
+		require.NoError(t, err)
+		s.Stop()
+	})
 }
 
 func TestScheduler_RunByTag(t *testing.T) {

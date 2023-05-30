@@ -248,12 +248,14 @@ func (s *Scheduler) durationToNextRun(lastRun time.Time, job *Job) nextRun {
 	// job can be scheduled with .StartAt()
 	if job.getFirstAtTime() == 0 && job.getStartAtTime().After(lastRun) {
 		sa := job.getStartAtTime()
-		job.addAtTime(
-			time.Duration(sa.Hour())*time.Hour +
-				time.Duration(sa.Minute())*time.Minute +
-				time.Duration(sa.Second())*time.Second,
-		)
-		return nextRun{duration: job.getStartAtTime().Sub(s.now()), dateTime: job.getStartAtTime()}
+		if job.unit == days || job.unit == weeks || job.unit == months {
+			job.addAtTime(
+				time.Duration(sa.Hour())*time.Hour +
+					time.Duration(sa.Minute())*time.Minute +
+					time.Duration(sa.Second())*time.Second,
+			)
+		}
+		return nextRun{duration: sa.Sub(s.now()), dateTime: sa}
 	}
 
 	var next nextRun
