@@ -252,10 +252,14 @@ func (j *Job) addAtTime(t time.Duration) {
 }
 
 func (j *Job) getStartAtTime() time.Time {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
 	return j.startAtTime
 }
 
 func (j *Job) setStartAtTime(t time.Time) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
 	j.startAtTime = t
 }
 
