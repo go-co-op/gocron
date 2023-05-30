@@ -996,6 +996,8 @@ func TestScheduler_Stop(t *testing.T) {
 	})
 	t.Run("stops a running scheduler calling .Stop()", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
+		_, err := s.Every(1).Second().Do(func() {})
+		require.NoError(t, err)
 
 		go func() {
 			time.Sleep(time.Second)
@@ -2690,4 +2692,12 @@ func TestScheduler_WithDistributedLocker_With_Name(t *testing.T) {
 			assert.Len(t, results, tc.expected)
 		})
 	}
+}
+
+func TestScheduler_StartBlocking(t *testing.T) {
+	t.Run("panics if no jobs are added", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		expected := "gocron: scheduler must have at least 1 job before calling StartBlocking"
+		assert.PanicsWithValue(t, expected, s.StartBlocking)
+	})
 }
