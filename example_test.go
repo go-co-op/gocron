@@ -756,7 +756,7 @@ func ExampleScheduler_StartAt() {
 	s.StartBlocking()
 }
 
-func ExampleScheduler_StartAt_AfterTaskStart() {
+func ExampleScheduler_StartAt_afterTaskStart() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(5).Seconds().Do(task)
 	s.StartAt(time.Now().Add(10 * time.Second))
