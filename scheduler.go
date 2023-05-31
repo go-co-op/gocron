@@ -1043,6 +1043,7 @@ func (s *Scheduler) GetAllTags() []string {
 // StartAt schedules the next run of the Job. If this time is in the past, the configured interval will be used
 // to calculate the next future time
 func (s *Scheduler) StartAt(t time.Time) *Scheduler {
+	s.inScheduleChain = true
 	job := s.getCurrentJob()
 	job.setStartAtTime(t)
 	job.startsImmediately = false

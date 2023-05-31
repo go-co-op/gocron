@@ -1108,6 +1108,22 @@ func TestScheduler_StartAt(t *testing.T) {
 
 		assert.Equal(t, dt.Add(time.Hour*168).Truncate(time.Second), job.NextRun())
 	})
+
+	t.Run("StartAt() called after starting a task", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+
+		dt := time.Now().UTC().Add(time.Second)
+		job, err := s.Every(1).Week().Do(func() {})
+		s.StartAt(dt)
+		require.NoError(t, err)
+
+		s.StartAsync()
+		assert.Equal(t, dt, job.NextRun())
+		time.Sleep(time.Millisecond * 1500)
+		s.Stop()
+
+		assert.Equal(t, dt.Add(time.Hour*168).Truncate(time.Second), job.NextRun())
+	})
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
