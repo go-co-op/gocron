@@ -199,16 +199,19 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 	if job.neverRan() {
 		// Increment startAtTime to the future
 		if !job.startAtTime.IsZero() && job.startAtTime.Before(now) {
-			duration := s.durationToNextRun(job.startAtTime, job).duration
-			job.setStartAtTime(job.startAtTime.Add(duration))
+			dur := s.durationToNextRun(job.startAtTime, job).duration
+			job.setStartAtTime(job.startAtTime.Add(dur))
 			if job.startAtTime.Before(now) {
 				diff := now.Sub(job.startAtTime)
-				duration := s.durationToNextRun(job.startAtTime, job).duration
-				count := diff / duration
-				if diff%duration != 0 {
-					count++
+				dur := s.durationToNextRun(job.startAtTime, job).duration
+				var count time.Duration
+				if dur != 0 {
+					count = diff / dur
+					if diff%dur != 0 {
+						count++
+					}
 				}
-				job.setStartAtTime(job.startAtTime.Add(duration * count))
+				job.setStartAtTime(job.startAtTime.Add(dur * count))
 			}
 		}
 	} else {
