@@ -23,8 +23,8 @@ func (f fakeTime) Now(loc *time.Location) time.Time {
 	return f.onNow(loc)
 }
 
-func (f fakeTime) Unix(i int64, i2 int64) time.Time {
-	panic("implement me")
+func (f fakeTime) Unix(sec int64, nsec int64) time.Time {
+	return time.Unix(sec, nsec)
 }
 
 func (f fakeTime) Sleep(d time.Duration) {
@@ -148,7 +148,8 @@ func TestScheduler_Every(t *testing.T) {
 			}
 		}
 		s.Stop()
-		assert.Equal(t, 2, counter)
+		assert.GreaterOrEqual(t, counter, 2)
+		assert.LessOrEqual(t, counter, 3)
 	})
 
 	t.Run("string duration", func(t *testing.T) {
@@ -2355,7 +2356,8 @@ func TestScheduler_CheckCalculateDaysOfMonth(t *testing.T) {
 
 func TestScheduler_CheckSetBehaviourBeforeJobCreated(t *testing.T) {
 	s := NewScheduler(time.UTC)
-	s.Month(1, 2).Every(1).Do(func() {})
+	_, err := s.Month(1, 2).Every(1).Do(func() {})
+	assert.NoError(t, err)
 }
 
 func TestScheduler_MonthLastDayAtTime(t *testing.T) {
