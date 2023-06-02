@@ -1175,9 +1175,8 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 			if _, ok := repeatMap[dayOfMonth]; ok {
 				job.error = wrapOrError(job.error, ErrInvalidDaysOfMonthDuplicateValue)
 				break
-			} else {
-				repeatMap[dayOfMonth]++
 			}
+			repeatMap[dayOfMonth]++
 		}
 	}
 	if job.daysOfTheMonth == nil {
