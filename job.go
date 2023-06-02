@@ -49,6 +49,7 @@ type jobFunction struct {
 	jobName           string             // key of the distributed lock
 	funcName          string             // the name of the function - e.g. main.func1
 	runConfig         runConfig          // configuration for how many times to run the job
+	singletonQueueMu  *sync.Mutex        // mutex for singletonQueue
 	singletonQueue    chan struct{}      // queues jobs for the singleton runner to handle
 	singletonRunnerOn *atomic.Bool       // whether the runner function for singleton is running
 	ctx               context.Context    // for cancellation
@@ -80,6 +81,7 @@ func (jf *jobFunction) copy() jobFunction {
 		jobName:           jf.jobName,
 		runConfig:         jf.runConfig,
 		singletonQueue:    jf.singletonQueue,
+		singletonQueueMu:  jf.singletonQueueMu,
 		ctx:               jf.ctx,
 		cancel:            jf.cancel,
 		isRunning:         jf.isRunning,
@@ -421,6 +423,9 @@ func (j *Job) SingletonMode() {
 	defer j.mu.Unlock()
 	j.runConfig.mode = singletonMode
 	j.jobFunction.singletonWg = &sync.WaitGroup{}
+	j.singletonQueueMu = &sync.Mutex{}
+	j.singletonQueueMu.Lock()
+	defer j.singletonQueueMu.Unlock()
 	j.jobFunction.singletonQueue = make(chan struct{}, 100)
 }
 
