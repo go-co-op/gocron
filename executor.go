@@ -86,7 +86,9 @@ func (jf *jobFunction) singletonRunner() {
 		case <-jf.ctx.Done():
 			jf.singletonWg.Done()
 			jf.singletonRunnerOn.Store(false)
+			jf.singletonQueueMu.Lock()
 			jf.singletonQueue = make(chan struct{}, 1000)
+			jf.singletonQueueMu.Unlock()
 			jf.stopped.Store(false)
 			return
 		case <-jf.singletonQueue:
@@ -166,7 +168,9 @@ func (e *executor) runJob(f jobFunction) {
 		if !f.singletonRunnerOn.Load() {
 			go f.singletonRunner()
 		}
+		f.singletonQueueMu.Lock()
 		f.singletonQueue <- struct{}{}
+		f.singletonQueueMu.Unlock()
 	}
 }
 
