@@ -58,6 +58,7 @@ type jobFunction struct {
 	runStartCount     *atomic.Int64      // number of times the job was started
 	runFinishCount    *atomic.Int64      // number of times the job was finished
 	singletonWg       *sync.WaitGroup    // used by singleton runner
+	singletonWgMu     *sync.Mutex        // use to protect the singletonWg
 	stopped           *atomic.Bool       // tracks whether the job is currently stopped
 	jobFuncNextRun    time.Time          // the next time the job is scheduled to run
 }
@@ -88,6 +89,7 @@ func (jf *jobFunction) copy() jobFunction {
 		runStartCount:     jf.runStartCount,
 		runFinishCount:    jf.runFinishCount,
 		singletonWg:       jf.singletonWg,
+		singletonWgMu:     jf.singletonWgMu,
 		singletonRunnerOn: jf.singletonRunnerOn,
 		stopped:           jf.stopped,
 		jobFuncNextRun:    jf.jobFuncNextRun,
@@ -422,11 +424,16 @@ func (j *Job) SingletonMode() {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	j.runConfig.mode = singletonMode
+
+	j.jobFunction.singletonWgMu = &sync.Mutex{}
+	j.jobFunction.singletonWgMu.Lock()
 	j.jobFunction.singletonWg = &sync.WaitGroup{}
-	j.singletonQueueMu = &sync.Mutex{}
-	j.singletonQueueMu.Lock()
-	defer j.singletonQueueMu.Unlock()
+	j.jobFunction.singletonWgMu.Unlock()
+
+	j.jobFunction.singletonQueueMu = &sync.Mutex{}
+	j.jobFunction.singletonQueueMu.Lock()
 	j.jobFunction.singletonQueue = make(chan struct{}, 100)
+	j.jobFunction.singletonQueueMu.Unlock()
 }
 
 // shouldRun evaluates if this job should run again
