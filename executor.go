@@ -80,7 +80,9 @@ func runJob(f jobFunction) {
 
 func (jf *jobFunction) singletonRunner() {
 	jf.singletonRunnerOn.Store(true)
+	jf.singletonWgMu.Lock()
 	jf.singletonWg.Add(1)
+	jf.singletonWgMu.Unlock()
 	for {
 		select {
 		case <-jf.ctx.Done():
@@ -163,7 +165,7 @@ func (e *executor) runJob(f jobFunction) {
 		}
 		runJob(f)
 	case singletonMode:
-		e.singletonWgs.Store(f.singletonWg, struct{}{})
+		e.singletonWgs.Store(f.singletonWg, f.singletonWgMu)
 
 		if !f.singletonRunnerOn.Load() {
 			go f.singletonRunner()
@@ -243,8 +245,12 @@ func (e *executor) stop() {
 	e.wg.Wait()
 	if e.singletonWgs != nil {
 		e.singletonWgs.Range(func(key, value interface{}) bool {
-			if wg, ok := key.(*sync.WaitGroup); ok {
+			wg, wgOk := key.(*sync.WaitGroup)
+			mu, muOk := value.(*sync.Mutex)
+			if wgOk && muOk {
+				mu.Lock()
 				wg.Wait()
+				mu.Unlock()
 			}
 			return true
 		})
