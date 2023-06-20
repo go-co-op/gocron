@@ -64,8 +64,12 @@ type jobFunction struct {
 }
 
 type eventListeners struct {
-	onBeforeJobExecution interface{} // performs before job executing
-	onAfterJobExecution  interface{} // performs after job executing
+	onAfterJobExecution  interface{}                     // deprecated
+	onBeforeJobExecution interface{}                     // deprecated
+	beforeJobRuns        func(jobName string)            // called before the job executes
+	afterJobRuns         func(jobName string)            // called after the job executes
+	onError              func(jobName string, err error) // called when the job returns an error
+	noError              func(jobName string)            // called when no error is returned
 }
 
 type jobMutex struct {
@@ -96,6 +100,13 @@ func (jf *jobFunction) copy() jobFunction {
 	}
 	cp.parameters = append(cp.parameters, jf.parameters...)
 	return cp
+}
+
+func (jf *jobFunction) getName() string {
+	if jf.jobName != "" {
+		return jf.jobName
+	}
+	return jf.funcName
 }
 
 type runConfig struct {
@@ -344,7 +355,48 @@ func (j *Job) Tags() []string {
 	return j.tags
 }
 
-// SetEventListeners accepts two functions that will be called, one before and one after the job is run
+// EventListener functions utilize the job's name and are triggered
+// by or in the condition that the name suggests
+type EventListener func(j *Job)
+
+// BeforeJobRuns is called before the job is run
+func BeforeJobRuns(eventListenerFunc func(jobName string)) EventListener {
+	return func(j *Job) {
+		j.eventListeners.beforeJobRuns = eventListenerFunc
+	}
+}
+
+// AfterJobRuns is called after the job is run
+// This is called even when an error is returned
+func AfterJobRuns(eventListenerFunc func(jobName string)) EventListener {
+	return func(j *Job) {
+		j.eventListeners.afterJobRuns = eventListenerFunc
+	}
+}
+
+// WhenJobReturnsError is called when the job returns an error
+func WhenJobReturnsError(eventListenerFunc func(jobName string, err error)) EventListener {
+	return func(j *Job) {
+		j.eventListeners.onError = eventListenerFunc
+	}
+}
+
+// WhenJobReturnsNoError is called when the job does not return an error
+// the function must accept a single parameter, which is an error
+func WhenJobReturnsNoError(eventListenerFunc func(jobName string)) EventListener {
+	return func(j *Job) {
+		j.eventListeners.noError = eventListenerFunc
+	}
+}
+
+// RegisterEventListeners accepts EventListeners and registers them for the job
+func (j *Job) RegisterEventListeners(eventListeners ...EventListener) {
+	for _, el := range eventListeners {
+		el(j)
+	}
+}
+
+// Deprecated: SetEventListeners accepts two functions that will be called, one before and one after the job is run
 func (j *Job) SetEventListeners(onBeforeJobExecution interface{}, onAfterJobExecution interface{}) {
 	j.eventListeners = eventListeners{
 		onBeforeJobExecution: onBeforeJobExecution,
@@ -513,7 +565,7 @@ func (j *Job) IsRunning() bool {
 func (j *Job) copy() Job {
 	return Job{
 		mu:                &jobMutex{},
-		jobFunction:       j.jobFunction,
+		jobFunction:       j.jobFunction.copy(),
 		interval:          j.interval,
 		duration:          j.duration,
 		unit:              j.unit,

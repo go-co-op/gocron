@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -234,9 +235,13 @@ func TestJob_CommonExports(t *testing.T) {
 func TestJob_SetEventListeners(t *testing.T) {
 	t.Run("run event listeners callbacks for a job", func(t *testing.T) {
 		var (
-			jobRanPassed         = false
-			beforeCallbackPassed = false
-			afterCallbackPassed  = false
+			jobRanPassed         bool
+			beforeCallbackPassed bool
+			afterCallbackPassed  bool
+			beforeJobCallback    bool
+			afterJobCallback     bool
+			onErrorCallback      bool
+			noErrorCallback      bool
 			wg                   = &sync.WaitGroup{}
 		)
 		wg.Add(1)
@@ -244,12 +249,35 @@ func TestJob_SetEventListeners(t *testing.T) {
 		job, err := s.Tag("tag1").Every("100ms").Do(func() {
 			jobRanPassed = true
 		})
+		require.NoError(t, err)
 		job.SetEventListeners(func() {
 			beforeCallbackPassed = true
 		}, func() {
 			defer wg.Done()
 			afterCallbackPassed = true
 		})
+
+		job2, err := s.Every("100ms").Do(func() error { return fmt.Errorf("failed") })
+		require.NoError(t, err)
+		job2.RegisterEventListeners(
+			AfterJobRuns(func(_ string) {
+				afterJobCallback = true
+			}),
+			BeforeJobRuns(func(_ string) {
+				beforeJobCallback = true
+			}),
+			WhenJobReturnsError(func(_ string, _ error) {
+				onErrorCallback = true
+			}),
+		)
+
+		job3, err := s.Every("100ms").Do(func() {})
+		require.NoError(t, err)
+		job3.RegisterEventListeners(
+			WhenJobReturnsNoError(func(_ string) {
+				noErrorCallback = true
+			}),
+		)
 
 		s.StartAsync()
 		wg.Wait()
@@ -259,6 +287,10 @@ func TestJob_SetEventListeners(t *testing.T) {
 		assert.True(t, jobRanPassed)
 		assert.True(t, beforeCallbackPassed)
 		assert.True(t, afterCallbackPassed)
+		assert.True(t, beforeJobCallback)
+		assert.True(t, afterJobCallback)
+		assert.True(t, onErrorCallback)
+		assert.True(t, noErrorCallback)
 	})
 }
 
