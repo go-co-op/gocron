@@ -574,7 +574,7 @@ func (j *Job) IsRunning() bool {
 func (j *Job) copy() Job {
 	return Job{
 		mu:                &jobMutex{},
-		jobFunction:       j.jobFunction.copy(),
+		jobFunction:       j.jobFunction,
 		interval:          j.interval,
 		duration:          j.duration,
 		unit:              j.unit,
