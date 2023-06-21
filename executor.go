@@ -72,7 +72,14 @@ func runJob(f jobFunction) {
 	f.runStartCount.Add(1)
 	f.isRunning.Store(true)
 	callJobFunc(f.eventListeners.onBeforeJobExecution)
-	callJobFuncWithParams(f.function, f.parameters)
+	_ = callJobFuncWithParams(f.eventListeners.beforeJobRuns, []interface{}{f.getName()})
+	err := callJobFuncWithParams(f.function, f.parameters)
+	if err != nil {
+		_ = callJobFuncWithParams(f.eventListeners.onError, []interface{}{f.getName(), err})
+	} else {
+		_ = callJobFuncWithParams(f.eventListeners.noError, []interface{}{f.getName()})
+	}
+	_ = callJobFuncWithParams(f.eventListeners.afterJobRuns, []interface{}{f.getName()})
 	callJobFunc(f.eventListeners.onAfterJobExecution)
 	f.isRunning.Store(false)
 	f.runFinishCount.Add(1)
