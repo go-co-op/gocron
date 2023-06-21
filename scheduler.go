@@ -1441,3 +1441,7 @@ func (s *Scheduler) RegisterEventListeners(eventListeners ...EventListener) {
 		job.RegisterEventListeners(eventListeners...)
 	}
 }
+
+func (s *Scheduler) PauseJobExecution(shouldPause bool) {
+	s.executor.skipExecution.Store(shouldPause)
+}

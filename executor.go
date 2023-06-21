@@ -37,12 +37,13 @@ const (
 )
 
 type executor struct {
-	jobFunctions chan jobFunction   // the chan upon which the jobFunctions are passed in from the scheduler
-	ctx          context.Context    // used to tell the executor to stop
-	cancel       context.CancelFunc // used to tell the executor to stop
-	wg           *sync.WaitGroup    // used by the scheduler to wait for the executor to stop
-	jobsWg       *sync.WaitGroup    // used by the executor to wait for all jobs to finish
-	singletonWgs *sync.Map          // used by the executor to wait for the singleton runners to complete
+	jobFunctions  chan jobFunction   // the chan upon which the jobFunctions are passed in from the scheduler
+	ctx           context.Context    // used to tell the executor to stop
+	cancel        context.CancelFunc // used to tell the executor to stop
+	wg            *sync.WaitGroup    // used by the scheduler to wait for the executor to stop
+	jobsWg        *sync.WaitGroup    // used by the executor to wait for all jobs to finish
+	singletonWgs  *sync.Map          // used by the executor to wait for the singleton runners to complete
+	skipExecution *atomic.Bool       // used to pause the execution of jobs
 
 	limitMode               limitMode        // when SetMaxConcurrentJobs() is set upon the scheduler
 	limitModeMaxRunningJobs int              // stores the maximum number of concurrently running jobs
@@ -134,6 +135,7 @@ func (e *executor) start() {
 	e.jobsWg = &sync.WaitGroup{}
 
 	e.stopped = atomic.NewBool(false)
+	e.skipExecution = atomic.NewBool(false)
 
 	e.limitModeQueueMu.Lock()
 	e.limitModeQueue = make(chan jobFunction, 1000)
@@ -187,7 +189,7 @@ func (e *executor) run() {
 	for {
 		select {
 		case f := <-e.jobFunctions:
-			if e.stopped.Load() {
+			if e.stopped.Load() || e.skipExecution.Load() {
 				continue
 			}
 

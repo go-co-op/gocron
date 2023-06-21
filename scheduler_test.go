@@ -2707,3 +2707,28 @@ func TestScheduler_WithDistributedLocker_With_Name(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_PauseJobExecution(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	var counter int
+	var mu sync.Mutex
+
+	_, err := s.Every("100ms").Do(func() {
+		mu.Lock()
+		counter++
+		mu.Unlock()
+	})
+	require.NoError(t, err)
+
+	s.StartAsync()
+	time.Sleep(50 * time.Millisecond)
+
+	s.PauseJobExecution(true)
+	time.Sleep(200 * time.Millisecond)
+
+	s.PauseJobExecution(false)
+	time.Sleep(100 * time.Millisecond)
+
+	assert.GreaterOrEqual(t, counter, 1)
+	assert.LessOrEqual(t, counter, 2)
+}
