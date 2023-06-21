@@ -362,6 +362,8 @@ type EventListener func(j *Job)
 // BeforeJobRuns is called before the job is run
 func BeforeJobRuns(eventListenerFunc func(jobName string)) EventListener {
 	return func(j *Job) {
+		j.mu.Lock()
+		defer j.mu.Unlock()
 		j.eventListeners.beforeJobRuns = eventListenerFunc
 	}
 }
@@ -370,6 +372,8 @@ func BeforeJobRuns(eventListenerFunc func(jobName string)) EventListener {
 // This is called even when an error is returned
 func AfterJobRuns(eventListenerFunc func(jobName string)) EventListener {
 	return func(j *Job) {
+		j.mu.Lock()
+		defer j.mu.Unlock()
 		j.eventListeners.afterJobRuns = eventListenerFunc
 	}
 }
@@ -377,6 +381,8 @@ func AfterJobRuns(eventListenerFunc func(jobName string)) EventListener {
 // WhenJobReturnsError is called when the job returns an error
 func WhenJobReturnsError(eventListenerFunc func(jobName string, err error)) EventListener {
 	return func(j *Job) {
+		j.mu.Lock()
+		defer j.mu.Unlock()
 		j.eventListeners.onError = eventListenerFunc
 	}
 }
@@ -385,11 +391,14 @@ func WhenJobReturnsError(eventListenerFunc func(jobName string, err error)) Even
 // the function must accept a single parameter, which is an error
 func WhenJobReturnsNoError(eventListenerFunc func(jobName string)) EventListener {
 	return func(j *Job) {
+		j.mu.Lock()
+		defer j.mu.Unlock()
 		j.eventListeners.noError = eventListenerFunc
 	}
 }
 
 // RegisterEventListeners accepts EventListeners and registers them for the job
+// The event listeners are then called at the times described by each listener.
 func (j *Job) RegisterEventListeners(eventListeners ...EventListener) {
 	for _, el := range eventListeners {
 		el(j)

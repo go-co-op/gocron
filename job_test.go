@@ -259,9 +259,11 @@ func TestJob_SetEventListeners(t *testing.T) {
 
 		job2, err := s.Every("100ms").Do(func() error { return fmt.Errorf("failed") })
 		require.NoError(t, err)
+		wg.Add(1)
 		job2.RegisterEventListeners(
 			AfterJobRuns(func(_ string) {
 				afterJobCallback = true
+				wg.Done()
 			}),
 			BeforeJobRuns(func(_ string) {
 				beforeJobCallback = true
@@ -273,9 +275,11 @@ func TestJob_SetEventListeners(t *testing.T) {
 
 		job3, err := s.Every("100ms").Do(func() {})
 		require.NoError(t, err)
+		wg.Add(1)
 		job3.RegisterEventListeners(
 			WhenJobReturnsNoError(func(_ string) {
 				noErrorCallback = true
+				wg.Done()
 			}),
 		)
 

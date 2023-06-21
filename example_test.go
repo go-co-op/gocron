@@ -92,6 +92,33 @@ func ExampleJob_PreviousRun() {
 	fmt.Println("Previous run:", job.PreviousRun())
 }
 
+func ExampleJob_RegisterEventListeners() {
+	s := gocron.NewScheduler(time.UTC)
+
+	job, _ := s.Every("1s").Name("my_func").Do(func() error { return fmt.Errorf("error") })
+	job.RegisterEventListeners(
+		gocron.AfterJobRuns(func(jobName string) {
+			fmt.Printf("afterJobRuns: %s\n", jobName)
+		}),
+		gocron.BeforeJobRuns(func(jobName string) {
+			fmt.Printf("beforeJobRuns: %s\n", jobName)
+		}),
+		gocron.WhenJobReturnsError(func(jobName string, err error) {
+			fmt.Printf("whenJobReturnsError: %s, %v\n", jobName, err)
+		}),
+		gocron.WhenJobReturnsNoError(func(jobName string) {
+			fmt.Printf("whenJobReturnsNoError: %s\n", jobName)
+		}),
+	)
+	s.StartAsync()
+	time.Sleep(100 * time.Millisecond)
+	s.Stop()
+	// Output:
+	// beforeJobRuns: my_func
+	// whenJobReturnsError: my_func, error
+	// afterJobRuns: my_func
+}
+
 func ExampleJob_RunCount() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
@@ -594,6 +621,40 @@ func ExampleScheduler_NextRun() {
 	fmt.Println(t.Format("15:04"))
 	// Output:
 	// 10:30
+}
+
+func ExampleScheduler_RegisterEventListeners() {
+	s := gocron.NewScheduler(time.UTC)
+
+	s.Every("1s").Name("my_func_1").Do(func() error { return fmt.Errorf("error_1") })
+	s.Every("1s").Name("my_func_2").
+		StartAt(time.Now().UTC().Add(50 * time.Millisecond)).
+		Do(func() error { return fmt.Errorf("error_2") })
+
+	s.RegisterEventListeners(
+		gocron.AfterJobRuns(func(jobName string) {
+			fmt.Printf("afterJobRuns: %s\n", jobName)
+		}),
+		gocron.BeforeJobRuns(func(jobName string) {
+			fmt.Printf("beforeJobRuns: %s\n", jobName)
+		}),
+		gocron.WhenJobReturnsError(func(jobName string, err error) {
+			fmt.Printf("whenJobReturnsError: %s, %v\n", jobName, err)
+		}),
+		gocron.WhenJobReturnsNoError(func(jobName string) {
+			fmt.Printf("whenJobReturnsNoError: %s\n", jobName)
+		}),
+	)
+	s.StartAsync()
+	time.Sleep(120 * time.Millisecond)
+	s.Stop()
+	// Output:
+	// beforeJobRuns: my_func_1
+	// whenJobReturnsError: my_func_1, error_1
+	// afterJobRuns: my_func_1
+	// beforeJobRuns: my_func_2
+	// whenJobReturnsError: my_func_2, error_2
+	// afterJobRuns: my_func_2
 }
 
 func ExampleScheduler_Remove() {

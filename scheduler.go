@@ -1430,3 +1430,14 @@ func (s *Scheduler) StopBlockingChan() {
 func (s *Scheduler) WithDistributedLocker(l Locker) {
 	s.executor.distributedLocker = l
 }
+
+// RegisterEventListeners accepts EventListeners and registers them for all jobs
+// in the scheduler at the time this function is called.
+// The event listeners are then called at the times described by each listener.
+// If a new job is added, an additional call to this method, or the job specific
+// version must be executed in order for the new job to trigger event listeners.
+func (s *Scheduler) RegisterEventListeners(eventListeners ...EventListener) {
+	for _, job := range s.Jobs() {
+		job.RegisterEventListeners(eventListeners...)
+	}
+}
