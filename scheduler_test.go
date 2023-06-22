@@ -2728,7 +2728,10 @@ func TestScheduler_PauseJobExecution(t *testing.T) {
 
 	s.PauseJobExecution(false)
 	time.Sleep(100 * time.Millisecond)
+s.Stop()
 
+mu.Lock()
+defer my.Unlock
 	assert.GreaterOrEqual(t, counter, 1)
 	assert.LessOrEqual(t, counter, 2)
 }
