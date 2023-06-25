@@ -623,6 +623,16 @@ func ExampleScheduler_NextRun() {
 	// 10:30
 }
 
+func ExampleScheduler_PauseJobExecution() {
+	s := gocron.NewScheduler(time.UTC)
+	_, _ = s.Every("1s").Do(task)
+	s.StartAsync()
+	s.PauseJobExecution(true)
+	// jobs don't run
+	s.PauseJobExecution(false)
+	// jobs run again
+}
+
 func ExampleScheduler_RegisterEventListeners() {
 	s := gocron.NewScheduler(time.UTC)
 
