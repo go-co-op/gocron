@@ -1111,6 +1111,30 @@ func TestScheduler_StartAt(t *testing.T) {
 	})
 }
 
+func calculateNextRunHelper(
+	interval int,
+	unit schedulingUnit,
+	lastRun time.Time,
+	atTimes []time.Duration,
+	scheduledWeekdays []time.Weekday,
+	daysOfTheMonth []int,
+) *Job {
+	return &Job{
+		mu:       &jobMutex{},
+		interval: interval,
+		unit:     unit,
+		jobFunction: jobFunction{
+			jobRunTimes: &jobRunTimes{
+				jobRunTimesMu: &sync.Mutex{},
+				lastRun:       lastRun,
+			},
+		},
+		atTimes:           atTimes,
+		scheduledWeekdays: scheduledWeekdays,
+		daysOfTheMonth:    daysOfTheMonth,
+	}
+}
+
 func TestScheduler_CalculateNextRun(t *testing.T) {
 	ft := fakeTime{onNow: func(l *time.Location) time.Time {
 		return time.Date(2020, 1, 1, 12, 0, 0, 0, l)
@@ -1133,63 +1157,63 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		wantTimeUntilNextRun time.Duration
 	}{
 		// SECONDS
-		{name: "every second test", job: &Job{mu: &jobMutex{}, interval: 1, unit: seconds, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getSeconds(1)},
-		{name: "every 62 seconds test", job: &Job{mu: &jobMutex{}, interval: 62, unit: seconds, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getSeconds(62)},
+		{name: "every second test", job: calculateNextRunHelper(1, seconds, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getSeconds(1)},
+		{name: "every 62 seconds test", job: calculateNextRunHelper(62, seconds, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getSeconds(62)},
 		// MINUTES
-		{name: "every minute test", job: &Job{mu: &jobMutex{}, interval: 1, unit: minutes, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getMinutes(1)},
-		{name: "every 62 minutes test", job: &Job{mu: &jobMutex{}, interval: 62, unit: minutes, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getMinutes(62)},
+		{name: "every minute test", job: calculateNextRunHelper(1, minutes, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getMinutes(1)},
+		{name: "every 62 minutes test", job: calculateNextRunHelper(62, minutes, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getMinutes(62)},
 		// HOURS
-		{name: "every hour test", job: &Job{mu: &jobMutex{}, interval: 1, unit: hours, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getHours(1)},
-		{name: "every 25 hours test", job: &Job{mu: &jobMutex{}, interval: 25, unit: hours, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getHours(25)},
+		{name: "every hour test", job: calculateNextRunHelper(1, hours, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getHours(1)},
+		{name: "every 25 hours test", job: calculateNextRunHelper(25, hours, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getHours(25)},
 		// DAYS
-		{name: "every day at midnight", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
-		{name: "every day at 09:30AM which just ran should run tomorrow at 09:30AM", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every 31 days at midnight should run 31 days later", job: &Job{mu: &jobMutex{}, interval: 31, unit: days, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31 * day},
-		{name: "daily job just ran at 8:30AM and should be scheduled for next day's 8:30AM", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(8, 30, 0)}, wantTimeUntilNextRun: 24 * time.Hour},
-		{name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: 3 * time.Hour},
-		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(5, 30, 0)}, wantTimeUntilNextRun: (2 * day) + 3*time.Hour},
-		{name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: days, atTimes: []time.Duration{8*time.Hour + 30*time.Minute}, lastRun: januaryFirst2020At(8, 30, 0)}, wantTimeUntilNextRun: 2 * day},
-		{name: "daily, last run was 1 second ago", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: []time.Duration{12 * time.Hour}, lastRun: ft.Now(time.UTC).Add(-time.Second)}, wantTimeUntilNextRun: time.Second},
+		{name: "every day at midnight", job: calculateNextRunHelper(1, days, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 1 * day},
+		{name: "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time", job: calculateNextRunHelper(1, days, januaryFirst2020At(0, 0, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
+		{name: "every day at 09:30AM which just ran should run tomorrow at 09:30AM", job: calculateNextRunHelper(1, days, januaryFirst2020At(9, 30, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: 1 * day},
+		{name: "every 31 days at midnight should run 31 days later", job: calculateNextRunHelper(31, days, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 31 * day},
+		{name: "daily job just ran at 8:30AM and should be scheduled for next day's 8:30AM", job: calculateNextRunHelper(1, days, januaryFirst2020At(8, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 24 * time.Hour},
+		{name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM", job: calculateNextRunHelper(1, days, januaryFirst2020At(5, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 3 * time.Hour},
+		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM", job: calculateNextRunHelper(2, days, januaryFirst2020At(5, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: (2 * day) + 3*time.Hour},
+		{name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM", job: calculateNextRunHelper(2, days, januaryFirst2020At(8, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 2 * day},
+		{name: "daily, last run was 1 second ago", job: calculateNextRunHelper(1, days, ft.Now(time.UTC).Add(-time.Second), []time.Duration{12 * time.Hour}, nil, nil), wantTimeUntilNextRun: time.Second},
 		//// WEEKS
-		{name: "every week should run in 7 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 7 * day},
-		{name: "every week with .At time rule should run respect .At time rule", job: &Job{mu: &jobMutex{}, interval: 1, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, unit: weeks, lastRun: januaryFirst2020At(9, 31, 0)}, wantTimeUntilNextRun: 7*day - time.Minute},
-		{name: "every two weeks at 09:30AM should run in 14 days at 09:30AM", job: &Job{mu: &jobMutex{}, interval: 2, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 14 * day},
-		{name: "every 31 weeks ran at jan 1st at midnight should run at August 5, 2020", job: &Job{mu: &jobMutex{}, interval: 31, unit: weeks, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31 * 7 * day},
+		{name: "every week should run in 7 days", job: calculateNextRunHelper(1, weeks, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 7 * day},
+		{name: "every week with .At time rule should run respect .At time rule", job: calculateNextRunHelper(1, weeks, januaryFirst2020At(9, 31, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: 7*day - time.Minute},
+		{name: "every two weeks at 09:30AM should run in 14 days at 09:30AM", job: calculateNextRunHelper(2, weeks, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 14 * day},
+		{name: "every 31 weeks ran at jan 1st at midnight should run at August 5, 2020", job: calculateNextRunHelper(31, weeks, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 31 * 7 * day},
 		// MONTHS
-		{name: "every month in a 31 days month should be scheduled for 31 days ahead", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31 * day},
-		{name: "every month in a 30 days month should be scheduled for 30 days ahead", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, lastRun: time.Date(2020, time.April, 1, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 30 * day},
-		{name: "every month at february on leap year should count 29 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, lastRun: time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 29 * day},
-		{name: "every month at february on non leap year should count 28 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, lastRun: time.Date(2019, time.February, 1, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 28 * day},
-		{name: "every month at first day at time should run next month", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, lastRun: januaryFirst2020At(9, 30, 0)}, wantTimeUntilNextRun: 31 * day},
-		{name: "every month at day should consider at days", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{2}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every month at day should consider at hours", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30)},
-		{name: "every month on the first day, but started on january 8th, should run February 1st", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 7)}, wantTimeUntilNextRun: 24 * day},
-		{name: "every month same as lastRun, should run February 1st", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31 * day},
-		{name: "every 2 months at day 1, starting at day 1, should run in 2 months", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day},                          // 2020 january and february
-		{name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{2}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 31*day + 29*day + 1*day},          // 2020 january and february
-		{name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 30*day + 29*day}, // 2020 january and february
-		{name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day", job: &Job{mu: &jobMutex{}, interval: 13, unit: months, daysOfTheMonth: []int{1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0))},
-		{name: "every last day of the month started on leap year february should run on march 31", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31 * day},
-		{name: "every last day of the month started on non-leap year february should run on march 31", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2019, time.February, 28, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31 * day},
-		{name: "every last day of 2 months started on leap year february should run on april 30", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31*day + 30*day},
-		{name: "every last day of 2 months started on non-leap year february should run on april 30", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: time.Date(2019, time.February, 28, 0, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: 31*day + 30*day},
-		{name: "every last day of the month started on january 1 in leap year should run on january 31", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0)}, wantTimeUntilNextRun: 30 * day},
-		{name: "every last day of the month started on january 1 in non-leap year should run on january 31", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0)}, wantTimeUntilNextRun: 30 * day},
-		{name: "every last day of the month started on january 30 in leap year should run on january 31", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 29)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every last day of the month started on january 30 in non-leap year should run on january 31", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, 29)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every last day of the month started on january 31 in leap year should run on february 29", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, 30)}, wantTimeUntilNextRun: 29 * day},
-		{name: "every last day of the month started on january 31 in non-leap year should run on february 28", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, 30)}, wantTimeUntilNextRun: 28 * day},
-		{name: "every last day of the month started on december 31 should run on january 31 of the next year", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31 * day},
-		{name: "every last day of 2 months started on december 31, 2018 should run on february 28, 2019", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31*day + 28*day},
-		{name: "every last day of 2 months started on december 31, 2019 should run on february 29, 2020", job: &Job{mu: &jobMutex{}, interval: 2, unit: months, daysOfTheMonth: []int{-1}, lastRun: januaryFirst2020At(0, 0, 0).AddDate(0, 0, -1)}, wantTimeUntilNextRun: 31*day + 29*day},
+		{name: "every month in a 31 days month should be scheduled for 31 days ahead", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 31 * day},
+		{name: "every month in a 30 days month should be scheduled for 30 days ahead", job: calculateNextRunHelper(1, months, time.Date(2020, time.April, 1, 0, 0, 0, 0, time.UTC), nil, nil, nil), wantTimeUntilNextRun: 30 * day},
+		{name: "every month at february on leap year should count 29 days", job: calculateNextRunHelper(1, months, time.Date(2020, time.February, 1, 0, 0, 0, 0, time.UTC), nil, nil, nil), wantTimeUntilNextRun: 29 * day},
+		{name: "every month at february on non leap year should count 28 days", job: calculateNextRunHelper(1, months, time.Date(2019, time.February, 1, 0, 0, 0, 0, time.UTC), nil, nil, nil), wantTimeUntilNextRun: 28 * day},
+		{name: "every month at first day at time should run next month", job: calculateNextRunHelper(1, months, januaryFirst2020At(9, 30, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: 31 * day},
+		{name: "every month at day should consider at days", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0), nil, nil, []int{2}), wantTimeUntilNextRun: 1 * day},
+		{name: "every month at day should consider at hours", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: 31*day + _getHours(9) + _getMinutes(30)},
+		{name: "every month on the first day, but started on january 8th, should run February 1st", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0).AddDate(0, 0, 7), nil, nil, []int{1}), wantTimeUntilNextRun: 24 * day},
+		{name: "every month same as lastRun, should run February 1st", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0), nil, nil, []int{1}), wantTimeUntilNextRun: 31 * day},
+		{name: "every 2 months at day 1, starting at day 1, should run in 2 months", job: calculateNextRunHelper(2, months, januaryFirst2020At(0, 0, 0), nil, nil, []int{1}), wantTimeUntilNextRun: 31*day + 29*day},                          // 2020 january and february
+		{name: "every 2 months at day 2, starting at day 1, should run in 2 months + 1 day", job: calculateNextRunHelper(2, months, januaryFirst2020At(0, 0, 0), nil, nil, []int{2}), wantTimeUntilNextRun: 31*day + 29*day + 1*day},          // 2020 january and february
+		{name: "every 2 months at day 1, starting at day 2, should run in 2 months - 1 day", job: calculateNextRunHelper(2, months, januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1), nil, nil, []int{1}), wantTimeUntilNextRun: 30*day + 29*day}, // 2020 january and february
+		{name: "every 13 months at day 1, starting at day 2 run in 13 months - 1 day", job: calculateNextRunHelper(13, months, januaryFirst2020At(0, 0, 0).AddDate(0, 0, 1), nil, nil, []int{1}), wantTimeUntilNextRun: januaryFirst2020At(0, 0, 0).AddDate(0, 13, -1).Sub(januaryFirst2020At(0, 0, 0))},
+		{name: "every last day of the month started on leap year february should run on march 31", job: calculateNextRunHelper(1, months, time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC), nil, nil, []int{-1}), wantTimeUntilNextRun: 31 * day},
+		{name: "every last day of the month started on non-leap year february should run on march 31", job: calculateNextRunHelper(1, months, time.Date(2019, time.February, 28, 0, 0, 0, 0, time.UTC), nil, nil, []int{-1}), wantTimeUntilNextRun: 31 * day},
+		{name: "every last day of 2 months started on leap year february should run on april 30", job: calculateNextRunHelper(2, months, time.Date(2020, time.February, 29, 0, 0, 0, 0, time.UTC), nil, nil, []int{-1}), wantTimeUntilNextRun: 31*day + 30*day},
+		{name: "every last day of 2 months started on non-leap year february should run on april 30", job: calculateNextRunHelper(2, months, time.Date(2019, time.February, 28, 0, 0, 0, 0, time.UTC), nil, nil, []int{-1}), wantTimeUntilNextRun: 31*day + 30*day},
+		{name: "every last day of the month started on january 1 in leap year should run on january 31", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0), nil, nil, []int{-1}), wantTimeUntilNextRun: 30 * day},
+		{name: "every last day of the month started on january 1 in non-leap year should run on january 31", job: calculateNextRunHelper(1, months, januaryFirst2019At(0, 0, 0), nil, nil, []int{-1}), wantTimeUntilNextRun: 30 * day},
+		{name: "every last day of the month started on january 30 in leap year should run on january 31", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0).AddDate(0, 0, 29), nil, nil, []int{-1}), wantTimeUntilNextRun: 1 * day},
+		{name: "every last day of the month started on january 30 in non-leap year should run on january 31", job: calculateNextRunHelper(1, months, januaryFirst2019At(0, 0, 0).AddDate(0, 0, 29), nil, nil, []int{-1}), wantTimeUntilNextRun: 1 * day},
+		{name: "every last day of the month started on january 31 in leap year should run on february 29", job: calculateNextRunHelper(1, months, januaryFirst2020At(0, 0, 0).AddDate(0, 0, 30), nil, nil, []int{-1}), wantTimeUntilNextRun: 29 * day},
+		{name: "every last day of the month started on january 31 in non-leap year should run on february 28", job: calculateNextRunHelper(1, months, januaryFirst2019At(0, 0, 0).AddDate(0, 0, 30), nil, nil, []int{-1}), wantTimeUntilNextRun: 28 * day},
+		{name: "every last day of the month started on december 31 should run on january 31 of the next year", job: calculateNextRunHelper(1, months, januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1), nil, nil, []int{-1}), wantTimeUntilNextRun: 31 * day},
+		{name: "every last day of 2 months started on december 31, 2018 should run on february 28, 2019", job: calculateNextRunHelper(2, months, januaryFirst2019At(0, 0, 0).AddDate(0, 0, -1), nil, nil, []int{-1}), wantTimeUntilNextRun: 31*day + 28*day},
+		{name: "every last day of 2 months started on december 31, 2019 should run on february 29, 2020", job: calculateNextRunHelper(2, months, januaryFirst2020At(0, 0, 0).AddDate(0, 0, -1), nil, nil, []int{-1}), wantTimeUntilNextRun: 31*day + 29*day},
 		//// WEEKDAYS
-		{name: "every weekday starting on one day before it should run this weekday", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: 1 * day},
-		{name: "every weekday starting on same weekday should run in 7 days", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 7 * day},
-		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: &Job{mu: &jobMutex{}, interval: 2, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0)}, wantTimeUntilNextRun: day},
-		{name: "every weekday starting on one day after should count days remaining", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 2)}, wantTimeUntilNextRun: 6 * day},
-		{name: "every weekday starting before jobs .At() time should run at same day at time", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(0, 0, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
-		{name: "every weekday starting at same day at time that already passed should run at next week at time", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, atTimes: []time.Duration{_getHours(9) + _getMinutes(30)}, scheduledWeekdays: []time.Weekday{*_tuesdayWeekday()}, lastRun: mondayAt(10, 30, 0).AddDate(0, 0, 1)}, wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0)},
+		{name: "every weekday starting on one day before it should run this weekday", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 1 * day},
+		{name: "every weekday starting on same weekday should run in 7 days", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0).AddDate(0, 0, 1), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 7 * day},
+		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: calculateNextRunHelper(2, weeks, mondayAt(0, 0, 0), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: day},
+		{name: "every weekday starting on one day after should count days remaining", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0).AddDate(0, 0, 2), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 6 * day},
+		{name: "every weekday starting before jobs .At() time should run at same day at time", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0).AddDate(0, 0, 1), []time.Duration{_getHours(9) + _getMinutes(30)}, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
+		{name: "every weekday starting at same day at time that already passed should run at next week at time", job: calculateNextRunHelper(1, weeks, mondayAt(10, 30, 0).AddDate(0, 0, 1), []time.Duration{_getHours(9) + _getMinutes(30)}, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0)},
 	}
 
 	for _, tc := range testCases {
@@ -1414,12 +1438,12 @@ func TestCalculateMonths(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{description: "day before current and before current time, should run next month", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{2}, atTimes: []time.Duration{_getHours(2)}, lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0200)},
-		{description: "day before current and after current time, should run next month", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{2}, atTimes: []time.Duration{_getHours(8)}, lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0800)},
-		{description: "current day and before current time, should run next month", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{6}, atTimes: []time.Duration{_getHours(2)}, lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySixth2021At0200)},
-		{description: "current day and after current time, should run on current day", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{6}, atTimes: []time.Duration{_getHours(8)}, lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: maySixth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
-		{description: "day after current and before current time, should run on current month", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{10}, atTimes: []time.Duration{_getHours(2)}, lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0200.Sub(maySixth2021At0500.Now(time.UTC))},
-		{description: "day after current and after current time, should run on current month", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{10}, atTimes: []time.Duration{_getHours(8)}, lastRun: maySixth2021At0500.Now(time.UTC)}, wantTimeUntilNextRun: mayTenth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day before current and before current time, should run next month", job: calculateNextRunHelper(1, months, maySixth2021At0500.Now(time.UTC), []time.Duration{_getHours(2)}, nil, []int{2}), wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0200)},
+		{description: "day before current and after current time, should run next month", job: calculateNextRunHelper(1, months, maySixth2021At0500.Now(time.UTC), []time.Duration{_getHours(8)}, nil, []int{2}), wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySecond2021At0800)},
+		{description: "current day and before current time, should run next month", job: calculateNextRunHelper(1, months, maySixth2021At0500.Now(time.UTC), []time.Duration{_getHours(2)}, nil, []int{6}), wantTimeUntilNextRun: (31 * day) - maySixth2021At0500.Now(time.UTC).Sub(maySixth2021At0200)},
+		{description: "current day and after current time, should run on current day", job: calculateNextRunHelper(1, months, maySixth2021At0500.Now(time.UTC), []time.Duration{_getHours(8)}, nil, []int{6}), wantTimeUntilNextRun: maySixth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day after current and before current time, should run on current month", job: calculateNextRunHelper(1, months, maySixth2021At0500.Now(time.UTC), []time.Duration{_getHours(2)}, nil, []int{10}), wantTimeUntilNextRun: mayTenth2021At0200.Sub(maySixth2021At0500.Now(time.UTC))},
+		{description: "day after current and after current time, should run on current month", job: calculateNextRunHelper(1, months, maySixth2021At0500.Now(time.UTC), []time.Duration{_getHours(8)}, nil, []int{10}), wantTimeUntilNextRun: mayTenth2021At0800.Sub(maySixth2021At0500.Now(time.UTC))},
 	}
 
 	for _, tc := range testCases {
@@ -2338,10 +2362,10 @@ func TestScheduler_CheckCalculateDaysOfMonth(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{description: "should run current month 10", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{10, 6}, atTimes: []time.Duration{_getHours(0)}, lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFirstCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run current month 10", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{10, 6}, atTimes: []time.Duration{_getHours(5)}, lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunSecondCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run next month 6", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{6, 7}, atTimes: []time.Duration{_getHours(0)}, lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunThirdCaseDate.Sub(curTime.Now(time.UTC))},
-		{description: "should run next month 11", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, daysOfTheMonth: []int{12, 11}, atTimes: []time.Duration{_getHours(0)}, lastRun: curTime.Now(time.UTC)}, wantTimeUntilNextRun: lastRunFourthCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run current month 10", job: calculateNextRunHelper(1, months, curTime.Now(time.UTC), []time.Duration{_getHours(0)}, nil, []int{10, 6}), wantTimeUntilNextRun: lastRunFirstCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run current month 10", job: calculateNextRunHelper(1, months, curTime.Now(time.UTC), []time.Duration{_getHours(5)}, nil, []int{10, 6}), wantTimeUntilNextRun: lastRunSecondCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run next month 6", job: calculateNextRunHelper(1, months, curTime.Now(time.UTC), []time.Duration{_getHours(0)}, nil, []int{6, 7}), wantTimeUntilNextRun: lastRunThirdCaseDate.Sub(curTime.Now(time.UTC))},
+		{description: "should run next month 11", job: calculateNextRunHelper(1, months, curTime.Now(time.UTC), []time.Duration{_getHours(0)}, nil, []int{12, 11}), wantTimeUntilNextRun: lastRunFourthCaseDate.Sub(curTime.Now(time.UTC))},
 	}
 
 	for _, tc := range testCases {
@@ -2366,7 +2390,7 @@ func TestScheduler_MonthLastDayAtTime(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{name: "month last day before run at time", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: []time.Duration{_getHours(20) + _getMinutes(0)}, daysOfTheMonth: []int{-1}, lastRun: time.Date(2022, 2, 28, 10, 0, 0, 0, time.UTC)}, wantTimeUntilNextRun: _getHours(10)},
+		{name: "month last day before run at time", job: calculateNextRunHelper(1, months, time.Date(2022, 2, 28, 10, 0, 0, 0, time.UTC), []time.Duration{_getHours(20) + _getMinutes(0)}, nil, []int{-1}), wantTimeUntilNextRun: _getHours(10)},
 	}
 
 	for _, tc := range testCases {
@@ -2409,23 +2433,23 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{description: "day test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(1, 0, 0)}, wantTimeUntilNextRun: _getHours(2) + _getMinutes(20)},
-		{description: "day test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(3, 30, 0)}, wantTimeUntilNextRun: _getHours(2)},
-		{description: "day test3", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(5, 27, 10)}, wantTimeUntilNextRun: _getMinutes(2) + _getSeconds(50)},
-		{description: "day test4", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
-		{description: "day test5", job: &Job{mu: &jobMutex{}, interval: 1, unit: days, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getHours(12) + _getMinutes(20)},
-		{description: "week test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getDays(7) - _getHours(2) - _getMinutes(10)},
-		{description: "week test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(7) - _getHours(15) + _getHours(3) + _getMinutes(20)},
-		{description: "weekday before test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Tuesday}, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getDays(6) - _getHours(2) - _getMinutes(10)},
-		{description: "weekday before test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Tuesday}, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(6) - _getHours(15) + _getHours(3) + _getMinutes(20)},
-		{description: "weekday equals test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Wednesday}, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
-		{description: "weekday equals test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Wednesday}, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(6) + _getHours(9) + _getHours(3) + _getMinutes(20)},
-		{description: "weekday after test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Thursday}, atTimes: atTimes, lastRun: getTime(5, 30, 0)}, wantTimeUntilNextRun: _getDays(1) - _getHours(2) - _getMinutes(10)},
-		{description: "weekday after test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: weeks, scheduledWeekdays: []time.Weekday{time.Thursday}, atTimes: atTimes, lastRun: getTime(15, 0, 0)}, wantTimeUntilNextRun: _getDays(1) - _getHours(15) + _getHours(3) + _getMinutes(20)},
-		{description: "month test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: atTimes, lastRun: getTime(5, 30, 0), daysOfTheMonth: []int{1}}, wantTimeUntilNextRun: _getDays(13) - _getHours(2) - _getMinutes(10)},
-		{description: "month test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: atTimes, lastRun: getTime(15, 0, 0), daysOfTheMonth: []int{1}}, wantTimeUntilNextRun: _getDays(12) + _getHours(9) + _getHours(3) + _getMinutes(20)},
-		{description: "month last day test1", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: atTimes, lastRun: getMonthLastDayTime(5, 30, 0), daysOfTheMonth: []int{-1}}, wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
-		{description: "month last day test2", job: &Job{mu: &jobMutex{}, interval: 1, unit: months, atTimes: atTimes, lastRun: getMonthLastDayTime(15, 0, 0), daysOfTheMonth: []int{-1}}, wantTimeUntilNextRun: _getDays(30) + _getHours(9) + _getHours(3) + _getMinutes(20)},
+		{description: "day test1", job: calculateNextRunHelper(1, days, getTime(1, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(2) + _getMinutes(20)},
+		{description: "day test2", job: calculateNextRunHelper(1, days, getTime(3, 30, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(2)},
+		{description: "day test3", job: calculateNextRunHelper(1, days, getTime(5, 27, 10), atTimes, nil, nil), wantTimeUntilNextRun: _getMinutes(2) + _getSeconds(50)},
+		{description: "day test4", job: calculateNextRunHelper(1, days, getTime(5, 30, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
+		{description: "day test5", job: calculateNextRunHelper(1, days, getTime(15, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(12) + _getMinutes(20)},
+		{description: "week test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getDays(7) - _getHours(2) - _getMinutes(10)},
+		{description: "week test2", job: calculateNextRunHelper(1, weeks, getTime(15, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getDays(7) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "weekday before test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, []time.Weekday{time.Tuesday}, nil), wantTimeUntilNextRun: _getDays(6) - _getHours(2) - _getMinutes(10)},
+		{description: "weekday before test2", job: calculateNextRunHelper(1, weeks, getTime(15, 0, 0), atTimes, []time.Weekday{time.Tuesday}, nil), wantTimeUntilNextRun: _getDays(6) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "weekday equals test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, []time.Weekday{time.Wednesday}, nil), wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
+		{description: "weekday equals test2", job: calculateNextRunHelper(1, weeks, getTime(15, 0, 0), atTimes, []time.Weekday{time.Wednesday}, nil), wantTimeUntilNextRun: _getDays(6) + _getHours(9) + _getHours(3) + _getMinutes(20)},
+		{description: "weekday after test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, []time.Weekday{time.Thursday}, nil), wantTimeUntilNextRun: _getDays(1) - _getHours(2) - _getMinutes(10)},
+		{description: "weekday after test2", job: calculateNextRunHelper(1, weeks, getTime(15, 0, 0), atTimes, []time.Weekday{time.Thursday}, nil), wantTimeUntilNextRun: _getDays(1) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "month test1", job: calculateNextRunHelper(1, months, getTime(5, 30, 0), atTimes, nil, []int{1}), wantTimeUntilNextRun: _getDays(13) - _getHours(2) - _getMinutes(10)},
+		{description: "month test2", job: calculateNextRunHelper(1, months, getTime(15, 0, 0), atTimes, nil, []int{1}), wantTimeUntilNextRun: _getDays(12) + _getHours(9) + _getHours(3) + _getMinutes(20)},
+		{description: "month last day test1", job: calculateNextRunHelper(1, months, getMonthLastDayTime(5, 30, 0), atTimes, nil, []int{-1}), wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
+		{description: "month last day test2", job: calculateNextRunHelper(1, months, getMonthLastDayTime(15, 0, 0), atTimes, nil, []int{-1}), wantTimeUntilNextRun: _getDays(30) + _getHours(9) + _getHours(3) + _getMinutes(20)},
 	}
 
 	for _, tc := range testCases {
