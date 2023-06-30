@@ -24,15 +24,20 @@ type Job struct {
 	atTimes           []time.Duration // optional time(s) at which this Job runs when interval is day
 	startAtTime       time.Time       // optional time at which the Job starts
 	error             error           // error related to Job
-	previousRun       time.Time       // datetime of the run before last run
-	lastRun           time.Time       // datetime of last run
-	nextRun           time.Time       // datetime of next run
-	scheduledWeekdays []time.Weekday  // Specific days of the week to start on
-	daysOfTheMonth    []int           // Specific days of the month to run the job
-	tags              []string        // allow the user to tag Jobs with certain labels
-	timer             *time.Timer     // handles running tasks at specific time
-	cronSchedule      cron.Schedule   // stores the schedule when a task uses cron
-	runWithDetails    bool            // when true the job is passed as the last arg of the jobFunc
+
+	scheduledWeekdays []time.Weekday // Specific days of the week to start on
+	daysOfTheMonth    []int          // Specific days of the month to run the job
+	tags              []string       // allow the user to tag Jobs with certain labels
+	timer             *time.Timer    // handles running tasks at specific time
+	cronSchedule      cron.Schedule  // stores the schedule when a task uses cron
+	runWithDetails    bool           // when true the job is passed as the last arg of the jobFunc
+}
+
+type jobRunTimes struct {
+	jobRunTimesMu *sync.Mutex
+	previousRun   time.Time // datetime of the run before last run
+	lastRun       time.Time // datetime of last run
+	nextRun       time.Time // datetime of next run
 }
 
 type random struct {
@@ -42,6 +47,7 @@ type random struct {
 }
 
 type jobFunction struct {
+	*jobRunTimes                         // tracking all the markers for job run times
 	eventListeners                       // additional functions to allow run 'em during job performing
 	function          interface{}        // task's function
 	parameters        []interface{}      // task's function parameters
@@ -78,6 +84,7 @@ type jobMutex struct {
 
 func (jf *jobFunction) copy() jobFunction {
 	cp := jobFunction{
+		jobRunTimes:       jf.jobRunTimes,
 		eventListeners:    jf.eventListeners,
 		function:          jf.function,
 		parameters:        nil,
@@ -133,9 +140,12 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		mu:       &jobMutex{},
 		interval: interval,
 		unit:     seconds,
-		lastRun:  time.Time{},
-		nextRun:  time.Time{},
 		jobFunction: jobFunction{
+			jobRunTimes: &jobRunTimes{
+				jobRunTimesMu: &sync.Mutex{},
+				lastRun:       time.Time{},
+				nextRun:       time.Time{},
+			},
 			ctx:               ctx,
 			cancel:            cancel,
 			isRunning:         atomic.NewBool(false),
@@ -507,8 +517,8 @@ func (j *Job) shouldRun() bool {
 
 // LastRun returns the time the job was run last
 func (j *Job) LastRun() time.Time {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
+	j.jobRunTimesMu.Lock()
+	defer j.jobRunTimesMu.Unlock()
 	return j.lastRun
 }
 
@@ -519,22 +529,22 @@ func (j *Job) setLastRun(t time.Time) {
 
 // NextRun returns the time the job will run next
 func (j *Job) NextRun() time.Time {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
+	j.jobRunTimesMu.Lock()
+	defer j.jobRunTimesMu.Unlock()
 	return j.nextRun
 }
 
 func (j *Job) setNextRun(t time.Time) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
+	j.jobRunTimesMu.Lock()
+	defer j.jobRunTimesMu.Unlock()
 	j.nextRun = t
 	j.jobFunction.jobFuncNextRun = t
 }
 
 // PreviousRun returns the job run time previous to LastRun
 func (j *Job) PreviousRun() time.Time {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
+	j.jobRunTimesMu.Lock()
+	defer j.jobRunTimesMu.Unlock()
 	return j.previousRun
 }
 
@@ -582,9 +592,6 @@ func (j *Job) copy() Job {
 		atTimes:           j.atTimes,
 		startAtTime:       j.startAtTime,
 		error:             j.error,
-		lastRun:           j.lastRun,
-		nextRun:           j.nextRun,
-		previousRun:       j.previousRun,
 		scheduledWeekdays: j.scheduledWeekdays,
 		daysOfTheMonth:    j.daysOfTheMonth,
 		tags:              j.tags,
