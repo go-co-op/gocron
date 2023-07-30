@@ -943,8 +943,10 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 		return nil, ErrNotAFunction
 	}
 
-	fname := getFunctionName(jobFun)
-	if val != reflect.ValueOf(jobFun) {
+	var fname string
+	if val == reflect.ValueOf(jobFun) {
+		fname = getFunctionName(jobFun)
+	} else {
 		fname = getFunctionNameOfPointer(jobFun)
 	}
 
