@@ -932,21 +932,37 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 		return nil, job.error
 	}
 
-	typ := reflect.TypeOf(jobFun)
-	if typ.Kind() != reflect.Func {
+	val := reflect.ValueOf(jobFun)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Func {
 		// delete the job for the same reason as above
 		s.RemoveByReference(job)
 		return nil, ErrNotAFunction
 	}
 
 	fname := getFunctionName(jobFun)
+	if val != reflect.ValueOf(jobFun) {
+		fname = getFunctionNameOfPointer(jobFun)
+	}
+
 	if job.funcName != fname {
 		job.function = jobFun
+		if val != reflect.ValueOf(jobFun) {
+			job.function = reflect.ValueOf(jobFun).Elem().Interface()
+		}
+
 		job.parameters = params
 		job.funcName = fname
 	}
 
 	f := reflect.ValueOf(jobFun)
+	if f != val {
+		f = f.Elem()
+	}
+
 	expectedParamLength := f.Type().NumIn()
 	if job.runWithDetails {
 		expectedParamLength--
