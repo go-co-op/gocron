@@ -1931,6 +1931,19 @@ func TestScheduler_Update(t *testing.T) {
 		require.NoError(t, err)
 		s.Stop()
 	})
+
+	// Verifies https://github.com/go-co-op/gocron/issues/528
+	t.Run("update with DoWithJobDetails", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		j, err := s.Every(time.Second).DoWithJobDetails(func(job Job) {})
+		require.NoError(t, err)
+		s.StartAsync()
+		time.Sleep(time.Millisecond * 500)
+
+		_, err = s.Job(j).Every(2 * time.Second).Update()
+		require.NoError(t, err)
+		s.Stop()
+	})
 }
 
 func TestScheduler_RunByTag(t *testing.T) {

@@ -1,5 +1,5 @@
 run:
-  timeout: 2m
+  timeout: 5m
   issues-exit-code: 1
   tests: true
 
@@ -15,8 +15,7 @@ issues:
 linters:
   enable:
     - bodyclose
-    - errcheck
-    - gofmt
+    - exportloopref
     - gofumpt
     - goimports
     - gosec
@@ -28,6 +27,7 @@ linters:
     - staticcheck
     - typecheck
     - unused
+    - whitespace
 
 output:
   # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"

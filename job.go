@@ -312,6 +312,12 @@ func (j *Job) setDuration(t time.Duration) {
 	j.duration = t
 }
 
+func (j *Job) setInterval(i int) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.interval = i
+}
+
 // hasTags returns true if all tags are matched on this Job
 func (j *Job) hasTags(tags ...string) bool {
 	// Build map of all Job tags for easy comparison
