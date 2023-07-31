@@ -57,6 +57,24 @@ func TestImmediateExecution(t *testing.T) {
 	}
 }
 
+func TestExecutionWithPointerToFunc(t *testing.T) {
+	s := NewScheduler(time.UTC)
+	semaphore := make(chan bool)
+	fn := func() { semaphore <- true }
+
+	_, err := s.Every(1).Second().Do(&fn)
+	require.NoError(t, err)
+	s.StartAsync()
+	select {
+	case <-time.After(time.Second):
+		s.stop()
+		t.Fatal("job did not run immediately")
+	case <-semaphore:
+		// test passed
+		s.stop()
+	}
+}
+
 func TestScheduler_Every_InvalidInterval(t *testing.T) {
 	testCases := []struct {
 		description   string

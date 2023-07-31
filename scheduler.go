@@ -931,22 +931,35 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 		return nil, job.error
 	}
 
-	typ := reflect.TypeOf(jobFun)
-	if typ.Kind() != reflect.Func {
+	val := reflect.ValueOf(jobFun)
+	for val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Func {
 		// delete the job for the same reason as above
 		s.RemoveByReference(job)
 		return nil, ErrNotAFunction
 	}
 
-	fname := getFunctionName(jobFun)
+	var fname string
+	if val == reflect.ValueOf(jobFun) {
+		fname = getFunctionName(jobFun)
+	} else {
+		fname = getFunctionNameOfPointer(jobFun)
+	}
+
 	if job.funcName != fname {
 		job.function = jobFun
+		if val != reflect.ValueOf(jobFun) {
+			job.function = val.Interface()
+		}
+
 		job.parameters = params
 		job.funcName = fname
 	}
 
-	f := reflect.ValueOf(jobFun)
-	expectedParamLength := f.Type().NumIn()
+	expectedParamLength := val.Type().NumIn()
 	if job.runWithDetails {
 		expectedParamLength--
 	}
@@ -957,7 +970,7 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 		return nil, job.error
 	}
 
-	if job.runWithDetails && f.Type().In(len(params)).Kind() != reflect.ValueOf(*job).Kind() {
+	if job.runWithDetails && val.Type().In(len(params)).Kind() != reflect.ValueOf(*job).Kind() {
 		s.RemoveByReference(job)
 		job.error = wrapOrError(job.error, ErrDoWithJobDetails)
 		return nil, job.error

@@ -127,6 +127,10 @@ func getFunctionName(fn interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
 }
 
+func getFunctionNameOfPointer(fn interface{}) string {
+	return runtime.FuncForPC(reflect.ValueOf(fn).Elem().Pointer()).Name()
+}
+
 func parseTime(t string) (hour, min, sec int, err error) {
 	var timeLayout string
 	switch {
