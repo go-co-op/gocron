@@ -289,7 +289,6 @@ func (s *Scheduler) calculateMonths(job *Job, lastRun time.Time) nextRun {
 	}
 
 	if len(job.daysOfTheMonth) != 0 { // calculate days to job.daysOfTheMonth
-
 		nextRunDateMap := make(map[int]nextRun)
 		for _, day := range job.daysOfTheMonth {
 			nextRunDateMap[day] = calculateNextRunForMonth(s, job, lastRun, day)
@@ -548,7 +547,7 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 	case time.Duration:
-		job.interval = 0
+		job.setInterval(0)
 		job.setDuration(interval)
 		job.setUnit(duration)
 	case string:
@@ -1153,10 +1152,8 @@ func (s *Scheduler) Months(daysOfTheMonth ...int) *Scheduler {
 			job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
 		}
 	} else {
-
 		repeatMap := make(map[int]int)
 		for _, dayOfMonth := range daysOfTheMonth {
-
 			if dayOfMonth < 1 || dayOfMonth > 28 {
 				job.error = wrapOrError(job.error, ErrInvalidDayOfMonthEntry)
 				break
@@ -1298,7 +1295,11 @@ func (s *Scheduler) Update() (*Job, error) {
 	job.setStartsImmediately(false)
 
 	if job.runWithDetails {
-		return s.DoWithJobDetails(job.function, job.parameters...)
+		params := job.parameters
+		if len(params) > 0 {
+			params = job.parameters[:len(job.parameters)-1]
+		}
+		return s.DoWithJobDetails(job.function, params...)
 	}
 
 	if job.runConfig.mode == singletonMode {
