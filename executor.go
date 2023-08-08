@@ -70,6 +70,16 @@ func newExecutor() executor {
 }
 
 func runJob(f jobFunction) {
+	panicHandlerMutex.RLock()
+	defer panicHandlerMutex.RUnlock()
+
+	if panicHandler != nil {
+		defer func() {
+			if r := recover(); r != nil {
+				panicHandler(f.funcName, r)
+			}
+		}()
+	}
 	f.runStartCount.Add(1)
 	f.isRunning.Store(true)
 	callJobFunc(f.eventListeners.onBeforeJobExecution)
@@ -208,17 +218,6 @@ func (e *executor) run() {
 			e.jobsWg.Add(1)
 			go func() {
 				defer e.jobsWg.Done()
-
-				panicHandlerMutex.RLock()
-				defer panicHandlerMutex.RUnlock()
-
-				if panicHandler != nil {
-					defer func() {
-						if r := recover(); r != nil {
-							panicHandler(f.funcName, r)
-						}
-					}()
-				}
 
 				if e.limitModeMaxRunningJobs > 0 {
 					switch e.limitMode {
