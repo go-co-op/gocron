@@ -2790,6 +2790,7 @@ func TestScheduler_PauseJobExecution(t *testing.T) {
 	assert.GreaterOrEqual(t, counter, 1)
 	assert.LessOrEqual(t, counter, 2)
 }
+
 func TestDataRace(t *testing.T) {
 	// This used to fail with the -race flag
 	sut := NewScheduler(time.UTC)
