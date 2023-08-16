@@ -2790,3 +2790,23 @@ func TestScheduler_PauseJobExecution(t *testing.T) {
 	assert.GreaterOrEqual(t, counter, 1)
 	assert.LessOrEqual(t, counter, 2)
 }
+func TestDataRace(t *testing.T) {
+	// This used to fail with the -race flag
+	sut := NewScheduler(time.UTC)
+	sut.StartAsync()
+	maxRuns := 10
+	task := func() {
+	}
+
+	_, err := sut.
+		Every(1).
+		Milliseconds().
+		Tag("name").
+		SingletonMode().
+		LimitRunsTo(maxRuns).
+		Do(task)
+	assert.NoError(t, err)
+
+	time.Sleep(1 * time.Second)
+	sut.Stop()
+}
