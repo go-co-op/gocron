@@ -892,14 +892,16 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) stop() {
-	s.stopJobs(s.jobs)
+	s.stopJobs()
 	s.executor.stop()
 	s.StopBlockingChan()
 	s.setRunning(false)
 }
 
-func (s *Scheduler) stopJobs(jobs []*Job) {
-	for _, job := range jobs {
+func (s *Scheduler) stopJobs() {
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
+	for _, job := range s.jobs {
 		job.stop()
 	}
 }
