@@ -40,6 +40,7 @@ var (
 	ErrNotAFunction                  = errors.New("gocron: only functions can be scheduled into the job queue")
 	ErrNotScheduledWeekday           = errors.New("gocron: job not scheduled weekly on a weekday")
 	ErrJobNotFoundWithTag            = errors.New("gocron: no jobs found with given tag")
+	ErrJobNotFound                   = errors.New("gocron: no job found")
 	ErrUnsupportedTimeFormat         = errors.New("gocron: the given time format is not supported")
 	ErrInvalidInterval               = errors.New("gocron: .Every() interval must be greater than 0")
 	ErrInvalidIntervalType           = errors.New("gocron: .Every() interval must be int, time.Duration, or string")

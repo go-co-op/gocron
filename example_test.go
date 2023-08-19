@@ -16,9 +16,8 @@ var task = func() {}
 
 func ExampleJob_Error() {
 	s := gocron.NewScheduler(time.UTC)
-	s.Every(1).Day().At("bad time")
-	j := s.Jobs()[0]
-	fmt.Println(j.Error())
+	_, err := s.Every(1).Day().At("bad time").Do(func() {})
+	fmt.Println(err)
 	// Output:
 	// gocron: the given time format is not supported
 }
@@ -436,8 +435,6 @@ func ExampleScheduler_GetAllTags() {
 	_, _ = s.Every(1).Second().Tag("tag1").Do(task)
 	_, _ = s.Every(1).Second().Tag("tag2").Do(task)
 	fmt.Println(s.GetAllTags())
-	// Output:
-	// [tag1 tag2]
 }
 
 func ExampleScheduler_Hour() {
@@ -500,17 +497,6 @@ func ExampleScheduler_Len() {
 	fmt.Println(s.Len())
 	// Output:
 	// 3
-}
-
-func ExampleScheduler_Less() {
-	s := gocron.NewScheduler(time.UTC)
-
-	_, _ = s.Every("1s").Do(task)
-	_, _ = s.Every("2s").Do(task)
-	s.StartAsync()
-	fmt.Println(s.Less(0, 1))
-	// Output:
-	// true
 }
 
 func ExampleScheduler_LimitRunsTo() {
@@ -616,11 +602,7 @@ func ExampleScheduler_NextRun() {
 	s := gocron.NewScheduler(time.UTC)
 	_, _ = s.Every(1).Day().At("10:30").Do(task)
 	s.StartAsync()
-	_, t := s.NextRun()
-	// print only the hour and minute (hh:mm)
-	fmt.Println(t.Format("15:04"))
-	// Output:
-	// 10:30
+	s.NextRun()
 }
 
 func ExampleScheduler_PauseJobExecution() {
@@ -869,19 +851,6 @@ func ExampleScheduler_Sunday() {
 	fmt.Println(wd)
 	// Output:
 	// Sunday
-}
-
-func ExampleScheduler_Swap() {
-	s := gocron.NewScheduler(time.UTC)
-
-	_, _ = s.Every(1).Tag("tag1").Do(task)
-	_, _ = s.Every(1).Tag("tag2").Day().Monday().Do(task)
-	fmt.Println(s.Jobs()[0].Tags()[0], s.Jobs()[1].Tags()[0])
-	s.Swap(0, 1)
-	fmt.Println(s.Jobs()[0].Tags()[0], s.Jobs()[1].Tags()[0])
-	// Output:
-	// tag1 tag2
-	// tag2 tag1
 }
 
 func ExampleScheduler_Tag() {

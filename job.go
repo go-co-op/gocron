@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/atomic"
 )
@@ -47,6 +48,7 @@ type random struct {
 }
 
 type jobFunction struct {
+	id                uuid.UUID          // unique identifier for the job
 	*jobRunTimes                         // tracking all the markers for job run times
 	eventListeners                       // additional functions to allow run 'em during job performing
 	function          interface{}        // task's function
@@ -84,6 +86,7 @@ type jobMutex struct {
 
 func (jf *jobFunction) copy() jobFunction {
 	cp := jobFunction{
+		id:                jf.id,
 		jobRunTimes:       jf.jobRunTimes,
 		eventListeners:    jf.eventListeners,
 		function:          jf.function,
@@ -141,6 +144,7 @@ func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
 		interval: interval,
 		unit:     seconds,
 		jobFunction: jobFunction{
+			id: uuid.New(),
 			jobRunTimes: &jobRunTimes{
 				jobRunTimesMu: &sync.Mutex{},
 				lastRun:       time.Time{},

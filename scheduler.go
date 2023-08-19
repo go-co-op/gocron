@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/atomic"
 )
@@ -19,7 +20,7 @@ type limitMode int8
 // and implements the sort. any for sorting Jobs, by the time of jobFuncNextRun
 type Scheduler struct {
 	jobsMutex sync.RWMutex
-	jobs      []*Job
+	jobs      map[uuid.UUID]*Job
 
 	locationMutex sync.RWMutex
 	location      *time.Location
@@ -45,7 +46,7 @@ type Scheduler struct {
 	// Update() calls Do(), so really they all end with Do().
 	// This allows the caller to begin with any job related scheduler method
 	// and only with one of [ Every(), EveryRandom(), Cron(), CronWithSeconds(), MonthFirstWeekday() ]
-	inScheduleChain bool
+	inScheduleChain *uuid.UUID
 }
 
 // days in a week
@@ -55,8 +56,7 @@ const allWeekDays = 7
 func NewScheduler(loc *time.Location) *Scheduler {
 	executor := newExecutor()
 
-	return &Scheduler{
-		jobs:       make([]*Job, 0),
+	s := &Scheduler{
 		location:   loc,
 		running:    atomic.NewBool(false),
 		time:       &trueTime{},
@@ -64,6 +64,10 @@ func NewScheduler(loc *time.Location) *Scheduler {
 		tagsUnique: false,
 		timer:      afterFunc,
 	}
+	s.jobsMutex.Lock()
+	s.jobs = map[uuid.UUID]*Job{}
+	s.jobsMutex.Unlock()
+	return s
 }
 
 // SetMaxConcurrentJobs limits how many jobs can be running at the same time.
@@ -104,7 +108,7 @@ func (s *Scheduler) start() {
 	s.runJobs(s.Jobs())
 }
 
-func (s *Scheduler) runJobs(jobs []*Job) {
+func (s *Scheduler) runJobs(jobs map[uuid.UUID]*Job) {
 	for _, job := range jobs {
 		ctx, cancel := context.WithCancel(context.Background())
 		job.mu.Lock()
@@ -125,7 +129,7 @@ func (s *Scheduler) IsRunning() bool {
 }
 
 // Jobs returns the list of Jobs from the Scheduler
-func (s *Scheduler) Jobs() []*Job {
+func (s *Scheduler) Jobs() map[uuid.UUID]*Job {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
 	return s.jobs
@@ -141,7 +145,7 @@ func (s *Scheduler) Name(name string) *Scheduler {
 	return s
 }
 
-func (s *Scheduler) setJobs(jobs []*Job) {
+func (s *Scheduler) setJobs(jobs map[uuid.UUID]*Job) {
 	s.jobsMutex.Lock()
 	defer s.jobsMutex.Unlock()
 	s.jobs = jobs
@@ -152,20 +156,6 @@ func (s *Scheduler) Len() int {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
 	return len(s.jobs)
-}
-
-// Swap places each job into the other job's position given
-// the provided job indexes.
-func (s *Scheduler) Swap(i, j int) {
-	s.jobsMutex.Lock()
-	defer s.jobsMutex.Unlock()
-	s.jobs[i], s.jobs[j] = s.jobs[j], s.jobs[i]
-}
-
-// Less compares the next run of jobs based on their index.
-// Returns true if the second job is after the first.
-func (s *Scheduler) Less(first, second int) bool {
-	return s.Jobs()[second].NextRun().Unix() >= s.Jobs()[first].NextRun().Unix()
 }
 
 // ChangeLocation changes the default time location
@@ -512,12 +502,20 @@ func (s *Scheduler) roundToMidnightAndAddDSTAware(t time.Time, d time.Duration) 
 // NextRun datetime when the next Job should run.
 func (s *Scheduler) NextRun() (*Job, time.Time) {
 	if len(s.Jobs()) <= 0 {
-		return nil, s.now()
+		return nil, time.Time{}
 	}
 
-	sort.Sort(s)
+	var jobID uuid.UUID
+	var nearestRun time.Time
+	for _, job := range s.Jobs() {
+		nr := job.NextRun()
+		if nr.Before(nearestRun) && s.now().Before(nr) {
+			nearestRun = nr
+			jobID = job.id
+		}
+	}
 
-	return s.Jobs()[0], s.Jobs()[0].NextRun()
+	return s.Jobs()[jobID], nearestRun
 }
 
 // EveryRandom schedules a new period Job that runs at random intervals
@@ -717,10 +715,10 @@ func (s *Scheduler) removeJobsUniqueTags(job *Job) {
 }
 
 func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
-	retainedJobs := make([]*Job, 0)
+	retainedJobs := make(map[uuid.UUID]*Job, 0)
 	for _, job := range s.Jobs() {
 		if !shouldRemove(job) {
-			retainedJobs = append(retainedJobs, job)
+			retainedJobs[job.id] = job
 		} else {
 			job.stop()
 		}
@@ -765,6 +763,15 @@ func (s *Scheduler) RemoveByTagsAny(tags ...string) error {
 	}
 
 	return errs
+}
+
+// RemoveByID removes the job from the scheduler looking up by id
+func (s *Scheduler) RemoveByID(id uuid.UUID) error {
+	if _, ok := s.Jobs()[id]; ok {
+		delete(s.Jobs(), id)
+		return nil
+	}
+	return ErrJobNotFound
 }
 
 // FindJobsByTag will return a slice of Jobs that match all given tags
@@ -853,13 +860,11 @@ func (s *Scheduler) TaskPresent(j interface{}) bool {
 
 // To avoid the recursive read lock on s.Jobs() and this function,
 // creating this new function and distributing the lock between jobPresent, _jobPresent
-func (s *Scheduler) _jobPresent(j *Job, jobs []*Job) bool {
+func (s *Scheduler) _jobPresent(j *Job, jobs map[uuid.UUID]*Job) bool {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
-	for _, job := range jobs {
-		if job == j {
-			return true
-		}
+	if _, ok := jobs[j.id]; ok {
+		return true
 	}
 	return false
 }
@@ -870,10 +875,8 @@ func (s *Scheduler) jobPresent(j *Job) bool {
 
 // Clear clears all Jobs from this scheduler
 func (s *Scheduler) Clear() {
-	for _, job := range s.Jobs() {
-		job.stop()
-	}
-	s.setJobs(make([]*Job, 0))
+	s.stopJobs()
+	s.setJobs(make(map[uuid.UUID]*Job, 0))
 	// If unique tags was enabled, delete all the tags loaded in the tags sync.Map
 	if s.tagsUnique {
 		s.tags.Range(func(key interface{}, value interface{}) bool {
@@ -908,7 +911,7 @@ func (s *Scheduler) stopJobs() {
 
 func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, error) {
 	job := s.getCurrentJob()
-	s.inScheduleChain = false
+	s.inScheduleChain = nil
 
 	jobUnit := job.getUnit()
 	jobLastRun := job.LastRun()
@@ -1255,17 +1258,19 @@ func (s *Scheduler) Sunday() *Scheduler {
 }
 
 func (s *Scheduler) getCurrentJob() *Job {
-	if !s.inScheduleChain {
+	if s.inScheduleChain == nil {
 		s.jobsMutex.Lock()
-		s.jobs = append(s.jobs, s.newJob(0))
+		j := s.newJob(0)
+		s.jobs[j.id] = j
 		s.jobsMutex.Unlock()
-		s.inScheduleChain = true
+		s.inScheduleChain = &j.id
+		return j
 	}
 
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
 
-	return s.jobs[len(s.jobs)-1]
+	return s.jobs[*s.inScheduleChain]
 }
 
 func (s *Scheduler) now() time.Time {
@@ -1284,14 +1289,7 @@ func (s *Scheduler) TagsUnique() {
 // of making changes to the job with the scheduler chain
 // and finalized by calling Update()
 func (s *Scheduler) Job(j *Job) *Scheduler {
-	jobs := s.Jobs()
-	for index, job := range jobs {
-		if job == j {
-			// the current job is always last, so put this job there
-			s.Swap(len(jobs)-1, index)
-		}
-	}
-	s.inScheduleChain = true
+	s.inScheduleChain = &j.id
 	s.updateJob = true
 	return s
 }
