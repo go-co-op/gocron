@@ -766,9 +766,9 @@ func (s *Scheduler) RemoveByTagsAny(tags ...string) error {
 }
 
 // RemoveByID removes the job from the scheduler looking up by id
-func (s *Scheduler) RemoveByID(id uuid.UUID) error {
-	if _, ok := s.Jobs()[id]; ok {
-		delete(s.Jobs(), id)
+func (s *Scheduler) RemoveByID(job *Job) error {
+	if _, ok := s.Jobs()[job.id]; ok {
+		delete(s.Jobs(), job.id)
 		return nil
 	}
 	return ErrJobNotFound

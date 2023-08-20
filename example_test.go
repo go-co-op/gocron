@@ -659,6 +659,18 @@ func ExampleScheduler_Remove() {
 	// 0
 }
 
+func ExampleScheduler_RemoveByID() {
+	s := gocron.NewScheduler(time.UTC)
+
+	j, _ := s.Every(1).Week().Do(task)
+	_, _ = s.Every(1).Week().Do(task)
+	s.StartAsync()
+	s.RemoveByID(j)
+	fmt.Println(s.Len())
+	// Output:
+	// 1
+}
+
 func ExampleScheduler_RemoveByReference() {
 	s := gocron.NewScheduler(time.UTC)
 
