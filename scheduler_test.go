@@ -2395,7 +2395,21 @@ func TestScheduler_MonthLastDayAtTime(t *testing.T) {
 		job                  *Job
 		wantTimeUntilNextRun time.Duration
 	}{
-		{name: "month last day before run at time", job: calculateNextRunHelper(1, months, time.Date(2022, 2, 28, 10, 0, 0, 0, time.UTC), []time.Duration{_getHours(20) + _getMinutes(0)}, nil, []int{-1}), wantTimeUntilNextRun: _getHours(10)},
+		{
+			name:                 "month last day before run at time",
+			job:                  calculateNextRunHelper(1, months, time.Date(2022, 2, 28, 10, 0, 0, 0, time.UTC), []time.Duration{_getHours(20) + _getMinutes(0)}, nil, []int{-1}),
+			wantTimeUntilNextRun: _getHours(10),
+		},
+		{
+			name:                 "month last day penultimate day before run at time",
+			job:                  calculateNextRunHelper(1, months, time.Date(2022, 2, 27, 10, 0, 0, 0, time.UTC), []time.Duration{_getHours(20) + _getMinutes(0)}, nil, []int{-2}),
+			wantTimeUntilNextRun: _getHours(10),
+		},
+		{
+			name:                 "month last day 2 days before last day before run at time",
+			job:                  calculateNextRunHelper(1, months, time.Date(2022, 2, 26, 10, 0, 0, 0, time.UTC), []time.Duration{_getHours(20) + _getMinutes(0)}, nil, []int{-3}),
+			wantTimeUntilNextRun: _getHours(10),
+		},
 	}
 
 	for _, tc := range testCases {
