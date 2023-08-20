@@ -576,6 +576,8 @@ func ExampleScheduler_Month() {
 	_, _ = s.Every(1).Months(1).Do(task)
 	_, _ = s.Every(1).Month(1, 2).Do(task)
 	_, _ = s.Month(1, 2).Every(1).Do(task)
+	_, _ = s.Every(1).Month(-1).Do(task)
+	_, _ = s.Every(1).Month(-2).Do(task)
 }
 
 func ExampleScheduler_MonthFirstWeekday() {
@@ -589,6 +591,8 @@ func ExampleScheduler_MonthLastDay() {
 
 	_, _ = s.Every(1).MonthLastDay().Do(task)
 	_, _ = s.Every(2).MonthLastDay().Do(task)
+	_, _ = s.Every(1).MonthLastDay(-1).Do(task)
+	_, _ = s.Every(1).MonthLastDay(-2).Do(task)
 }
 
 func ExampleScheduler_Months() {
@@ -596,6 +600,8 @@ func ExampleScheduler_Months() {
 
 	_, _ = s.Every(1).Month(1).Do(task)
 	_, _ = s.Every(1).Months(1).Do(task)
+	_, _ = s.Every(1).Months(-1).Do(task)
+	_, _ = s.Every(1).Months(-2).Do(task)
 }
 
 func ExampleScheduler_NextRun() {

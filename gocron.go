@@ -49,7 +49,8 @@ var (
 
 	ErrAtTimeNotSupported               = errors.New("gocron: the At() method is not supported for this time unit")
 	ErrWeekdayNotSupported              = errors.New("gocron: weekday is not supported for time unit")
-	ErrInvalidDayOfMonthEntry           = errors.New("gocron: only days 1 through 28 are allowed for monthly schedules")
+	ErrInvalidDayOfMonthEntry           = errors.New("gocron: only days 1 through 28 and -1 through -28 are allowed for monthly schedules")
+	ErrInvalidMonthLastDayEntry         = errors.New("gocron: only a single negative integer is permitted for MonthLastDay")
 	ErrTagsUnique                       = func(tag string) error { return fmt.Errorf("gocron: a non-unique tag was set on the job: %s", tag) }
 	ErrWrongParams                      = errors.New("gocron: wrong list of params")
 	ErrDoWithJobDetails                 = errors.New("gocron: DoWithJobDetails expects a function whose last parameter is a gocron.Job")
