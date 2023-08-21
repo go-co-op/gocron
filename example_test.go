@@ -494,7 +494,7 @@ func ExampleScheduler_JobsMap() {
 	_, _ = s.Every("1s").Do(task)
 	_, _ = s.Every("1s").Do(task)
 	_, _ = s.Every("1s").Do(task)
-	fmt.Printf("map of job uuid to job: %+v", s.Jobs())
+	fmt.Printf("map of job uuid to job: %+v", s.JobsMap())
 }
 
 func ExampleScheduler_Len() {

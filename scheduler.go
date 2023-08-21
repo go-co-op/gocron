@@ -16,8 +16,7 @@ import (
 
 type limitMode int8
 
-// Scheduler struct stores a list of jobs and the location of time used by the Scheduler,
-// and implements the sort. any for sorting jobs, by the time of jobFuncNextRun
+// Scheduler struct stores a list of Jobs and the location of time used by the Scheduler
 type Scheduler struct {
 	jobsMutex sync.RWMutex
 	jobs      map[uuid.UUID]*Job
@@ -128,7 +127,7 @@ func (s *Scheduler) IsRunning() bool {
 	return s.running.Load()
 }
 
-// Jobs returns the list of jobs from the scheduler
+// Jobs returns the list of Jobs from the scheduler
 func (s *Scheduler) Jobs() []*Job {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
@@ -168,7 +167,7 @@ func (s *Scheduler) setJobs(jobs map[uuid.UUID]*Job) {
 	s.jobs = jobs
 }
 
-// Len returns the number of jobs in the Scheduler - implemented for sort
+// Len returns the number of Jobs in the Scheduler
 func (s *Scheduler) Len() int {
 	s.jobsMutex.RLock()
 	defer s.jobsMutex.RUnlock()
@@ -648,12 +647,12 @@ func (s *Scheduler) runContinuous(job *Job) {
 	}))
 }
 
-// RunAll run all jobs regardless if they are scheduled to run or not
+// RunAll run all Jobs regardless if they are scheduled to run or not
 func (s *Scheduler) RunAll() {
 	s.RunAllWithDelay(0)
 }
 
-// RunAllWithDelay runs all jobs with the provided delay in between each job
+// RunAllWithDelay runs all Jobs with the provided delay in between each Job
 func (s *Scheduler) RunAllWithDelay(d time.Duration) {
 	for _, job := range s.jobsMap() {
 		s.run(job)
@@ -661,14 +660,14 @@ func (s *Scheduler) RunAllWithDelay(d time.Duration) {
 	}
 }
 
-// RunByTag runs all the jobs containing a specific tag
+// RunByTag runs all the Jobs containing a specific tag
 // regardless of whether they are scheduled to run or not
 func (s *Scheduler) RunByTag(tag string) error {
 	return s.RunByTagWithDelay(tag, 0)
 }
 
 // RunByTagWithDelay is same as RunByTag but introduces a delay between
-// each job execution
+// each Job execution
 func (s *Scheduler) RunByTagWithDelay(tag string, d time.Duration) error {
 	jobs, err := s.FindJobsByTag(tag)
 	if err != nil {
