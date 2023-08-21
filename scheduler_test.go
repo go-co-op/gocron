@@ -588,8 +588,8 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 		assert.Equal(t, 2, s.Len(), "Incorrect number of jobs")
 
 		s.RemoveByReference(job1)
-		assert.NotContains(t, s.Jobs(), job1.id)
-		assert.Contains(t, s.Jobs(), job2.id)
+		assert.NotContains(t, s.jobsMap(), job1.id)
+		assert.Contains(t, s.jobsMap(), job2.id)
 	})
 
 	t.Run("remove from running scheduler", func(t *testing.T) {
@@ -622,7 +622,7 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 	t.Run("non unique tags", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		// Creating 2 Jobs with different tags
+		// Creating 2 jobs with different tags
 		tag1 := "a"
 		tag2 := "ab"
 		j1, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
@@ -631,14 +631,14 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags is equal with tag "a" (tag1)
-		assert.Equal(t, s.Jobs()[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Equal(t, s.jobsMap()[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
 
 		err = s.RemoveByTags(tag1)
 		require.NoError(t, err)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
 		// check j2 tags is equal with tag "tag two" (tag2) after removing "a"
-		assert.Equal(t, s.Jobs()[j2.id].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
+		assert.Equal(t, s.jobsMap()[j2.id].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
 
 		// Removing Non-Existent Job with "a" because already removed above (will not removing any jobs because tag not match)
 		err = s.RemoveByTags(tag1)
@@ -649,7 +649,7 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.TagsUnique()
 
-		// Creating 2 Jobs with unique tags
+		// Creating 2 jobs with unique tags
 		tag1 := "tag one"
 		tag2 := "tag two"
 		_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
@@ -668,7 +668,7 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 	t.Run("multiple non unique tags", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		// Creating 2 Jobs with different tags
+		// Creating 2 jobs with different tags
 		tag1 := "a"
 		tag2 := "ab"
 		tag3 := "abc"
@@ -678,16 +678,16 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags contains tag "a" (tag1) and "abc" (tag3)
-		assert.Contains(t, s.Jobs()[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
-		assert.Contains(t, s.Jobs()[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
+		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
 
 		err = s.RemoveByTags(tag1, tag3)
 		require.NoError(t, err)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
 		// check j2 tags is equal with tag "a" (tag1) and "ab" (tag2) after removing "a"+"abc"
-		assert.Contains(t, s.Jobs()[j2.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
-		assert.Contains(t, s.Jobs()[j2.id].Tags(), tag2, "Job With Tag 'ab' is removed from index 0")
+		assert.Contains(t, s.jobsMap()[j2.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Contains(t, s.jobsMap()[j2.id].Tags(), tag2, "Job With Tag 'ab' is removed from index 0")
 
 		// Removing Non-Existent Job with "a"+"abc" because already removed above (will not removing any jobs because tag not match)
 		err = s.RemoveByTags(tag1, tag3)
@@ -698,7 +698,7 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.TagsUnique()
 
-		// Creating 2 Jobs with unique tags
+		// Creating 2 jobs with unique tags
 		tag1 := "tag one"
 		tag2 := "tag two"
 		tag3 := "tag three"
@@ -720,7 +720,7 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 	t.Run("non unique tags", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		// Creating 2 Jobs with different tags
+		// Creating 2 jobs with different tags
 		tag1 := "a"
 		tag2 := "ab"
 		j1, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
@@ -729,7 +729,7 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags is equal with tag "a" (tag1)
-		assert.Equal(t, s.Jobs()[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Equal(t, s.jobsMap()[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
 
 		err = s.RemoveByTagsAny(tag1, tag2)
 		require.NoError(t, err)
@@ -744,7 +744,7 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.TagsUnique()
 
-		// Creating 2 Jobs with unique tags
+		// Creating 2 jobs with unique tags
 		tag1 := "tag one"
 		tag2 := "tag two"
 		_, err := s.Every(1).Second().Tag(tag1).Do(taskWithParams, 1, "hello") // index 0
@@ -763,7 +763,7 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 	t.Run("multiple non unique tags", func(t *testing.T) {
 		s := NewScheduler(time.UTC)
 
-		// Creating 2 Jobs with different tags
+		// Creating 2 jobs with different tags
 		tag1 := "a"
 		tag2 := "ab"
 		tag3 := "abc"
@@ -773,8 +773,8 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags contains tag "a" (tag1) and "abc" (tag3)
-		assert.Contains(t, s.Jobs()[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
-		assert.Contains(t, s.Jobs()[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
+		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
 
 		err = s.RemoveByTagsAny(tag1, tag2, tag3)
 		require.NoError(t, err)
@@ -789,7 +789,7 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 		s := NewScheduler(time.UTC)
 		s.TagsUnique()
 
-		// Creating 2 Jobs with unique tags
+		// Creating 2 jobs with unique tags
 		tag1 := "tag one"
 		tag2 := "tag two"
 		tag3 := "tag three"
@@ -813,7 +813,7 @@ func TestScheduler_Jobs(t *testing.T) {
 	_, _ = s.Every(2).Minutes().Do(task)
 	_, _ = s.Every(3).Minutes().Do(task)
 	_, _ = s.Every(4).Minutes().Do(task)
-	js := s.Jobs()
+	js := s.jobsMap()
 	assert.Len(t, js, 4)
 }
 
