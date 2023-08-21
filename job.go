@@ -28,7 +28,7 @@ type Job struct {
 
 	scheduledWeekdays []time.Weekday // Specific days of the week to start on
 	daysOfTheMonth    []int          // Specific days of the month to run the job
-	tags              []string       // allow the user to tag Jobs with certain labels
+	tags              []string       // allow the user to tag jobs with certain labels
 	timer             *time.Timer    // handles running tasks at specific time
 	cronSchedule      cron.Schedule  // stores the schedule when a task uses cron
 	runWithDetails    bool           // when true the job is passed as the last arg of the jobFunc

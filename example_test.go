@@ -488,6 +488,15 @@ func ExampleScheduler_Jobs() {
 	// 3
 }
 
+func ExampleScheduler_JobsMap() {
+	s := gocron.NewScheduler(time.UTC)
+
+	_, _ = s.Every("1s").Do(task)
+	_, _ = s.Every("1s").Do(task)
+	_, _ = s.Every("1s").Do(task)
+	fmt.Printf("map of job uuid to job: %+v", s.Jobs())
+}
+
 func ExampleScheduler_Len() {
 	s := gocron.NewScheduler(time.UTC)
 
