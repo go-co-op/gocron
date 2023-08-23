@@ -1759,21 +1759,35 @@ func TestScheduler_DoParameterValidation(t *testing.T) {
 }
 
 func TestScheduler_Job(t *testing.T) {
-	s := NewScheduler(time.UTC)
+	t.Run("happy", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
 
-	j1, err := s.Every("1s").Do(func() {})
-	require.NoError(t, err)
-	assert.Equal(t, j1, s.jobs[j1.id])
+		j1, err := s.Every("1s").Do(func() {})
+		require.NoError(t, err)
+		assert.Equal(t, j1, s.jobs[j1.id])
 
-	j2, err := s.Every("1s").Do(func() {})
-	require.NoError(t, err)
-	assert.Equal(t, j2, s.jobs[j2.id])
+		j2, err := s.Every("1s").Do(func() {})
+		require.NoError(t, err)
+		assert.Equal(t, j2, s.jobs[j2.id])
 
-	s.Job(j1)
-	assert.Equal(t, j1, s.jobs[j1.id])
+		s.Job(j1)
+		assert.Equal(t, j1, s.jobs[j1.id])
 
-	s.Job(j2)
-	assert.Equal(t, j2, s.jobs[j2.id])
+		s.Job(j2)
+		assert.Equal(t, j2, s.jobs[j2.id])
+	})
+	t.Run("job address doesn't match after de/re-referencing", func(t *testing.T) {
+		s := NewScheduler(time.UTC)
+		j1, err := s.Every("1s").Do(func() {})
+		require.NoError(t, err)
+		assert.Equal(t, j1, s.jobs[j1.id])
+
+		j1PtrDeReferenced := *j1
+		j1PtrReReferenced := &j1PtrDeReferenced
+
+		_, err = s.Job(j1PtrReReferenced).Every("2s").Update()
+		assert.EqualError(t, err, ErrUpdateCalledWithoutJob.Error())
+	})
 }
 
 func TestScheduler_Update(t *testing.T) {
