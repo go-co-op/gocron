@@ -1327,6 +1327,11 @@ func (s *Scheduler) TagsUnique() {
 // of making changes to the job with the scheduler chain
 // and finalized by calling Update()
 func (s *Scheduler) Job(j *Job) *Scheduler {
+	if job, ok := s.JobsMap()[j.id]; !ok {
+		return s
+	} else if job != j {
+		return s
+	}
 	s.inScheduleChain = &j.id
 	s.updateJob = true
 	return s
