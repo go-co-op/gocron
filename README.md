@@ -39,6 +39,14 @@ if err != nil {
 	// handle the error related to setting up the job
 }
 
+// to wait for the interval to pass before running the first job
+// use WaitForSchedule or WaitForScheduleAll
+s.Every(5).Second().WaitForSchedule().Do(func(){ ... })
+
+s.WaitForScheduleAll()
+s.Every(5).Second().Do(func(){ ... }) // waits for schedule
+s.Every(5).Second().Do(func(){ ... }) // waits for schedule
+
 // strings parse to duration
 s.Every("5m").Do(func(){ ... })
 
