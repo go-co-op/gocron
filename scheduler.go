@@ -550,7 +550,10 @@ func (s *Scheduler) EveryRandom(lower, upper int) *Scheduler {
 // parses with time.ParseDuration().
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 //
-// The job is run immediately, unless StartAt or At is set.
+// The job is run immediately, unless:
+// * StartAt or At is set on the job,
+// * WaitForSchedule is set on the job,
+// * or WaitForScheduleAll is set on the scheduler.
 func (s *Scheduler) Every(interval interface{}) *Scheduler {
 	job := s.getCurrentJob()
 
