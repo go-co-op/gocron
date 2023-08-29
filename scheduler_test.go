@@ -1128,10 +1128,6 @@ func calculateNextRunHelper(
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
-	ft := fakeTime{onNow: func(l *time.Location) time.Time {
-		return time.Date(2020, 1, 1, 12, 0, 0, 0, l)
-	}}
-
 	day := time.Hour * 24
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
@@ -1158,15 +1154,15 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		{name: "every hour test", job: calculateNextRunHelper(1, hours, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getHours(1)},
 		{name: "every 25 hours test", job: calculateNextRunHelper(25, hours, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: _getHours(25)},
 		// DAYS
-		{name: "every day at midnight", job: calculateNextRunHelper(1, days, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 1 * day},
+		{name: "every day at midnight", job: calculateNextRunHelper(1, days, januaryFirst2020At(0, 0, 1), nil, nil, nil), wantTimeUntilNextRun: 1*day - time.Second},
 		{name: "every day at 09:30AM with scheduler starting before 09:30AM should run at same day at time", job: calculateNextRunHelper(1, days, januaryFirst2020At(0, 0, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
 		{name: "every day at 09:30AM which just ran should run tomorrow at 09:30AM", job: calculateNextRunHelper(1, days, januaryFirst2020At(9, 30, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: 1 * day},
 		{name: "every 31 days at midnight should run 31 days later", job: calculateNextRunHelper(31, days, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 31 * day},
 		{name: "daily job just ran at 8:30AM and should be scheduled for next day's 8:30AM", job: calculateNextRunHelper(1, days, januaryFirst2020At(8, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 24 * time.Hour},
 		{name: "daily job just ran at 5:30AM and should be scheduled for today at 8:30AM", job: calculateNextRunHelper(1, days, januaryFirst2020At(5, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 3 * time.Hour},
-		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for 2 days at 8:30AM", job: calculateNextRunHelper(2, days, januaryFirst2020At(5, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: (2 * day) + 3*time.Hour},
+		{name: "job runs every 2 days, just ran at 5:30AM and should be scheduled for same day 8:30AM", job: calculateNextRunHelper(2, days, januaryFirst2020At(5, 30, 0), []time.Duration{5*time.Hour + 30*time.Minute, 8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 3 * time.Hour},
 		{name: "job runs every 2 days, just ran at 8:30AM and should be scheduled for 2 days at 8:30AM", job: calculateNextRunHelper(2, days, januaryFirst2020At(8, 30, 0), []time.Duration{8*time.Hour + 30*time.Minute}, nil, nil), wantTimeUntilNextRun: 2 * day},
-		{name: "daily, last run was 1 second ago", job: calculateNextRunHelper(1, days, ft.Now(time.UTC).Add(-time.Second), []time.Duration{12 * time.Hour}, nil, nil), wantTimeUntilNextRun: time.Second},
+		{name: "daily, last run was 1 second ago", job: calculateNextRunHelper(1, days, januaryFirst2020At(11, 59, 59), []time.Duration{12 * time.Hour}, nil, nil), wantTimeUntilNextRun: time.Second},
 		//// WEEKS
 		{name: "every week should run in 7 days", job: calculateNextRunHelper(1, weeks, januaryFirst2020At(0, 0, 0), nil, nil, nil), wantTimeUntilNextRun: 7 * day},
 		{name: "every week with .At time rule should run respect .At time rule", job: calculateNextRunHelper(1, weeks, januaryFirst2020At(9, 31, 0), []time.Duration{_getHours(9) + _getMinutes(30)}, nil, nil), wantTimeUntilNextRun: 7*day - time.Minute},
@@ -1210,6 +1206,10 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ft := fakeTime{onNow: func(l *time.Location) time.Time {
+				return tc.job.lastRun
+			}}
+
 			s := NewScheduler(time.UTC)
 			s.time = ft
 			tc.job.runStartCount = atomic.NewInt64(0)
@@ -2471,8 +2471,11 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 		{description: "day test3", job: calculateNextRunHelper(1, days, getTime(5, 27, 10), atTimes, nil, nil), wantTimeUntilNextRun: _getMinutes(2) + _getSeconds(50)},
 		{description: "day test4", job: calculateNextRunHelper(1, days, getTime(5, 30, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
 		{description: "day test5", job: calculateNextRunHelper(1, days, getTime(15, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(12) + _getMinutes(20)},
-		{description: "week test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getDays(7) - _getHours(2) - _getMinutes(10)},
+		{description: "day test6", job: calculateNextRunHelper(2, days, getTime(15, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(36) + _getMinutes(20)},
+		{description: "day test7", job: calculateNextRunHelper(2, days, getTime(1, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(2) + _getMinutes(20)},
+		{description: "week test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
 		{description: "week test2", job: calculateNextRunHelper(1, weeks, getTime(15, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getDays(7) - _getHours(15) + _getHours(3) + _getMinutes(20)},
+		{description: "week test2", job: calculateNextRunHelper(2, weeks, getTime(1, 0, 0), atTimes, nil, nil), wantTimeUntilNextRun: _getHours(2) + _getMinutes(20)},
 		{description: "weekday before test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, []time.Weekday{time.Tuesday}, nil), wantTimeUntilNextRun: _getDays(6) - _getHours(2) - _getMinutes(10)},
 		{description: "weekday before test2", job: calculateNextRunHelper(1, weeks, getTime(15, 0, 0), atTimes, []time.Weekday{time.Tuesday}, nil), wantTimeUntilNextRun: _getDays(6) - _getHours(15) + _getHours(3) + _getMinutes(20)},
 		{description: "weekday equals test1", job: calculateNextRunHelper(1, weeks, getTime(5, 30, 0), atTimes, []time.Weekday{time.Wednesday}, nil), wantTimeUntilNextRun: _getHours(1) + _getMinutes(30)},
@@ -2487,7 +2490,13 @@ func TestScheduler_MultipleAtTime(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
+			ft := fakeTime{onNow: func(l *time.Location) time.Time {
+				return tc.job.LastRun()
+			}}
+
 			s := NewScheduler(time.UTC)
+			s.time = ft
+
 			got := s.durationToNextRun(tc.job.LastRun(), tc.job).duration
 			assert.Equalf(t, tc.wantTimeUntilNextRun, got, fmt.Sprintf("expected %s / got %s", tc.wantTimeUntilNextRun.String(), got.String()))
 		})

@@ -231,24 +231,21 @@ func (j *Job) getFirstAtTime() time.Duration {
 }
 
 func (j *Job) getAtTime(lastRun time.Time) time.Duration {
-	var r time.Duration
 	if len(j.atTimes) == 0 {
+		return 0
+	}
+
+	r := j.atTimes[0]
+
+	if len(j.atTimes) == 1 || lastRun.IsZero() {
 		return r
 	}
 
-	if len(j.atTimes) == 1 {
-		return j.atTimes[0]
-	}
-
-	if lastRun.IsZero() {
-		r = j.atTimes[0]
-	} else {
-		for _, d := range j.atTimes {
-			nt := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, lastRun.Location()).Add(d)
-			if nt.After(lastRun) {
-				r = d
-				break
-			}
+	for _, d := range j.atTimes {
+		nt := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), 0, 0, 0, 0, lastRun.Location()).Add(d)
+		if nt.After(lastRun) {
+			r = d
+			break
 		}
 	}
 

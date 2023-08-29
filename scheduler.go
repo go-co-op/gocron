@@ -418,24 +418,15 @@ func (s *Scheduler) calculateTotalDaysDifference(lastRun time.Time, daysToWeekda
 }
 
 func (s *Scheduler) calculateDays(job *Job, lastRun time.Time) nextRun {
-	if job.getInterval() == 1 {
-		lastRunDayPlusJobAtTime := s.roundToMidnightAndAddDSTAware(lastRun, job.getAtTime(lastRun))
-
-		if shouldRunToday(lastRun, lastRunDayPlusJobAtTime) {
-			return nextRun{duration: until(lastRun, lastRunDayPlusJobAtTime), dateTime: lastRunDayPlusJobAtTime}
-		}
+	nextRunAtTime := s.roundToMidnightAndAddDSTAware(lastRun, job.getAtTime(lastRun)).In(s.Location())
+	if s.now().After(nextRunAtTime) || s.now() == nextRunAtTime {
+		nextRunAtTime = nextRunAtTime.AddDate(0, 0, job.getInterval())
 	}
-
-	nextRunAtTime := s.roundToMidnightAndAddDSTAware(lastRun, job.getFirstAtTime()).AddDate(0, 0, job.getInterval()).In(s.Location())
 	return nextRun{duration: until(lastRun, nextRunAtTime), dateTime: nextRunAtTime}
 }
 
 func until(from time.Time, until time.Time) time.Duration {
 	return until.Sub(from)
-}
-
-func shouldRunToday(lastRun time.Time, atTime time.Time) bool {
-	return lastRun.Before(atTime)
 }
 
 func in(scheduleWeekdays []time.Weekday, weekday time.Weekday) bool {
@@ -1026,6 +1017,11 @@ func (s *Scheduler) DoWithJobDetails(jobFun interface{}, params ...interface{}) 
 
 // At schedules the Job at a specific time of day in the form "HH:MM:SS" or "HH:MM"
 // or time.Time (note that only the hours, minutes, seconds and nanos are used).
+// When the At time(s) occur on the same day on which the scheduler is started
+// the Job will be run at the first available At time.
+// For example: a schedule for every 2 days at 9am and 11am
+// - currently 7am -> Job runs at 9am and 11am on the day the scheduler was started
+// - currently 12 noon -> Job runs at 9am and 11am two days after the scheduler started
 func (s *Scheduler) At(i interface{}) *Scheduler {
 	job := s.getCurrentJob()
 
