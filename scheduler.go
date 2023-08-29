@@ -429,10 +429,6 @@ func until(from time.Time, until time.Time) time.Duration {
 	return until.Sub(from)
 }
 
-func shouldRunToday(lastRun time.Time, atTime time.Time) bool {
-	return lastRun.Before(atTime)
-}
-
 func in(scheduleWeekdays []time.Weekday, weekday time.Weekday) bool {
 	in := false
 

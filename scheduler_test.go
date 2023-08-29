@@ -1128,7 +1128,6 @@ func calculateNextRunHelper(
 }
 
 func TestScheduler_CalculateNextRun(t *testing.T) {
-
 	day := time.Hour * 24
 	januaryFirst2020At := func(hour, minute, second int) time.Time {
 		return time.Date(2020, time.January, 1, hour, minute, second, 0, time.UTC)
