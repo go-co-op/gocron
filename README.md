@@ -79,6 +79,13 @@ s.CronWithSeconds("*/1 * * * * *").Do(task) // every second
 s.StartAsync()
 // starts the scheduler and blocks current execution path
 s.StartBlocking()
+
+// stop the running scheduler in two different ways:
+// stop the scheduler
+s.Stop()
+
+// stop the scheduler and notify the `StartBlocking()` to exit
+s.StopBlockingChan()
 ```
 
 For more examples, take a look in our [go docs](https://pkg.go.dev/github.com/go-co-op/gocron#pkg-examples)
