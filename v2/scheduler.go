@@ -1,5 +1,7 @@
 package v2
 
+import "github.com/google/uuid"
+
 var _ Scheduler = (*scheduler)(nil)
 
 type Scheduler interface {
@@ -7,6 +9,7 @@ type Scheduler interface {
 }
 
 type scheduler struct {
+	jobs map[uuid.UUID]job
 }
 
 func (s scheduler) NewJob(j Job, err error) error {

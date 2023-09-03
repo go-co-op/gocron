@@ -1,13 +1,15 @@
 package v2
 
+import "time"
+
 func main() {
 	s := &scheduler{}
 	err := s.NewJob(
 		CronJob(
-			"* * * * *",
-			false,
+			"*/1 * * * * *",
+			true,
 			SingletonMode(),
-			LimitRunsTo(1),
+			WithTimezone(time.UTC),
 		),
 	)
 	if err != nil {
