@@ -170,8 +170,17 @@ func (e *executor) runJob(f jobFunction) {
 				if durationToNextRun > time.Second*5 {
 					durationToNextRun = time.Second * 5
 				}
+
+				delay := time.Duration(float64(durationToNextRun) * 0.9)
+				if e.limitModeMaxRunningJobs > 0 {
+					time.AfterFunc(delay, func() {
+						_ = l.Unlock(f.ctx)
+					})
+					return
+				}
+
 				if durationToNextRun > time.Millisecond*100 {
-					timer := time.NewTimer(time.Duration(float64(durationToNextRun) * 0.9))
+					timer := time.NewTimer(delay)
 					defer timer.Stop()
 
 					select {
