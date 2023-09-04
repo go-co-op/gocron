@@ -2702,6 +2702,44 @@ func runTestWithDistributedLocking(t *testing.T, maxConcurrentJobs int) {
 	assert.Len(t, results, 4)
 }
 
+func TestWithDistributedLockingBlocking(t *testing.T) {
+	var (
+		maxConcurrentJobs = 1
+		counter           = 10
+		resultChan        = make(chan time.Time, 20)
+	)
+
+	f := func() {
+		if counter == 0 {
+			close(resultChan)
+			return
+		}
+
+		resultChan <- time.Now()
+		counter--
+	}
+
+	l := &locker{
+		store: make(map[string]struct{}, 0),
+	}
+
+	s := NewScheduler(time.UTC)
+	s.WithDistributedLocker(l)
+	s.SetMaxConcurrentJobs(maxConcurrentJobs, WaitMode)
+
+	s.Every(1).Seconds().Do(func() {})
+	s.Every(150).Milliseconds().Do(f)
+	s.StartAsync()
+
+	last := time.Now()
+	for ts := range resultChan {
+		assert.True(t, ts.Sub(last) <= 200*time.Millisecond)
+		last = ts
+	}
+
+	s.Stop()
+}
+
 func TestScheduler_WithDistributedLocker_With_Name(t *testing.T) {
 	testCases := []struct {
 		description string
