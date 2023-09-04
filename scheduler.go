@@ -142,7 +142,13 @@ func (s *Scheduler) Jobs() []*Job {
 
 // JobsMap returns a map of job uuid to job
 func (s *Scheduler) JobsMap() map[uuid.UUID]*Job {
-	return s.jobsMap()
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
+	jobs := make(map[uuid.UUID]*Job, len(s.jobs))
+	for id, job := range s.jobs {
+		jobs[id] = job
+	}
+	return jobs
 }
 
 func (s *Scheduler) jobsMap() map[uuid.UUID]*Job {
