@@ -1500,7 +1500,7 @@ func (s *Scheduler) WithDistributedLocker(l Locker) {
 // the other instances are backup instances. only the leader scheduler instance can schedule the jobs.
 // Non-leader instance cannot schedule the jobs.
 //
-// Compared with the distributed lock, the election is the same as an leader/follower (master/backup) framework.
+// Compared with the distributed lock, the election is the same as leader/follower (master/backup) framework.
 // All jobs are only scheduled and execute on the leader scheduler instance. Only when the leader scheduler instance hangs up,
 // and one of the scheduler instances is successfully elected, the new leader scheduler instance can schedule the jobs.
 func (s *Scheduler) WithDistributedElection(el Election) {
