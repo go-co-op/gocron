@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -2850,4 +2851,69 @@ func TestDataRace(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 	sut.Stop()
+}
+
+var _ Elector = (*elector)(nil)
+
+type elector struct {
+	isLeader bool
+}
+
+func (e *elector) IsLeader(_ context.Context) error {
+	if e.isLeader {
+		return nil
+	}
+	return errors.New("is not leader")
+}
+
+func (e *elector) setLeader() {
+	e.isLeader = true
+}
+
+func TestScheduler_EnableDistributedElector(t *testing.T) {
+	runTestWithDistributedElector(t, 0)
+}
+
+func TestScheduler_EnableDistributedElectorWithMaxConcurrent(t *testing.T) {
+	runTestWithDistributedElector(t, 1)
+}
+
+func runTestWithDistributedElector(t *testing.T, maxConcurrentJobs int) {
+	resultChan := make(chan int, 20)
+	f := func(schedulerInstance int) {
+		resultChan <- schedulerInstance
+	}
+
+	leaderIndex := 0
+	schedulers := make([]*Scheduler, 0)
+	for i := 0; i < 3; i++ {
+		el := &elector{}
+		if i == leaderIndex {
+			el.setLeader()
+		}
+
+		s := NewScheduler(time.UTC)
+		s.WithDistributedElector(el)
+		if maxConcurrentJobs > 0 {
+			s.SetMaxConcurrentJobs(maxConcurrentJobs, WaitMode)
+		}
+		_, err := s.Every("50ms").Do(f, i)
+		require.NoError(t, err)
+		schedulers = append(schedulers, s)
+	}
+	for i := range schedulers {
+		schedulers[i].StartAsync()
+	}
+	time.Sleep(530 * time.Millisecond)
+	for i := range schedulers {
+		schedulers[i].Stop()
+	}
+	close(resultChan)
+
+	// 10 <- len <- 12
+	assert.Greater(t, len(resultChan), 10)
+	assert.Less(t, len(resultChan), 12)
+	for r := range resultChan {
+		assert.Equal(t, leaderIndex, r)
+	}
 }
