@@ -166,6 +166,8 @@ func (e *executor) runJob(f jobFunction) {
 			if err != nil {
 				return
 			}
+			runJob(f)
+			return
 		}
 		if e.distributedLocker != nil {
 			l, err := e.distributedLocker.Lock(f.ctx, lockKey)
@@ -197,6 +199,8 @@ func (e *executor) runJob(f jobFunction) {
 				}
 				_ = l.Unlock(f.ctx)
 			}()
+			runJob(f)
+			return
 		}
 		runJob(f)
 	case singletonMode:
