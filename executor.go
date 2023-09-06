@@ -54,8 +54,8 @@ type executor struct {
 	limitModeRunningJobs    *atomic.Int64    // tracks the count of running jobs to check against the max
 	stopped                 *atomic.Bool     // allow workers to drain the buffered limitModeQueue
 
-	distributedLocker   Locker   // support running jobs across multiple instances
-	distributedElection Election // support running jobs across multiple instances
+	distributedLocker  Locker  // support running jobs across multiple instances
+	distributedElector Elector // support running jobs across multiple instances
 }
 
 func newExecutor() executor {
@@ -161,8 +161,8 @@ func (e *executor) runJob(f jobFunction) {
 		if lockKey == "" {
 			lockKey = f.funcName
 		}
-		if e.distributedElection != nil {
-			err := e.distributedElection.IsLeader(e.ctx)
+		if e.distributedElector != nil {
+			err := e.distributedElector.IsLeader(e.ctx)
 			if err != nil {
 				return
 			}

@@ -1495,14 +1495,14 @@ func (s *Scheduler) WithDistributedLocker(l Locker) {
 
 // WithDistributedElector prevents the same job from being run more than once
 // when multiple schedulers are trying to schedule the same job, by allowing only
-// the leader to run jobs. Non-leaders wait until the leader instance goes down 
+// the leader to run jobs. Non-leaders wait until the leader instance goes down
 // and then a new leader is elected.
 //
 // Compared with the distributed lock, the election is the same as leader/follower framework.
 // All jobs are only scheduled and execute on the leader scheduler instance. Only when the leader scheduler goes down
 // and one of the scheduler instances is successfully elected, then the new leader scheduler instance can schedule jobs.
 func (s *Scheduler) WithDistributedElector(e Elector) {
-	s.executor.distributedElection = el
+	s.executor.distributedElector = e
 }
 
 // RegisterEventListeners accepts EventListeners and registers them for all jobs

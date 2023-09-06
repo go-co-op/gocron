@@ -2853,32 +2853,32 @@ func TestDataRace(t *testing.T) {
 	sut.Stop()
 }
 
-var _ Election = (*election)(nil)
+var _ Elector = (*elector)(nil)
 
-type election struct {
+type elector struct {
 	isLeader bool
 }
 
-func (e *election) IsLeader(_ context.Context) error {
+func (e *elector) IsLeader(_ context.Context) error {
 	if e.isLeader {
 		return nil
 	}
 	return errors.New("is not leader")
 }
 
-func (e *election) setLeader() {
+func (e *elector) setLeader() {
 	e.isLeader = true
 }
 
-func TestScheduler_EnableDistributedElection(t *testing.T) {
-	runTestWithDistributedElection(t, 0)
+func TestScheduler_EnableDistributedElector(t *testing.T) {
+	runTestWithDistributedElector(t, 0)
 }
 
-func TestScheduler_EnableDistributedElectionWithMaxConcurrent(t *testing.T) {
-	runTestWithDistributedElection(t, 1)
+func TestScheduler_EnableDistributedElectorWithMaxConcurrent(t *testing.T) {
+	runTestWithDistributedElector(t, 1)
 }
 
-func runTestWithDistributedElection(t *testing.T, maxConcurrentJobs int) {
+func runTestWithDistributedElector(t *testing.T, maxConcurrentJobs int) {
 	resultChan := make(chan int, 20)
 	f := func(schedulerInstance int) {
 		resultChan <- schedulerInstance
@@ -2887,13 +2887,13 @@ func runTestWithDistributedElection(t *testing.T, maxConcurrentJobs int) {
 	leaderIndex := 0
 	schedulers := make([]*Scheduler, 0)
 	for i := 0; i < 3; i++ {
-		el := &election{}
+		el := &elector{}
 		if i == leaderIndex {
 			el.setLeader()
 		}
 
 		s := NewScheduler(time.UTC)
-		s.WithDistributedElection(el)
+		s.WithDistributedElector(el)
 		if maxConcurrentJobs > 0 {
 			s.SetMaxConcurrentJobs(maxConcurrentJobs, WaitMode)
 		}
