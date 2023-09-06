@@ -1471,9 +1471,6 @@ func (s *Scheduler) StopBlockingChan() {
 // WithDistributedLocker prevents the same job from being run more than once
 // when multiple schedulers are trying to schedule the same job.
 //
-// NOTE - This is currently in BETA. Please provide any feedback on your usage
-// and open bugs with any issues.
-//
 // One strategy to reduce splay in the job execution times when using
 // intervals (e.g. 1s, 1m, 1h), on each scheduler instance, is to use
 // StartAt with time.Now().Round(interval) to start the job at the
