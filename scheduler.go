@@ -1493,17 +1493,15 @@ func (s *Scheduler) WithDistributedLocker(l Locker) {
 	s.executor.distributedLocker = l
 }
 
-// WithDistributedElection prevents the same job from being run more than once
-// when multiple schedulers are trying to schedule the same job.
+// WithDistributedElector prevents the same job from being run more than once
+// when multiple schedulers are trying to schedule the same job, by allowing only
+// the leader to run jobs. Non-leaders wait until the leader instance goes down 
+// and then a new leader is elected.
 //
-// Use the election component to elect the leader, In many instances, only there is only one leader instance,
-// the other instances are backup instances. only the leader scheduler instance can schedule the jobs.
-// Non-leader instance cannot schedule the jobs.
-//
-// Compared with the distributed lock, the election is the same as leader/follower (master/backup) framework.
-// All jobs are only scheduled and execute on the leader scheduler instance. Only when the leader scheduler instance hangs up,
-// and one of the scheduler instances is successfully elected, the new leader scheduler instance can schedule the jobs.
-func (s *Scheduler) WithDistributedElection(el Election) {
+// Compared with the distributed lock, the election is the same as leader/follower framework.
+// All jobs are only scheduled and execute on the leader scheduler instance. Only when the leader scheduler goes down
+// and one of the scheduler instances is successfully elected, then the new leader scheduler instance can schedule jobs.
+func (s *Scheduler) WithDistributedElector(e Elector) {
 	s.executor.distributedElection = el
 }
 

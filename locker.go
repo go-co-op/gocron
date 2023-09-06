@@ -22,10 +22,9 @@ type Lock interface {
 	Unlock(ctx context.Context) error
 }
 
-// Election the leader instance can run the jobs only.
-type Election interface {
-	// IsLeader if an error is returned by IsLeader, the job will not be scheduled.
-	// IsLeader is a non-blocking implementation. it will start a thread internally to elect
-	// and update the status to a variable atomically. IsLeader() returns the election status only.
+// Elector determines the leader from instances asking to be the leader. Only
+// the leader runs jobs. If the leader goes down, a new leader will be elected.
+type Elector interface {
+	// IsLeader should return an error if the job should not be scheduled and nil if the job should be scheduled.
 	IsLeader(ctx context.Context) error
 }
