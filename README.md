@@ -111,6 +111,7 @@ There are several options available to restrict how jobs run:
 | Job singleton       | `SingletonMode()`         | a long running job will not be rescheduled until the current run is completed                        |
 | Scheduler limit     | `SetMaxConcurrentJobs()`  | set a collective maximum number of concurrent jobs running across the scheduler                      |
 | Distributed locking | `WithDistributedLocker()` | prevents the same job from being run more than once when running multiple instances of the scheduler |
+| Distributed elector | `WithDistributedElector()` | multiple instances exist in a distributed scenario, only the leader instance can run jobs  |
 
 ## Distributed Locker Implementations
 
