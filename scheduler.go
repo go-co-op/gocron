@@ -736,10 +736,19 @@ func (s *Scheduler) removeByCondition(shouldRemove func(*Job) bool) {
 		if !shouldRemove(job) {
 			retainedJobs[job.id] = job
 		} else {
-			job.stop()
+			s.stopJob(job)
 		}
 	}
 	s.setJobs(retainedJobs)
+}
+
+func (s *Scheduler) stopJob(job *Job) {
+	job.mu.Lock()
+	if job.runConfig.mode == singletonMode {
+		s.executor.singletonWgs.Delete(job.singletonWg)
+	}
+	job.mu.Unlock()
+	job.stop()
 }
 
 // RemoveByTag will remove jobs that match the given tag.
@@ -784,6 +793,7 @@ func (s *Scheduler) RemoveByTagsAny(tags ...string) error {
 // RemoveByID removes the job from the scheduler looking up by id
 func (s *Scheduler) RemoveByID(job *Job) error {
 	if _, ok := s.jobsMap()[job.id]; ok {
+		s.stopJob(job)
 		delete(s.jobsMap(), job.id)
 		return nil
 	}
