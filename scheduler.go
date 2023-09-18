@@ -108,6 +108,9 @@ func (s *Scheduler) start() {
 }
 
 func (s *Scheduler) runJobs(jobs map[uuid.UUID]*Job) {
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
+
 	for _, job := range jobs {
 		ctx, cancel := context.WithCancel(context.Background())
 		job.mu.Lock()
