@@ -95,15 +95,15 @@ func (s *Scheduler) StartBlocking() {
 
 // StartAsync starts all jobs without blocking the current thread
 func (s *Scheduler) StartAsync() {
-	if s.running.CAS(false, true) {
+	if !s.IsRunning() {
 		s.start()
 	}
 }
 
 // start starts the scheduler, scheduling and running jobs
 func (s *Scheduler) start() {
-	s.setRunning(true)
 	s.executor.start()
+	s.setRunning(true)
 	s.runJobs(s.jobsMap())
 }
 
