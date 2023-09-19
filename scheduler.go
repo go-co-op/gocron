@@ -1108,12 +1108,12 @@ func (s *Scheduler) setUnit(unit schedulingUnit) {
 	job.setUnit(unit)
 }
 
-// Millisecond sets the unit with seconds
+// Millisecond sets the unit with milliseconds
 func (s *Scheduler) Millisecond() *Scheduler {
 	return s.Milliseconds()
 }
 
-// Milliseconds sets the unit with seconds
+// Milliseconds sets the unit with milliseconds
 func (s *Scheduler) Milliseconds() *Scheduler {
 	s.setUnit(milliseconds)
 	return s
