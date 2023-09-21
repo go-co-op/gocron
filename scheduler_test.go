@@ -1605,12 +1605,19 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 		f                 func()
 	}{
 		// Expecting a total of 4 job runs:
-		// 0ms - 2 jobs are run, the 3rd job hits the limit and is skipped
-		// 100ms - job 1 hits the limit and is skipped
-		// 200ms - job 1 & 2 run
-		// 300ms - jobs 1 & 3 hit the limit and are skipped
+		// 0ms - 2 jobs are run, 1 is skipped
+		// 100ms - 3 jobs hit the limit and are skipped
+		// 200ms - 2 jobs are run, 1 is skipped
+		// 300ms - 3 jobs hit the limit and are skipped
 		{
 			"reschedule mode", 2, RescheduleMode, 4, false,
+			func() {
+				semaphore <- true
+				time.Sleep(200 * time.Millisecond)
+			},
+		},
+		{
+			"reschedule mode with job removal", 2, RescheduleMode, 4, true,
 			func() {
 				semaphore <- true
 				time.Sleep(200 * time.Millisecond)
@@ -1648,10 +1655,10 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			j1, err := s.Every("100ms").Do(tc.f)
 			require.NoError(t, err)
 
-			j2, err := s.Every("200ms").Do(tc.f)
+			j2, err := s.Every("100ms").Do(tc.f)
 			require.NoError(t, err)
 
-			j3, err := s.Every("300ms").Do(tc.f)
+			j3, err := s.Every("100ms").Do(tc.f)
 			require.NoError(t, err)
 
 			s.StartAsync()
@@ -1682,13 +1689,13 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			for time.Now().Before(now.Add(200 * time.Millisecond)) {
 				select {
 				case <-semaphore:
-					counter++
+					t.Error("received a job run after jobs were removed or scheduler stopeed")
 				default:
 				}
 			}
 
-			assert.GreaterOrEqual(t, counter, tc.expectedRuns-2)
-			assert.LessOrEqual(t, counter, tc.expectedRuns+2)
+			assert.GreaterOrEqual(t, counter, tc.expectedRuns)
+			assert.LessOrEqual(t, counter, tc.expectedRuns)
 
 			if tc.removeJobs {
 				s.Stop()

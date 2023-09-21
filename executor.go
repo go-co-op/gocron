@@ -128,7 +128,11 @@ func (e *executor) limitModeRunner() {
 			return
 		case jf := <-e.limitModeQueue:
 			if !e.stopped.Load() {
-				e.runJob(jf)
+				select {
+				case <-jf.ctx.Done():
+				default:
+					e.runJob(jf)
+				}
 			}
 		}
 	}
