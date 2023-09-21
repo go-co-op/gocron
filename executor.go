@@ -154,6 +154,11 @@ func (e *executor) start() {
 }
 
 func (e *executor) runJob(f jobFunction) {
+	defer func() {
+		if e.limitMode == RescheduleMode && e.limitModeMaxRunningJobs > 0 {
+			e.limitModeRunningJobs.Add(-1)
+		}
+	}()
 	switch f.runConfig.mode {
 	case defaultMode:
 		lockKey := f.jobName
@@ -244,6 +249,7 @@ func (e *executor) run() {
 						if e.limitModeRunningJobs.Load() < int64(e.limitModeMaxRunningJobs) {
 							select {
 							case e.limitModeQueue <- f:
+								e.limitModeRunningJobs.Inc()
 							case <-e.ctx.Done():
 							}
 						}
