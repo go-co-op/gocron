@@ -520,16 +520,9 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 
 	var jobID uuid.UUID
 	var nearestRun time.Time
-	flag := false
 	for _, job := range s.jobsMap() {
 		nr := job.NextRun()
-		if !flag && s.now().Before(nr) {
-			nearestRun = nr
-			jobID = job.id
-			flag = true
-			continue
-		}
-		if nr.Before(nearestRun) && s.now().Before(nr) {
+		if (nr.Before(nearestRun) || nearestRun.IsZero()) && s.now().Before(nr) {
 			nearestRun = nr
 			jobID = job.id
 		}
