@@ -522,7 +522,7 @@ func (s *Scheduler) NextRun() (*Job, time.Time) {
 	var nearestRun time.Time
 	for _, job := range s.jobsMap() {
 		nr := job.NextRun()
-		if nr.Before(nearestRun) && s.now().Before(nr) {
+		if (nr.Before(nearestRun) || nearestRun.IsZero()) && s.now().Before(nr) {
 			nearestRun = nr
 			jobID = job.id
 		}
