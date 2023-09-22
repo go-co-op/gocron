@@ -7,7 +7,10 @@ import (
 )
 
 func TestScheduler_Start(t *testing.T) {
-	s := NewScheduler()
+	s, err := NewScheduler()
+	if err != nil {
+		t.Fatal(err)
+	}
 	id, err := s.NewJob(
 		NewCronJob(
 			"* * * * * *",
@@ -18,7 +21,7 @@ func TestScheduler_Start(t *testing.T) {
 		),
 	)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	s.Start()
 	time.Sleep(2 * time.Second)

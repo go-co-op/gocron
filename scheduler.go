@@ -18,6 +18,30 @@ type Scheduler interface {
 	Start()
 }
 
+// -----------------------------------------------
+// -----------------------------------------------
+// ------------- Scheduler Options ---------------
+// -----------------------------------------------
+// -----------------------------------------------
+
+type SchedulerOption func(*scheduler) error
+
+func WithLocation(location *time.Location) SchedulerOption {
+	return func(s *scheduler) error {
+		if location == nil {
+			return fmt.Errorf("gocron: WithLocation: location was nil")
+		}
+		s.location = location
+		return nil
+	}
+}
+
+// -----------------------------------------------
+// -----------------------------------------------
+// ----------------- Scheduler -------------------
+// -----------------------------------------------
+// -----------------------------------------------
+
 type scheduler struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -25,10 +49,11 @@ type scheduler struct {
 	jobs          map[uuid.UUID]job
 	newJobs       chan job
 	jobOutRequest chan jobOutRequest
-	timezone      *time.Location
-	clock         clockwork.Clock
-	started       bool
-	start         chan struct{}
+	location      *time.Location
+	//todo - clock should be mockable, allow user to pass a fake clock
+	clock   clockwork.Clock
+	started bool
+	start   chan struct{}
 }
 
 type jobOutRequest struct {
@@ -36,7 +61,7 @@ type jobOutRequest struct {
 	outChan chan job
 }
 
-func NewScheduler() Scheduler {
+func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	jobOutRequestChan := make(chan jobOutRequest)
@@ -56,8 +81,15 @@ func NewScheduler() Scheduler {
 		newJobs:       make(chan job),
 		start:         make(chan struct{}),
 		jobOutRequest: jobOutRequestChan,
-		timezone:      time.UTC,
+		location:      time.Local,
 		clock:         clockwork.NewRealClock(),
+	}
+
+	for _, option := range options {
+		err := option(s)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	go func() {
@@ -110,7 +142,7 @@ func NewScheduler() Scheduler {
 		}
 	}()
 
-	return s
+	return s, nil
 }
 
 func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
@@ -138,7 +170,7 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 		}
 	}
 
-	j, err := definition.setup(j, s.timezone)
+	j, err := definition.setup(j, s.location)
 	if err != nil {
 		return uuid.Nil, err
 	}

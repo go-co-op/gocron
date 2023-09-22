@@ -40,8 +40,8 @@ type Task struct {
 // -----------------------------------------------
 
 type JobDefinition interface {
-	options() []Option
-	setup(j job, timezone *time.Location) (job, error)
+	options() []JobOption
+	setup(job, *time.Location) (job, error)
 	task() Task
 }
 
@@ -50,11 +50,11 @@ var _ JobDefinition = (*cronJobDefinition)(nil)
 type cronJobDefinition struct {
 	crontab     string
 	withSeconds bool
-	opts        []Option
+	opts        []JobOption
 	tas         Task
 }
 
-func (c cronJobDefinition) options() []Option {
+func (c cronJobDefinition) options() []JobOption {
 	return c.opts
 }
 
@@ -62,12 +62,12 @@ func (c cronJobDefinition) task() Task {
 	return c.tas
 }
 
-func (c cronJobDefinition) setup(j job, timezone *time.Location) (job, error) {
+func (c cronJobDefinition) setup(j job, location *time.Location) (job, error) {
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
-	} else if timezone != nil {
-		withLocation = fmt.Sprintf("CRON_TZ=%s %s", timezone.String(), c.crontab)
+	} else if location != nil {
+		withLocation = fmt.Sprintf("CRON_TZ=%s %s", location.String(), c.crontab)
 	} else {
 		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local.String(), c.crontab)
 	}
@@ -91,7 +91,7 @@ func (c cronJobDefinition) setup(j job, timezone *time.Location) (job, error) {
 	return j, nil
 }
 
-func NewCronJob(crontab string, withSeconds bool, task Task, options ...Option) JobDefinition {
+func NewCronJob(crontab string, withSeconds bool, task Task, options ...JobOption) JobDefinition {
 	return cronJobDefinition{
 		crontab:     crontab,
 		withSeconds: withSeconds,
@@ -100,35 +100,35 @@ func NewCronJob(crontab string, withSeconds bool, task Task, options ...Option) 
 	}
 }
 
-func DurationJob(duration string, options ...Option) JobDefinition {
+func DurationJob(duration string, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func DurationRandomJob(minDuration, maxDuration string, options ...Option) JobDefinition {
+func DurationRandomJob(minDuration, maxDuration string, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func DailyJob(interval int, at time.Duration, options ...Option) JobDefinition {
+func DailyJob(interval int, at time.Duration, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func HourlyJob(interval int, options ...Option) JobDefinition {
+func HourlyJob(interval int, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func MinuteJob(interval int, options ...Option) JobDefinition {
+func MinuteJob(interval int, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func MillisecondJob(interval int, options ...Option) JobDefinition {
+func MillisecondJob(interval int, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func SecondJob(interval int, options ...Option) JobDefinition {
+func SecondJob(interval int, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, options ...Option) JobDefinition {
+func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, options ...JobOption) JobDefinition {
 	return nil
 }
 
@@ -138,39 +138,39 @@ func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, options ...Option) Jo
 // -----------------------------------------------
 // -----------------------------------------------
 
-type Option func(*job) error
+type JobOption func(*job) error
 
-func LimitRunsTo(runLimit int) Option {
+func LimitRunsTo(runLimit int) JobOption {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func SingletonMode() Option {
+func SingletonMode() JobOption {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func WithContext(ctx context.Context) Option {
+func WithContext(ctx context.Context) JobOption {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func WithDistributedLockerKey(key string) Option {
+func WithDistributedLockerKey(key string) JobOption {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func WithEventListeners(eventListeners ...EventListener) Option {
+func WithEventListeners(eventListeners ...EventListener) JobOption {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func WithTags(tags ...string) Option {
+func WithTags(tags ...string) JobOption {
 	return func(j *job) error {
 		return nil
 	}
