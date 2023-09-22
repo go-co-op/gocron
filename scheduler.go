@@ -16,6 +16,7 @@ type Scheduler interface {
 	GetJobLastRun(id uuid.UUID) (time.Time, error)
 	NewJob(JobDefinition) (uuid.UUID, error)
 	Start()
+	Stop()
 }
 
 // -----------------------------------------------
@@ -63,11 +64,14 @@ type jobOutRequest struct {
 
 func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	execCtx, execCancel := context.WithCancel(context.Background())
 
 	jobOutRequestChan := make(chan jobOutRequest)
 
 	exec := executor{
-		ctx:           ctx,
+		ctx:           execCtx,
+		cancel:        execCancel,
+		schCtx:        ctx,
 		jobsIDsIn:     make(chan uuid.UUID),
 		jobIDsOut:     make(chan uuid.UUID),
 		jobOutRequest: jobOutRequestChan,
@@ -181,8 +185,12 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 
 func (s *scheduler) Start() {
 	go s.exec.start()
-
 	s.start <- struct{}{}
+}
+
+func (s *scheduler) Stop() {
+	s.cancel()
+	<-s.exec.ctx.Done()
 }
 
 func (s *scheduler) GetJobLastRun(id uuid.UUID) (time.Time, error) {

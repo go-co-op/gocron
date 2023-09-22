@@ -12,7 +12,7 @@ func TestScheduler_Start(t *testing.T) {
 		t.Fatal(err)
 	}
 	id, err := s.NewJob(
-		NewCronJob(
+		CronJob(
 			"* * * * * *",
 			true,
 			Task{
@@ -27,4 +27,5 @@ func TestScheduler_Start(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	lastRun, err := s.GetJobLastRun(id)
 	log.Println(lastRun)
+	s.Stop()
 }

@@ -91,7 +91,7 @@ func (c cronJobDefinition) setup(j job, location *time.Location) (job, error) {
 	return j, nil
 }
 
-func NewCronJob(crontab string, withSeconds bool, task Task, options ...JobOption) JobDefinition {
+func CronJob(crontab string, withSeconds bool, task Task, options ...JobOption) JobDefinition {
 	return cronJobDefinition{
 		crontab:     crontab,
 		withSeconds: withSeconds,
@@ -100,35 +100,65 @@ func NewCronJob(crontab string, withSeconds bool, task Task, options ...JobOptio
 	}
 }
 
-func DurationJob(duration string, options ...JobOption) JobDefinition {
+var _ JobDefinition = (*durationJobDefinition)(nil)
+
+type durationJobDefinition struct {
+	duration string
+	opts     []JobOption
+	tas      Task
+}
+
+func (d durationJobDefinition) options() []JobOption {
+	return d.opts
+}
+
+func (d durationJobDefinition) setup(j job, location *time.Location) (job, error) {
+	dur, err := time.ParseDuration(d.duration)
+	if err != nil {
+		return j, fmt.Errorf("gocron: failed to parse duration: %w", err)
+	}
+
+	j.jobSchedule = &durationJob{duration: dur}
+	return j, nil
+}
+
+func (d durationJobDefinition) task() Task {
+	return d.tas
+}
+
+func DurationJob(duration string, task Task, options ...JobOption) JobDefinition {
+	return durationJobDefinition{
+		duration: duration,
+		opts:     options,
+		tas:      task,
+	}
+}
+
+func DurationRandomJob(minDuration, maxDuration string, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func DurationRandomJob(minDuration, maxDuration string, options ...JobOption) JobDefinition {
+func DailyJob(interval int, at time.Duration, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func DailyJob(interval int, at time.Duration, options ...JobOption) JobDefinition {
+func HourlyJob(interval int, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func HourlyJob(interval int, options ...JobOption) JobDefinition {
+func MinuteJob(interval int, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func MinuteJob(interval int, options ...JobOption) JobDefinition {
+func MillisecondJob(interval int, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func MillisecondJob(interval int, options ...JobOption) JobDefinition {
+func SecondJob(interval int, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func SecondJob(interval int, options ...JobOption) JobDefinition {
-	return nil
-}
-
-func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, options ...JobOption) JobDefinition {
+func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 

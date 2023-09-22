@@ -3,30 +3,40 @@ package gocron
 import (
 	"context"
 	"log"
+	"sync"
 
 	"github.com/google/uuid"
 )
 
 type executor struct {
 	ctx           context.Context
+	cancel        context.CancelFunc
+	schCtx        context.Context
 	jobsIDsIn     chan uuid.UUID
 	jobIDsOut     chan uuid.UUID
 	jobOutRequest chan jobOutRequest
 }
 
 func (e *executor) start() {
-	select {
-	case id := <-e.jobsIDsIn:
-		go func() {
-			j := requestJob(id, e.jobOutRequest)
-			err := callJobFuncWithParams(j.function, j.parameters)
-			if err != nil {
-				log.Printf("error calling job function: %s\n", err)
-			}
-			e.jobIDsOut <- j.id
-		}()
+	wg := sync.WaitGroup{}
+	for {
+		select {
+		case id := <-e.jobsIDsIn:
+			wg.Add(1)
+			go func() {
+				j := requestJob(id, e.jobOutRequest)
+				err := callJobFuncWithParams(j.function, j.parameters)
+				if err != nil {
+					log.Printf("error calling job function: %s\n", err)
+				}
+				e.jobIDsOut <- j.id
+				wg.Done()
+			}()
 
-	case <-e.ctx.Done():
-		return
+		case <-e.schCtx.Done():
+			wg.Wait()
+			e.cancel()
+			return
+		}
 	}
 }

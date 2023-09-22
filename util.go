@@ -6,6 +6,10 @@ import (
 	"github.com/google/uuid"
 )
 
+func strPtr(in string) *string {
+	return &in
+}
+
 //func callJobFunc(jobFunc interface{}) {
 //	if jobFunc == nil {
 //		return
