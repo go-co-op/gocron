@@ -27,6 +27,16 @@ type Scheduler interface {
 
 type SchedulerOption func(*scheduler) error
 
+func WithFakeClock(clock clockwork.Clock) SchedulerOption {
+	return func(s *scheduler) error {
+		if clock == nil {
+			return fmt.Errorf("gocron: WithFakeClock: clock must not be nil")
+		}
+		s.clock = clock
+		return nil
+	}
+}
+
 func WithLocation(location *time.Location) SchedulerOption {
 	return func(s *scheduler) error {
 		if location == nil {
@@ -111,16 +121,23 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		for {
 			select {
 			case id := <-s.exec.jobIDsOut:
-				lastRun := s.clock.Now()
 				j := s.jobs[id]
-				j.lastRun = lastRun
+
+				j.lastRun = j.nextRun
+				next := j.next(j.lastRun)
+				j.nextRun = next
+				j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
+					s.exec.jobsIDsIn <- id
+				})
 				s.jobs[id] = j
+
 			case j := <-s.newJobs:
 				if _, ok := s.jobs[j.id]; !ok {
 					if s.started {
-						next := j.next(time.Now())
+						next := j.next(s.now())
+						j.nextRun = next
 						id := j.id
-						j.timer = s.clock.AfterFunc(time.Until(next), func() {
+						j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 							s.exec.jobsIDsIn <- id
 						})
 					}
@@ -143,16 +160,18 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 			case <-s.start:
 				s.started = true
 				for id, j := range s.jobs {
-					next := j.next(time.Now())
+					next := j.next(s.now())
+					j.nextRun = next
 
 					jobId := id
-					j.timer = s.clock.AfterFunc(time.Until(next), func() {
+					j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 						s.exec.jobsIDsIn <- jobId
 					})
 					s.jobs[id] = j
 				}
 			case <-s.ctx.Done():
 				for _, j := range s.jobs {
+					j.timer.Stop()
 					j.cancel()
 				}
 				return
@@ -161,6 +180,10 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	}()
 
 	return s, nil
+}
+
+func (s *scheduler) now() time.Time {
+	return s.clock.Now().In(s.location)
 }
 
 func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
