@@ -37,6 +37,16 @@ func WithLocation(location *time.Location) SchedulerOption {
 	}
 }
 
+func WithShutdownTimeout(timeout time.Duration) SchedulerOption {
+	return func(s *scheduler) error {
+		if timeout == 0 {
+			return fmt.Errorf("gocron: shutdown timeout cannot be zero")
+		}
+		s.exec.shutdownTimeout = timeout
+		return nil
+	}
+}
+
 // -----------------------------------------------
 // -----------------------------------------------
 // ----------------- Scheduler -------------------
@@ -69,12 +79,13 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	jobOutRequestChan := make(chan jobOutRequest)
 
 	exec := executor{
-		ctx:           execCtx,
-		cancel:        execCancel,
-		schCtx:        ctx,
-		jobsIDsIn:     make(chan uuid.UUID),
-		jobIDsOut:     make(chan uuid.UUID),
-		jobOutRequest: jobOutRequestChan,
+		ctx:             execCtx,
+		cancel:          execCancel,
+		schCtx:          ctx,
+		jobsIDsIn:       make(chan uuid.UUID),
+		jobIDsOut:       make(chan uuid.UUID),
+		jobOutRequest:   jobOutRequestChan,
+		shutdownTimeout: time.Second * 10,
 	}
 
 	s := &scheduler{
@@ -141,6 +152,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 					s.jobs[id] = j
 				}
 			case <-s.ctx.Done():
+				for _, j := range s.jobs {
+					j.cancel()
+				}
 				return
 			}
 		}
@@ -153,6 +167,7 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 	j := job{
 		id: uuid.New(),
 	}
+	j.ctx, j.cancel = context.WithCancel(context.Background())
 
 	task := definition.task()
 	taskFunc := reflect.ValueOf(task.Function)
@@ -174,7 +189,7 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 		}
 	}
 
-	j, err := definition.setup(j, s.location)
+	err := definition.setup(&j, s.location)
 	if err != nil {
 		return uuid.Nil, err
 	}

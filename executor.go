@@ -4,17 +4,19 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type executor struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	schCtx        context.Context
-	jobsIDsIn     chan uuid.UUID
-	jobIDsOut     chan uuid.UUID
-	jobOutRequest chan jobOutRequest
+	ctx             context.Context
+	cancel          context.CancelFunc
+	schCtx          context.Context
+	jobsIDsIn       chan uuid.UUID
+	jobIDsOut       chan uuid.UUID
+	jobOutRequest   chan jobOutRequest
+	shutdownTimeout time.Duration
 }
 
 func (e *executor) start() {
@@ -34,7 +36,7 @@ func (e *executor) start() {
 			}()
 
 		case <-e.schCtx.Done():
-			wg.Wait()
+			waitTimeout(&wg, e.shutdownTimeout)
 			e.cancel()
 			return
 		}

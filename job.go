@@ -12,11 +12,6 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-var _ Job = (*job)(nil)
-
-type Job interface {
-}
-
 type job struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -41,7 +36,7 @@ type Task struct {
 
 type JobDefinition interface {
 	options() []JobOption
-	setup(job, *time.Location) (job, error)
+	setup(*job, *time.Location) error
 	task() Task
 }
 
@@ -62,7 +57,7 @@ func (c cronJobDefinition) task() Task {
 	return c.tas
 }
 
-func (c cronJobDefinition) setup(j job, location *time.Location) (job, error) {
+func (c cronJobDefinition) setup(j *job, location *time.Location) error {
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
@@ -84,11 +79,11 @@ func (c cronJobDefinition) setup(j job, location *time.Location) (job, error) {
 		cronSchedule, err = cron.ParseStandard(withLocation)
 	}
 	if err != nil {
-		return j, fmt.Errorf("gocron: crontab pare failure: %w", err)
+		return fmt.Errorf("gocron: crontab pare failure: %w", err)
 	}
 
 	j.jobSchedule = &cronJob{cronSchedule: cronSchedule}
-	return j, nil
+	return nil
 }
 
 func CronJob(crontab string, withSeconds bool, task Task, options ...JobOption) JobDefinition {
@@ -112,14 +107,14 @@ func (d durationJobDefinition) options() []JobOption {
 	return d.opts
 }
 
-func (d durationJobDefinition) setup(j job, location *time.Location) (job, error) {
+func (d durationJobDefinition) setup(j *job, location *time.Location) error {
 	dur, err := time.ParseDuration(d.duration)
 	if err != nil {
-		return j, fmt.Errorf("gocron: failed to parse duration: %w", err)
+		return fmt.Errorf("gocron: failed to parse duration: %w", err)
 	}
 
 	j.jobSchedule = &durationJob{duration: dur}
-	return j, nil
+	return nil
 }
 
 func (d durationJobDefinition) task() Task {
@@ -182,8 +177,13 @@ func SingletonMode() JobOption {
 	}
 }
 
-func WithContext(ctx context.Context) JobOption {
+func WithContext(ctx context.Context, cancel context.CancelFunc) JobOption {
 	return func(j *job) error {
+		if ctx == nil || cancel == nil {
+			return fmt.Errorf("gocron: context and cancel cannot be nil")
+		}
+		j.ctx = ctx
+		j.cancel = cancel
 		return nil
 	}
 }
@@ -212,28 +212,28 @@ func WithTags(tags ...string) JobOption {
 // -----------------------------------------------
 // -----------------------------------------------
 
-type EventListener func(Job) error
+type EventListener func(*job) error
 
 func AfterJobRuns(eventListenerFunc func()) EventListener {
-	return func(j Job) error {
+	return func(j *job) error {
 		return nil
 	}
 }
 
 func BeforeJobRuns(eventListenerFunc func()) EventListener {
-	return func(j Job) error {
+	return func(j *job) error {
 		return nil
 	}
 }
 
 func WhenJobReturnsError(eventListenerFunc func()) EventListener {
-	return func(j Job) error {
+	return func(j *job) error {
 		return nil
 	}
 }
 
 func WhenJobReturnsNoError(eventListenerFunc func()) EventListener {
-	return func(j Job) error {
+	return func(j *job) error {
 		return nil
 	}
 }
