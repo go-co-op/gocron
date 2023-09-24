@@ -1,31 +1,42 @@
 package gocron
 
 import (
-	"log"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScheduler_Start(t *testing.T) {
 	s, err := NewScheduler()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
+	jobRan := make(chan struct{})
+
 	id, err := s.NewJob(
 		CronJob(
 			"* * * * * *",
 			true,
 			Task{
-				Function: func() { log.Println("job ran") },
+				Function: func() {
+					close(jobRan)
+				},
 			},
 		),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	s.Start()
-	time.Sleep(2 * time.Second)
+
+	select {
+	case <-jobRan:
+	case <-time.After(2 * time.Second):
+		t.Errorf("job failed to run")
+	}
+
 	lastRun, err := s.GetJobLastRun(id)
-	log.Println(lastRun)
-	s.Stop()
+	assert.NotZero(t, lastRun)
+	err = s.Stop()
+	assert.NoError(t, err)
 }

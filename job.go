@@ -21,6 +21,14 @@ type job struct {
 	function         interface{}
 	parameters       []interface{}
 	timer            clockwork.Timer
+	singletonMode    bool
+	eventListeners
+}
+
+type eventListeners struct {
+	afterJobRuns          func(jobID uuid.UUID)
+	beforeJobRuns         func(jobID uuid.UUID)
+	afterJobRunsWithError func(jobID uuid.UUID, err error)
 }
 
 type Task struct {
@@ -214,25 +222,19 @@ func WithTags(tags ...string) JobOption {
 
 type EventListener func(*job) error
 
-func AfterJobRuns(eventListenerFunc func()) EventListener {
+func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func BeforeJobRuns(eventListenerFunc func()) EventListener {
+func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, err error)) EventListener {
 	return func(j *job) error {
 		return nil
 	}
 }
 
-func WhenJobReturnsError(eventListenerFunc func()) EventListener {
-	return func(j *job) error {
-		return nil
-	}
-}
-
-func WhenJobReturnsNoError(eventListenerFunc func()) EventListener {
+func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
 	return func(j *job) error {
 		return nil
 	}

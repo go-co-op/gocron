@@ -16,7 +16,7 @@ type Scheduler interface {
 	GetJobLastRun(id uuid.UUID) (time.Time, error)
 	NewJob(JobDefinition) (uuid.UUID, error)
 	Start()
-	Stop()
+	Stop() error
 }
 
 // -----------------------------------------------
@@ -89,13 +89,15 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	jobOutRequestChan := make(chan jobOutRequest)
 
 	exec := executor{
-		ctx:             execCtx,
-		cancel:          execCancel,
-		schCtx:          ctx,
-		jobsIDsIn:       make(chan uuid.UUID),
-		jobIDsOut:       make(chan uuid.UUID),
-		jobOutRequest:   jobOutRequestChan,
-		shutdownTimeout: time.Second * 10,
+		ctx:              execCtx,
+		cancel:           execCancel,
+		schCtx:           ctx,
+		jobsIDsIn:        make(chan uuid.UUID),
+		jobIDsOut:        make(chan uuid.UUID),
+		jobOutRequest:    jobOutRequestChan,
+		shutdownTimeout:  time.Second * 10,
+		done:             make(chan error),
+		singletonRunners: make(map[uuid.UUID]singletonRunner),
 	}
 
 	s := &scheduler{
@@ -226,9 +228,9 @@ func (s *scheduler) Start() {
 	s.start <- struct{}{}
 }
 
-func (s *scheduler) Stop() {
+func (s *scheduler) Stop() error {
 	s.cancel()
-	<-s.exec.ctx.Done()
+	return <-s.exec.done
 }
 
 func (s *scheduler) GetJobLastRun(id uuid.UUID) (time.Time, error) {

@@ -36,7 +36,7 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) {
 //	}
 //}
 
-func callJobFuncWithParams(jobFunc interface{}, params []interface{}) error {
+func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
 	if jobFunc == nil {
 		return nil
 	}

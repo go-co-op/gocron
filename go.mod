@@ -8,4 +8,5 @@ require (
 	github.com/go-co-op/gocron v1.34.2
 	github.com/google/uuid v1.3.1
 	github.com/jonboulle/clockwork v0.4.0
+	github.com/stretchr/testify v1.8.2
 )
