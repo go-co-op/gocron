@@ -106,7 +106,7 @@ func CronJob(crontab string, withSeconds bool, task Task, options ...JobOption) 
 var _ JobDefinition = (*durationJobDefinition)(nil)
 
 type durationJobDefinition struct {
-	duration string
+	duration time.Duration
 	opts     []JobOption
 	tas      Task
 }
@@ -116,12 +116,11 @@ func (d durationJobDefinition) options() []JobOption {
 }
 
 func (d durationJobDefinition) setup(j *job, location *time.Location) error {
-	dur, err := time.ParseDuration(d.duration)
-	if err != nil {
-		return fmt.Errorf("gocron: failed to parse duration: %w", err)
+	if d.duration <= 0 {
+		return fmt.Errorf("gocron: duration must be greater than 0")
 	}
 
-	j.jobSchedule = &durationJob{duration: dur}
+	j.jobSchedule = &durationJob{duration: d.duration}
 	return nil
 }
 
@@ -129,7 +128,7 @@ func (d durationJobDefinition) task() Task {
 	return d.tas
 }
 
-func DurationJob(duration string, task Task, options ...JobOption) JobDefinition {
+func DurationJob(duration time.Duration, task Task, options ...JobOption) JobDefinition {
 	return durationJobDefinition{
 		duration: duration,
 		opts:     options,
@@ -181,6 +180,7 @@ func LimitRunsTo(runLimit int) JobOption {
 
 func SingletonMode() JobOption {
 	return func(j *job) error {
+		j.singletonMode = true
 		return nil
 	}
 }

@@ -2,15 +2,16 @@ package gocron
 
 import (
 	"testing"
+	"time"
 )
 
 func TestDurationJob(t *testing.T) {
 	tests := []struct {
 		name        string
-		duration    string
+		duration    time.Duration
 		expectedErr *string
 	}{
-		{"success", "1s", nil},
+		{"success", time.Second, nil},
 	}
 
 	for _, tt := range tests {

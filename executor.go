@@ -19,6 +19,7 @@ type executor struct {
 	shutdownTimeout  time.Duration
 	done             chan error
 	singletonRunners map[uuid.UUID]singletonRunner
+	limitMode        *limitMode
 }
 
 type singletonRunner struct {
@@ -26,27 +27,57 @@ type singletonRunner struct {
 	done chan struct{}
 }
 
+type limitMode struct {
+	started           bool
+	mode              LimitMode
+	limit             int
+	rescheduleLimiter chan struct{}
+	in                chan uuid.UUID
+	done              chan struct{}
+}
+
 func (e *executor) start() {
 	wg := sync.WaitGroup{}
 	for {
 		select {
 		case id := <-e.jobsIDsIn:
-			j := requestJob(id, e.jobOutRequest)
-			if j.singletonMode {
-				runner, ok := e.singletonRunners[id]
-				if !ok {
-					runner.in = make(chan uuid.UUID, 1000)
-					runner.done = make(chan struct{})
-					e.singletonRunners[id] = runner
-					go e.singletonRunner(runner.in, runner.done)
+			if e.limitMode != nil {
+				if !e.limitMode.started {
+					for i := e.limitMode.limit; i > 0; i-- {
+						go e.limitModeRunner(e.limitMode.in, e.limitMode.done)
+					}
 				}
-				runner.in <- id
+				if e.limitMode.mode == LimitModeReschedule {
+					select {
+					case e.limitMode.rescheduleLimiter <- struct{}{}:
+						e.limitMode.in <- id
+					default:
+						// all runners are busy, reschedule the work for later
+						// which means we just skip it here and do nothing
+						// TODO when metrics are added, this should increment a rescheduled metric
+					}
+				} else {
+					// TODO when metrics are added, this should increment a wait metric
+					e.limitMode.in <- id
+				}
 			} else {
-				wg.Add(1)
-				go func(j job) {
-					e.runJob(j)
-					wg.Done()
-				}(j)
+				j := requestJob(id, e.jobOutRequest)
+				if j.singletonMode {
+					runner, ok := e.singletonRunners[id]
+					if !ok {
+						runner.in = make(chan uuid.UUID, 1000)
+						runner.done = make(chan struct{})
+						e.singletonRunners[id] = runner
+						go e.singletonRunner(runner.in, runner.done)
+					}
+					runner.in <- id
+				} else {
+					wg.Add(1)
+					go func(j job) {
+						e.runJob(j)
+						wg.Done()
+					}(j)
+				}
 			}
 
 		case <-e.schCtx.Done():
@@ -87,22 +118,44 @@ func (e *executor) start() {
 }
 
 func (e *executor) singletonRunner(in chan uuid.UUID, done chan struct{}) {
-	select {
-	case id := <-in:
-		j := requestJob(id, e.jobOutRequest)
-		e.runJob(j)
-	case <-e.ctx.Done():
-		done <- struct{}{}
+	for {
+		select {
+		case id := <-in:
+			j := requestJob(id, e.jobOutRequest)
+			e.runJob(j)
+		case <-e.ctx.Done():
+			done <- struct{}{}
+			return
+		}
+	}
+}
+
+func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
+	for {
+		select {
+		case id := <-in:
+			j := requestJob(id, e.jobOutRequest)
+			e.runJob(j)
+			// remove the limiter block to allow another job to be scheduled
+			<-e.limitMode.rescheduleLimiter
+		case <-e.ctx.Done():
+			done <- struct{}{}
+			return
+		}
 	}
 }
 
 func (e *executor) runJob(j job) {
-	_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
-	err := callJobFuncWithParams(j.function, j.parameters...)
-	if err != nil {
-		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, err)
-	} else {
-		_ = callJobFuncWithParams(j.afterJobRuns, j.id)
+	select {
+	case <-j.ctx.Done():
+	default:
+		_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
+		e.jobIDsOut <- j.id
+		err := callJobFuncWithParams(j.function, j.parameters...)
+		if err != nil {
+			_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, err)
+		} else {
+			_ = callJobFuncWithParams(j.afterJobRuns, j.id)
+		}
 	}
-	e.jobIDsOut <- j.id
 }

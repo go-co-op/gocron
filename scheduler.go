@@ -46,6 +46,18 @@ const (
 
 func WithLimit(limit int, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
+		if limit <= 0 {
+			return fmt.Errorf("gocron: WithLimit: limit must be greater than 0")
+		}
+		s.exec.limitMode = &limitMode{
+			mode:  mode,
+			limit: limit,
+			in:    make(chan uuid.UUID, 1000),
+			done:  make(chan struct{}),
+		}
+		if mode == LimitModeReschedule {
+			s.exec.limitMode.rescheduleLimiter = make(chan struct{}, limit)
+		}
 		return nil
 	}
 }
