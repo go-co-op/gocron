@@ -71,6 +71,19 @@ func ExampleJob_LimitRunsTo() {
 	s.StartAsync()
 }
 
+func ExampleJob_Name() {
+	s := gocron.NewScheduler(time.UTC)
+	s.Every(1).Second().Name("job_name").Do(task)
+}
+
+func ExampleJob_GetName() {
+	s := gocron.NewScheduler(time.UTC)
+	j, _ := s.Every(1).Second().Name("job_name").Do(task)
+	fmt.Println(j.GetName())
+	// Output:
+	// job_name
+}
+
 func ExampleJob_NextRun() {
 	s := gocron.NewScheduler(time.UTC)
 	job, _ := s.Every(1).Second().Do(task)
