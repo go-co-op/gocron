@@ -34,6 +34,14 @@ func ExampleJob_FinishedRunCount() {
 	s.StartAsync()
 }
 
+func ExampleJob_GetName() {
+	s := gocron.NewScheduler(time.UTC)
+	j, _ := s.Every(1).Second().Name("job_name").Do(task)
+	fmt.Println(j.GetName())
+	// Output:
+	// job_name
+}
+
 func ExampleJob_IsRunning() {
 	s := gocron.NewScheduler(time.UTC)
 	j, _ := s.Every(10).Seconds().Do(func() { time.Sleep(2 * time.Second) })
@@ -69,6 +77,11 @@ func ExampleJob_LimitRunsTo() {
 	job, _ := s.Every(1).Second().Do(task)
 	job.LimitRunsTo(2)
 	s.StartAsync()
+}
+
+func ExampleJob_Name() {
+	s := gocron.NewScheduler(time.UTC)
+	s.Every(1).Second().Name("job_name").Do(task)
 }
 
 func ExampleJob_NextRun() {

@@ -232,6 +232,19 @@ func TestJob_CommonExports(t *testing.T) {
 	assert.Equal(t, lastRun, j.LastRun())
 }
 
+func TestJob_GetName(t *testing.T) {
+	s := NewScheduler(time.Local)
+	j1, _ := s.Every(1).Second().Name("one").Do(func() {})
+	assert.Equal(t, "one", j1.GetName())
+
+	j2, _ := s.Every(1).Second().Do(func() {})
+	j2.Name("two")
+	assert.Equal(t, "two", j2.GetName())
+
+	j3, _ := s.Every(1).Second().Do(func() {})
+	assert.Contains(t, j3.GetName(), "func3")
+}
+
 func TestJob_SetEventListeners(t *testing.T) {
 	t.Run("run event listeners callbacks for a job", func(t *testing.T) {
 		var (
