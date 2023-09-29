@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestScheduler_Start(t *testing.T) {
+func TestScheduler_Cron_Start_Stop(t *testing.T) {
 	s, err := NewScheduler()
 	require.NoError(t, err)
 

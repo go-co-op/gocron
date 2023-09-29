@@ -37,6 +37,19 @@ func WithFakeClock(clock clockwork.Clock) SchedulerOption {
 	}
 }
 
+type LimitMode int
+
+const (
+	LimitModeReschedule = 1
+	LimitModeWait       = 2
+)
+
+func WithLimit(limit int, mode LimitMode) SchedulerOption {
+	return func(s *scheduler) error {
+		return nil
+	}
+}
+
 func WithLocation(location *time.Location) SchedulerOption {
 	return func(s *scheduler) error {
 		if location == nil {
