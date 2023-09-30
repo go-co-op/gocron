@@ -82,17 +82,17 @@ func (e *executor) start() {
 
 		case <-e.schCtx.Done():
 			e.cancel()
-			c1 := make(chan struct{})
-			c2 := make(chan struct{})
+			waitForJobs := make(chan struct{})
+			waitForSingletons := make(chan struct{})
 			go func() {
 				wg.Wait()
-				close(c1)
+				waitForJobs <- struct{}{}
 			}()
 			go func() {
 				for _, sr := range e.singletonRunners {
 					<-sr.done
 				}
-				close(c2)
+				waitForSingletons <- struct{}{}
 			}()
 
 			var timedOut bool
@@ -101,9 +101,9 @@ func (e *executor) start() {
 				select {
 				case <-time.After(e.shutdownTimeout):
 					timedOut = true
-				case <-c1:
+				case <-waitForJobs:
 					count++
-				case <-c2:
+				case <-waitForSingletons:
 					count++
 				}
 			}
