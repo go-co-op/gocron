@@ -2,13 +2,13 @@ package gocron
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/jonboulle/clockwork"
-
 	"github.com/google/uuid"
+	"github.com/jonboulle/clockwork"
 	"github.com/robfig/cron/v3"
 )
 
@@ -16,17 +16,23 @@ type job struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	id     uuid.UUID
+	name   string
+	tags   map[string]struct{}
 	jobSchedule
 	lastRun, nextRun time.Time
 	function         interface{}
 	parameters       []interface{}
 	timer            clockwork.Timer
 	singletonMode    bool
-
 	// event listeners
 	afterJobRuns          func(jobID uuid.UUID)
 	beforeJobRuns         func(jobID uuid.UUID)
 	afterJobRunsWithError func(jobID uuid.UUID, err error)
+}
+
+func (j *job) stop() {
+	j.timer.Stop()
+	j.cancel()
 }
 
 type Task struct {
@@ -85,7 +91,7 @@ func (c cronJobDefinition) setup(j *job, location *time.Location) error {
 		cronSchedule, err = cron.ParseStandard(withLocation)
 	}
 	if err != nil {
-		return fmt.Errorf("gocron: crontab pare failure: %w", err)
+		return errors.Join(ErrCronJobParse, err)
 	}
 
 	j.jobSchedule = &cronJob{cronSchedule: cronSchedule}
@@ -115,7 +121,7 @@ func (d durationJobDefinition) options() []JobOption {
 
 func (d durationJobDefinition) setup(j *job, location *time.Location) error {
 	if d.duration <= 0 {
-		return fmt.Errorf("gocron: duration must be greater than 0")
+		return ErrDurationJobZero
 	}
 
 	j.jobSchedule = &durationJob{duration: d.duration}
@@ -185,8 +191,11 @@ func SingletonMode() JobOption {
 
 func WithContext(ctx context.Context, cancel context.CancelFunc) JobOption {
 	return func(j *job) error {
-		if ctx == nil || cancel == nil {
-			return fmt.Errorf("gocron: context and cancel cannot be nil")
+		if ctx == nil {
+			return ErrWithContextNilContext
+		}
+		if cancel == nil {
+			return ErrWithContextNilCancel
 		}
 		j.ctx = ctx
 		j.cancel = cancel
@@ -211,8 +220,26 @@ func WithEventListeners(eventListeners ...EventListener) JobOption {
 	}
 }
 
+// WithName sets the name of the job. Name provides
+// a human-readable identifier for the job.
+func WithName(name string) JobOption {
+	// TODO use the name for metrics and future logging option
+	return func(j *job) error {
+		if name == "" {
+			return fmt.Errorf("gocron: WithName: name must not be empty")
+		}
+		j.name = name
+		return nil
+	}
+}
+
 func WithTags(tags ...string) JobOption {
 	return func(j *job) error {
+		mapTags := make(map[string]struct{})
+		for _, t := range tags {
+			mapTags[t] = struct{}{}
+		}
+		j.tags = mapTags
 		return nil
 	}
 }
@@ -271,4 +298,38 @@ type durationJob struct {
 
 func (j *durationJob) next(lastRun time.Time) time.Time {
 	return lastRun.Add(j.duration)
+}
+
+// -----------------------------------------------
+// -----------------------------------------------
+// ---------------- Job Interface ----------------
+// -----------------------------------------------
+// -----------------------------------------------
+
+type Job interface {
+	LastRun() (time.Time, error)
+	NextRun() (time.Time, error)
+}
+
+var _ Job = (*publicJob)(nil)
+
+type publicJob struct {
+	id            uuid.UUID
+	jobOutRequest chan jobOutRequest
+}
+
+func (pj publicJob) LastRun() (time.Time, error) {
+	j := requestJob(pj.id, pj.jobOutRequest)
+	if j.id == uuid.Nil {
+		return time.Time{}, ErrJobNotFound
+	}
+	return j.lastRun, nil
+}
+
+func (pj publicJob) NextRun() (time.Time, error) {
+	j := requestJob(pj.id, pj.jobOutRequest)
+	if j.id == uuid.Nil {
+		return time.Time{}, ErrJobNotFound
+	}
+	return j.nextRun, nil
 }

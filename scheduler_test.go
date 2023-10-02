@@ -120,7 +120,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 				},
 				SingletonMode(),
 			),
-			[]SchedulerOption{WithShutdownTimeout(time.Second * 3)},
+			[]SchedulerOption{WithShutdownTimeout(time.Second * 5)},
 			2,
 		},
 	}

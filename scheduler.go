@@ -2,7 +2,6 @@ package gocron
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"time"
 
@@ -13,10 +12,11 @@ import (
 var _ Scheduler = (*scheduler)(nil)
 
 type Scheduler interface {
-	GetJobLastRun(id uuid.UUID) (time.Time, error)
-	NewJob(JobDefinition) (uuid.UUID, error)
+	NewJob(JobDefinition) (Job, error)
+	RemoveJob(uuid.UUID) error
 	Start()
 	Stop() error
+	Update(uuid.UUID, JobDefinition) (Job, error)
 }
 
 // -----------------------------------------------
@@ -31,6 +31,7 @@ type scheduler struct {
 	exec             executor
 	jobs             map[uuid.UUID]job
 	newJobs          chan job
+	removeJobs       chan uuid.UUID
 	jobOutRequest    chan jobOutRequest
 	location         *time.Location
 	clock            clockwork.Clock
@@ -68,6 +69,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		exec:          exec,
 		jobs:          make(map[uuid.UUID]job, 0),
 		newJobs:       make(chan job),
+		removeJobs:    make(chan uuid.UUID),
 		start:         make(chan struct{}),
 		jobOutRequest: jobOutRequestChan,
 		location:      time.Local,
@@ -97,9 +99,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 			case j := <-s.newJobs:
 				if _, ok := s.jobs[j.id]; !ok {
+					next := j.next(s.now())
+					j.nextRun = next
 					if s.started {
-						next := j.next(s.now())
-						j.nextRun = next
 						id := j.id
 						j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 							s.exec.jobsIDsIn <- id
@@ -109,10 +111,17 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				} else {
 					// the job exists already.
 					// what all has to be handled here? this should mostly be new
-					//jobs, but if update is used, the job would exist
+					// jobs, but if update is used, the job would exist
 					// and we'd have to handle that here
 				}
 
+			case id := <-s.removeJobs:
+				j, ok := s.jobs[id]
+				if !ok {
+					break
+				}
+				j.stop()
+				delete(s.jobs, id)
 			case out := <-s.jobOutRequest:
 				if j, ok := s.jobs[out.id]; ok {
 					out.outChan <- j
@@ -135,8 +144,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				}
 			case <-s.ctx.Done():
 				for _, j := range s.jobs {
-					j.timer.Stop()
-					j.cancel()
+					j.stop()
 				}
 				return
 			}
@@ -150,7 +158,7 @@ func (s *scheduler) now() time.Time {
 	return s.clock.Now().In(s.location)
 }
 
-func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
+func (s *scheduler) NewJob(definition JobDefinition) (Job, error) {
 	j := job{
 		id: uuid.New(),
 	}
@@ -163,7 +171,7 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 	}
 
 	if taskFunc.Kind() != reflect.Func {
-		return uuid.Nil, fmt.Errorf("gocron: Task.Function was not a reflect.Func")
+		return nil, ErrNewJobTask
 	}
 
 	j.function = task.Function
@@ -172,24 +180,26 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 	// apply global job options
 	for _, option := range s.globalJobOptions {
 		if err := option(&j); err != nil {
-			return uuid.Nil, err
+			return nil, err
 		}
 	}
 
 	// apply job specific options, which take precedence
 	for _, option := range definition.options() {
 		if err := option(&j); err != nil {
-			return uuid.Nil, err
+			return nil, err
 		}
 	}
 
-	err := definition.setup(&j, s.location)
-	if err != nil {
-		return uuid.Nil, err
+	if err := definition.setup(&j, s.location); err != nil {
+		return nil, err
 	}
 
 	s.newJobs <- j
-	return j.id, nil
+	return &publicJob{
+		id:            j.id,
+		jobOutRequest: s.jobOutRequest,
+	}, nil
 }
 
 func (s *scheduler) Start() {
@@ -200,6 +210,16 @@ func (s *scheduler) Start() {
 func (s *scheduler) Stop() error {
 	s.cancel()
 	return <-s.exec.done
+}
+
+func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *scheduler) RemoveJob(uuid2 uuid.UUID) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 // -----------------------------------------------
@@ -213,7 +233,7 @@ type SchedulerOption func(*scheduler) error
 func WithFakeClock(clock clockwork.Clock) SchedulerOption {
 	return func(s *scheduler) error {
 		if clock == nil {
-			return fmt.Errorf("gocron: WithFakeClock: clock must not be nil")
+			return ErrWithFakeClockNil
 		}
 		s.clock = clock
 		return nil
@@ -239,7 +259,7 @@ const (
 func WithLimit(limit int, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
 		if limit <= 0 {
-			return fmt.Errorf("gocron: WithLimit: limit must be greater than 0")
+			return ErrWithLimitZero
 		}
 		s.exec.limitMode = &limitMode{
 			mode:  mode,
@@ -257,7 +277,7 @@ func WithLimit(limit int, mode LimitMode) SchedulerOption {
 func WithLocation(location *time.Location) SchedulerOption {
 	return func(s *scheduler) error {
 		if location == nil {
-			return fmt.Errorf("gocron: WithLocation: location was nil")
+			return ErrWithLocationNil
 		}
 		s.location = location
 		return nil
@@ -266,24 +286,10 @@ func WithLocation(location *time.Location) SchedulerOption {
 
 func WithShutdownTimeout(timeout time.Duration) SchedulerOption {
 	return func(s *scheduler) error {
-		if timeout == 0 {
-			return fmt.Errorf("gocron: shutdown timeout cannot be zero")
+		if timeout <= 0 {
+			return ErrWithShutdownTimeoutZero
 		}
 		s.exec.shutdownTimeout = timeout
 		return nil
 	}
-}
-
-// -----------------------------------------------
-// -----------------------------------------------
-// ------------- Scheduler Job Info --------------
-// -----------------------------------------------
-// -----------------------------------------------
-
-func (s *scheduler) GetJobLastRun(id uuid.UUID) (time.Time, error) {
-	j := requestJob(id, s.jobOutRequest)
-	if j.id == uuid.Nil {
-		return time.Time{}, fmt.Errorf("gocron: job not found")
-	}
-	return j.lastRun, nil
 }
