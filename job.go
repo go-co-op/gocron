@@ -22,10 +22,8 @@ type job struct {
 	parameters       []interface{}
 	timer            clockwork.Timer
 	singletonMode    bool
-	eventListeners
-}
 
-type eventListeners struct {
+	// event listeners
 	afterJobRuns          func(jobID uuid.UUID)
 	beforeJobRuns         func(jobID uuid.UUID)
 	afterJobRunsWithError func(jobID uuid.UUID, err error)
@@ -204,6 +202,11 @@ func WithDistributedLockerKey(key string) JobOption {
 
 func WithEventListeners(eventListeners ...EventListener) JobOption {
 	return func(j *job) error {
+		for _, eventListener := range eventListeners {
+			if err := eventListener(j); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 }

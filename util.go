@@ -2,29 +2,9 @@ package gocron
 
 import (
 	"reflect"
-	"sync"
-	"time"
 
 	"github.com/google/uuid"
 )
-
-func strPtr(in string) *string {
-	return &in
-}
-
-func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) {
-	c := make(chan struct{})
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	select {
-	case <-c:
-		return
-	case <-time.After(timeout):
-		return
-	}
-}
 
 //func callJobFunc(jobFunc interface{}) {
 //	if jobFunc == nil {

@@ -6,11 +6,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
 func TestScheduler_OneSecond_NoOptions(t *testing.T) {
-	t.Parallel()
-
+	defer goleak.VerifyNone(t)
 	cronNoOptionsCh := make(chan struct{})
 	durationNoOptionsCh := make(chan struct{})
 
@@ -48,8 +48,6 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			s, err := NewScheduler()
 			require.NoError(t, err)
 
@@ -82,17 +80,17 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 }
 
 func TestScheduler_LongRunningJobs(t *testing.T) {
-	t.Parallel()
+	defer goleak.VerifyNone(t)
 
 	durationCh := make(chan struct{}, 10)
 	durationSingletonCh := make(chan struct{}, 10)
 
 	tests := []struct {
-		name     string
-		ch       chan struct{}
-		jd       JobDefinition
-		options  []SchedulerOption
-		expected int
+		name         string
+		ch           chan struct{}
+		jd           JobDefinition
+		options      []SchedulerOption
+		expectedRuns int
 	}{
 		{
 			"duration",
@@ -106,11 +104,11 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 					},
 				},
 			),
-			nil,
+			[]SchedulerOption{WithShutdownTimeout(time.Second * 2)},
 			3,
 		},
 		{
-			"duration",
+			"duration singleton",
 			durationSingletonCh,
 			DurationJob(
 				time.Millisecond*500,
@@ -122,16 +120,14 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 				},
 				SingletonMode(),
 			),
-			nil,
+			[]SchedulerOption{WithShutdownTimeout(time.Second * 3)},
 			2,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			s, err := NewScheduler()
+			s, err := NewScheduler(tt.options...)
 			require.NoError(t, err)
 
 			_, err = s.NewJob(tt.jd)
@@ -142,15 +138,84 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			err = s.Stop()
 			require.NoError(t, err)
 
-			time.Sleep(1 * time.Second)
-			close(tt.ch)
-
 			var runCount int
-			for range tt.ch {
-				runCount++
+			timeout := make(chan struct{})
+			go func() {
+				time.Sleep(2 * time.Second)
+				close(timeout)
+			}()
+		Outer:
+			for {
+				select {
+				case <-tt.ch:
+					runCount++
+				case <-timeout:
+					break Outer
+				}
 			}
 
-			assert.Equal(t, tt.expected, runCount)
+			assert.Equal(t, tt.expectedRuns, runCount)
+		})
+	}
+}
+
+func TestScheduler_StopTimeout(t *testing.T) {
+	// We expect goroutines to leak here because we timed-out
+	// and one or both of the go routines waiting for singleton
+	// runner and job wait group never returned.
+	// defer goleak.VerifyNone(t)
+
+	durationCh := make(chan struct{}, 10)
+	durationSingletonCh := make(chan struct{}, 10)
+
+	tests := []struct {
+		name string
+		ch   chan struct{}
+		jd   JobDefinition
+	}{
+		{
+			"duration",
+			durationCh,
+			DurationJob(
+				time.Millisecond*500,
+				Task{
+					Function: func() {
+						time.Sleep(10 * time.Second)
+						durationCh <- struct{}{}
+					},
+				},
+			),
+		},
+		{
+			"duration singleton",
+			durationSingletonCh,
+			DurationJob(
+				time.Millisecond*500,
+				Task{
+					Function: func() {
+						time.Sleep(10 * time.Second)
+						durationSingletonCh <- struct{}{}
+					},
+				},
+				SingletonMode(),
+			),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewScheduler(
+				WithShutdownTimeout(time.Second * 1),
+			)
+			require.NoError(t, err)
+
+			_, err = s.NewJob(tt.jd)
+			require.NoError(t, err)
+
+			s.Start()
+			time.Sleep(time.Second)
+			err = s.Stop()
+			assert.ErrorIs(t, err, ErrStopTimedOut)
 		})
 	}
 }

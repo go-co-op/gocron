@@ -2,7 +2,6 @@ package gocron
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -95,20 +94,19 @@ func (e *executor) start() {
 				waitForSingletons <- struct{}{}
 			}()
 
-			var timedOut bool
 			var count int
-			for !timedOut && count < 2 {
+			timeout := time.Now().Add(e.shutdownTimeout)
+			for time.Now().Before(timeout) && count < 2 {
 				select {
-				case <-time.After(e.shutdownTimeout):
-					timedOut = true
 				case <-waitForJobs:
 					count++
 				case <-waitForSingletons:
 					count++
+				default:
 				}
 			}
-			if timedOut {
-				e.done <- fmt.Errorf("gocron: timed out waiting for jobs to finish")
+			if count < 2 {
+				e.done <- ErrStopTimedOut
 			} else {
 				e.done <- nil
 			}

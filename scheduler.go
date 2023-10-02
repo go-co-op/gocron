@@ -21,85 +21,22 @@ type Scheduler interface {
 
 // -----------------------------------------------
 // -----------------------------------------------
-// ------------- Scheduler Options ---------------
-// -----------------------------------------------
-// -----------------------------------------------
-
-type SchedulerOption func(*scheduler) error
-
-func WithFakeClock(clock clockwork.Clock) SchedulerOption {
-	return func(s *scheduler) error {
-		if clock == nil {
-			return fmt.Errorf("gocron: WithFakeClock: clock must not be nil")
-		}
-		s.clock = clock
-		return nil
-	}
-}
-
-type LimitMode int
-
-const (
-	LimitModeReschedule = 1
-	LimitModeWait       = 2
-)
-
-func WithLimit(limit int, mode LimitMode) SchedulerOption {
-	return func(s *scheduler) error {
-		if limit <= 0 {
-			return fmt.Errorf("gocron: WithLimit: limit must be greater than 0")
-		}
-		s.exec.limitMode = &limitMode{
-			mode:  mode,
-			limit: limit,
-			in:    make(chan uuid.UUID, 1000),
-			done:  make(chan struct{}),
-		}
-		if mode == LimitModeReschedule {
-			s.exec.limitMode.rescheduleLimiter = make(chan struct{}, limit)
-		}
-		return nil
-	}
-}
-
-func WithLocation(location *time.Location) SchedulerOption {
-	return func(s *scheduler) error {
-		if location == nil {
-			return fmt.Errorf("gocron: WithLocation: location was nil")
-		}
-		s.location = location
-		return nil
-	}
-}
-
-func WithShutdownTimeout(timeout time.Duration) SchedulerOption {
-	return func(s *scheduler) error {
-		if timeout == 0 {
-			return fmt.Errorf("gocron: shutdown timeout cannot be zero")
-		}
-		s.exec.shutdownTimeout = timeout
-		return nil
-	}
-}
-
-// -----------------------------------------------
-// -----------------------------------------------
 // ----------------- Scheduler -------------------
 // -----------------------------------------------
 // -----------------------------------------------
 
 type scheduler struct {
-	ctx           context.Context
-	cancel        context.CancelFunc
-	exec          executor
-	jobs          map[uuid.UUID]job
-	newJobs       chan job
-	jobOutRequest chan jobOutRequest
-	location      *time.Location
-	//todo - clock should be mockable, allow user to pass a fake clock
-	clock   clockwork.Clock
-	started bool
-	start   chan struct{}
+	ctx              context.Context
+	cancel           context.CancelFunc
+	exec             executor
+	jobs             map[uuid.UUID]job
+	newJobs          chan job
+	jobOutRequest    chan jobOutRequest
+	location         *time.Location
+	clock            clockwork.Clock
+	started          bool
+	start            chan struct{}
+	globalJobOptions []JobOption
 }
 
 type jobOutRequest struct {
@@ -232,9 +169,16 @@ func (s *scheduler) NewJob(definition JobDefinition) (uuid.UUID, error) {
 	j.function = task.Function
 	j.parameters = task.Parameters
 
+	// apply global job options
+	for _, option := range s.globalJobOptions {
+		if err := option(&j); err != nil {
+			return uuid.Nil, err
+		}
+	}
+
+	// apply job specific options, which take precedence
 	for _, option := range definition.options() {
-		err := option(&j)
-		if err != nil {
+		if err := option(&j); err != nil {
 			return uuid.Nil, err
 		}
 	}
@@ -257,6 +201,84 @@ func (s *scheduler) Stop() error {
 	s.cancel()
 	return <-s.exec.done
 }
+
+// -----------------------------------------------
+// -----------------------------------------------
+// ------------- Scheduler Options ---------------
+// -----------------------------------------------
+// -----------------------------------------------
+
+type SchedulerOption func(*scheduler) error
+
+func WithFakeClock(clock clockwork.Clock) SchedulerOption {
+	return func(s *scheduler) error {
+		if clock == nil {
+			return fmt.Errorf("gocron: WithFakeClock: clock must not be nil")
+		}
+		s.clock = clock
+		return nil
+	}
+}
+
+// WithGlobalJobOptions sets JobOption's that will be applied to
+// all jobs added to the scheduler
+func WithGlobalJobOptions(jobOptions ...JobOption) SchedulerOption {
+	return func(s *scheduler) error {
+		s.globalJobOptions = jobOptions
+		return nil
+	}
+}
+
+type LimitMode int
+
+const (
+	LimitModeReschedule = 1
+	LimitModeWait       = 2
+)
+
+func WithLimit(limit int, mode LimitMode) SchedulerOption {
+	return func(s *scheduler) error {
+		if limit <= 0 {
+			return fmt.Errorf("gocron: WithLimit: limit must be greater than 0")
+		}
+		s.exec.limitMode = &limitMode{
+			mode:  mode,
+			limit: limit,
+			in:    make(chan uuid.UUID, 1000),
+			done:  make(chan struct{}),
+		}
+		if mode == LimitModeReschedule {
+			s.exec.limitMode.rescheduleLimiter = make(chan struct{}, limit)
+		}
+		return nil
+	}
+}
+
+func WithLocation(location *time.Location) SchedulerOption {
+	return func(s *scheduler) error {
+		if location == nil {
+			return fmt.Errorf("gocron: WithLocation: location was nil")
+		}
+		s.location = location
+		return nil
+	}
+}
+
+func WithShutdownTimeout(timeout time.Duration) SchedulerOption {
+	return func(s *scheduler) error {
+		if timeout == 0 {
+			return fmt.Errorf("gocron: shutdown timeout cannot be zero")
+		}
+		s.exec.shutdownTimeout = timeout
+		return nil
+	}
+}
+
+// -----------------------------------------------
+// -----------------------------------------------
+// ------------- Scheduler Job Info --------------
+// -----------------------------------------------
+// -----------------------------------------------
 
 func (s *scheduler) GetJobLastRun(id uuid.UUID) (time.Time, error) {
 	j := requestJob(id, s.jobOutRequest)
