@@ -19,6 +19,7 @@ type executor struct {
 	done             chan error
 	singletonRunners map[uuid.UUID]singletonRunner
 	limitMode        *limitMode
+	elector          Elector
 }
 
 type singletonRunner struct {
@@ -135,7 +136,9 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
 			j := requestJob(id, e.jobOutRequest)
 			e.runJob(j)
 			// remove the limiter block to allow another job to be scheduled
-			<-e.limitMode.rescheduleLimiter
+			if e.limitMode.mode == LimitModeReschedule {
+				<-e.limitMode.rescheduleLimiter
+			}
 		case <-e.ctx.Done():
 			done <- struct{}{}
 			return
@@ -147,7 +150,11 @@ func (e *executor) runJob(j job) {
 	select {
 	case <-j.ctx.Done():
 	default:
-		// TODO handle Locker and Elector here
+		if e.elector != nil {
+			if err := e.elector.IsLeader(j.ctx); err != nil {
+				return
+			}
+		}
 		_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
 		e.jobIDsOut <- j.id
 		err := callJobFuncWithParams(j.function, j.parameters...)

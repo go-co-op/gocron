@@ -219,3 +219,84 @@ func TestScheduler_StopTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_Update(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
+	durationJobCh := make(chan struct{})
+
+	tests := []struct {
+		name               string
+		initialJob         JobDefinition
+		updateJob          JobDefinition
+		ch                 chan struct{}
+		runCount           int
+		updateAfterCount   int
+		expectedMinTime    time.Duration
+		expectedMaxRunTime time.Duration
+	}{
+		{
+			"duration, updated to another duration",
+			DurationJob(
+				time.Millisecond*500,
+				Task{
+					Function: func() {
+						durationJobCh <- struct{}{}
+					},
+				},
+			),
+			DurationJob(
+				time.Second,
+				Task{
+					Function: func() {
+						durationJobCh <- struct{}{}
+					},
+				},
+			),
+			durationJobCh,
+			2,
+			1,
+			time.Millisecond * 1499,
+			time.Second * 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewScheduler()
+			require.NoError(t, err)
+
+			j, err := s.NewJob(tt.initialJob)
+			require.NoError(t, err)
+
+			startTime := time.Now()
+			s.Start()
+
+			var runCount int
+			for runCount < tt.runCount {
+				select {
+				case <-tt.ch:
+					runCount++
+					if runCount == tt.updateAfterCount {
+						_, err = s.Update(j.Id(), tt.updateJob)
+						require.NoError(t, err)
+					}
+				default:
+				}
+			}
+			err = s.Stop()
+			require.NoError(t, err)
+			stopTime := time.Now()
+
+			select {
+			case <-tt.ch:
+				t.Fatal("job ran after scheduler was stopped")
+			case <-time.After(time.Millisecond * 50):
+			}
+
+			runDuration := stopTime.Sub(startTime)
+			assert.GreaterOrEqual(t, runDuration, tt.expectedMinTime)
+			assert.LessOrEqual(t, runDuration, tt.expectedMaxRunTime)
+		})
+	}
+}

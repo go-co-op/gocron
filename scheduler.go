@@ -266,6 +266,23 @@ func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, erro
 
 type SchedulerOption func(*scheduler) error
 
+// WithDistributedElector sets the elector to be used by multiple
+// Scheduler instances to determine who should be the leader.
+// Only the leader runs jobs, while non-leaders wait and continue
+// to check if a new leader has been elected.
+func WithDistributedElector(elector Elector) SchedulerOption {
+	return func(s *scheduler) error {
+		if elector == nil {
+			return ErrWithDistributedElector
+		}
+		s.exec.elector = elector
+		return nil
+	}
+}
+
+// WithFakeClock sets the clock used by the Scheduler
+// to the clock provided. See https://github.com/jonboulle/clockwork
+// Example: clockwork.NewFakeClock()
 func WithFakeClock(clock clockwork.Clock) SchedulerOption {
 	return func(s *scheduler) error {
 		if clock == nil {
@@ -285,17 +302,50 @@ func WithGlobalJobOptions(jobOptions ...JobOption) SchedulerOption {
 	}
 }
 
+// LimitMode defines the modes used for handling jobs that reach
+// the limit provided in WithLimitConcurrentJobs
 type LimitMode int
 
 const (
+	// LimitModeReschedule causes jobs reaching the limit set in
+	// WithLimitConcurrentJobs to be skipped / rescheduled for the
+	// next run time rather than being queued up to wait.
 	LimitModeReschedule = 1
-	LimitModeWait       = 2
+
+	// LimitModeWait causes jobs reaching the limit set in
+	// WithLimitConcurrentJobs to wait in a queue until a slot becomes
+	// available to run.
+	//
+	// Note: this mode can produce unpredictable results as
+	// job execution order isn't guaranteed. For example, a job that
+	// executes frequently may pile up in the wait queue and be executed
+	// many times back to back when the queue opens.
+	//
+	// Warning: do not use this mode if your jobs will continue to stack
+	// up beyond the ability of the limit workers to keep up. An example of
+	// what NOT to do:
+	//
+	//     s, _ := gocron.NewScheduler()
+	//     s.NewJob(
+	//         gocron.DurationJob(
+	//				time.Second,
+	//				Task{
+	//					Function: func() {
+	//						time.Sleep(10 * time.Second)
+	//					},
+	//				},
+	//			),
+	//      )
+	LimitModeWait = 2
 )
 
-func WithLimit(limit int, mode LimitMode) SchedulerOption {
+// WithLimitConcurrentJobs sets the limit and mode to be used by the
+// Scheduler for limiting the number of jobs that may be running at
+// a given time.
+func WithLimitConcurrentJobs(limit int, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
 		if limit <= 0 {
-			return ErrWithLimitZero
+			return ErrWithLimitConcurrentJobsZero
 		}
 		s.exec.limitMode = &limitMode{
 			mode:  mode,
@@ -310,6 +360,9 @@ func WithLimit(limit int, mode LimitMode) SchedulerOption {
 	}
 }
 
+// WithLocation sets the location (i.e. timezone) that the scheduler
+// should operate within. In many systems time.Local is UTC.
+// Default: time.Local
 func WithLocation(location *time.Location) SchedulerOption {
 	return func(s *scheduler) error {
 		if location == nil {
@@ -320,6 +373,9 @@ func WithLocation(location *time.Location) SchedulerOption {
 	}
 }
 
+// WithShutdownTimeout sets the amount of time the Scheduler should
+// wait gracefully for jobs to complete before shutting down.
+// Default: 10 * time.Second
 func WithShutdownTimeout(timeout time.Duration) SchedulerOption {
 	return func(s *scheduler) error {
 		if timeout <= 0 {

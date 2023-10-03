@@ -24,6 +24,8 @@ type job struct {
 	parameters       []interface{}
 	timer            clockwork.Timer
 	singletonMode    bool
+	lockerKey        string
+	startTime        time.Time
 	// event listeners
 	afterJobRuns          func(jobID uuid.UUID)
 	beforeJobRuns         func(jobID uuid.UUID)
@@ -205,6 +207,10 @@ func WithContext(ctx context.Context, cancel context.CancelFunc) JobOption {
 
 func WithDistributedLockerKey(key string) JobOption {
 	return func(j *job) error {
+		if key == "" {
+			return fmt.Errorf("gocron: WithDistributedLockerKey: key must not be empty")
+		}
+		j.lockerKey = key
 		return nil
 	}
 }
@@ -229,6 +235,17 @@ func WithName(name string) JobOption {
 			return fmt.Errorf("gocron: WithName: name must not be empty")
 		}
 		j.name = name
+		return nil
+	}
+}
+
+// WithStartDateTime sets the first date & time at which the job should run.
+func WithStartDateTime(start time.Time) JobOption {
+	return func(j *job) error {
+		if start.IsZero() || start.Before(time.Now()) {
+			return fmt.Errorf("gocron: WithStartDateTime: start must not be in the past")
+		}
+		j.startTime = start
 		return nil
 	}
 }
@@ -319,6 +336,7 @@ func (j *durationJob) next(lastRun time.Time) time.Time {
 // -----------------------------------------------
 
 type Job interface {
+	Id() uuid.UUID
 	LastRun() (time.Time, error)
 	NextRun() (time.Time, error)
 }
@@ -328,6 +346,10 @@ var _ Job = (*publicJob)(nil)
 type publicJob struct {
 	id            uuid.UUID
 	jobOutRequest chan jobOutRequest
+}
+
+func (pj publicJob) Id() uuid.UUID {
+	return pj.id
 }
 
 func (pj publicJob) LastRun() (time.Time, error) {
