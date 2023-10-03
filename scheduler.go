@@ -13,6 +13,7 @@ var _ Scheduler = (*scheduler)(nil)
 
 type Scheduler interface {
 	NewJob(JobDefinition) (Job, error)
+	RemoveByTags(...string) error
 	RemoveJob(uuid.UUID) error
 	Start()
 	Stop() error
@@ -202,6 +203,16 @@ func (s *scheduler) NewJob(definition JobDefinition) (Job, error) {
 	}, nil
 }
 
+func (s *scheduler) RemoveByTags(s2 ...string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *scheduler) RemoveJob(uuid2 uuid.UUID) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s *scheduler) Start() {
 	go s.exec.start()
 	s.start <- struct{}{}
@@ -213,11 +224,6 @@ func (s *scheduler) Stop() error {
 }
 
 func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s *scheduler) RemoveJob(uuid2 uuid.UUID) error {
 	//TODO implement me
 	panic("implement me")
 }

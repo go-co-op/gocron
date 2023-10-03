@@ -147,6 +147,7 @@ func (e *executor) runJob(j job) {
 	select {
 	case <-j.ctx.Done():
 	default:
+		// TODO handle Locker and Elector here
 		_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
 		e.jobIDsOut <- j.id
 		err := callJobFuncWithParams(j.function, j.parameters...)
