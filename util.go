@@ -53,3 +53,14 @@ func requestJob(id uuid.UUID, ch chan jobOutRequest) job {
 	}
 	return j
 }
+
+func contains(m map[string]struct{}, sl []string) bool {
+	for x := range m {
+		for _, y := range sl {
+			if x == y {
+				return true
+			}
+		}
+	}
+	return false
+}

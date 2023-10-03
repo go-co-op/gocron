@@ -13,7 +13,7 @@ var _ Scheduler = (*scheduler)(nil)
 
 type Scheduler interface {
 	NewJob(JobDefinition) (Job, error)
-	RemoveByTags(...string) error
+	RemoveByTags(...string)
 	RemoveJob(uuid.UUID) error
 	Start()
 	Stop() error
@@ -31,9 +31,10 @@ type scheduler struct {
 	cancel           context.CancelFunc
 	exec             executor
 	jobs             map[uuid.UUID]job
+	jobsOutRequest   chan jobsOutRequest
+	jobOutRequest    chan jobOutRequest
 	newJobs          chan job
 	removeJobs       chan uuid.UUID
-	jobOutRequest    chan jobOutRequest
 	location         *time.Location
 	clock            clockwork.Clock
 	started          bool
@@ -44,6 +45,10 @@ type scheduler struct {
 type jobOutRequest struct {
 	id      uuid.UUID
 	outChan chan job
+}
+
+type jobsOutRequest struct {
+	outChan chan map[uuid.UUID]job
 }
 
 func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
@@ -65,16 +70,17 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	}
 
 	s := &scheduler{
-		ctx:           ctx,
-		cancel:        cancel,
-		exec:          exec,
-		jobs:          make(map[uuid.UUID]job, 0),
-		newJobs:       make(chan job),
-		removeJobs:    make(chan uuid.UUID),
-		start:         make(chan struct{}),
-		jobOutRequest: jobOutRequestChan,
-		location:      time.Local,
-		clock:         clockwork.NewRealClock(),
+		ctx:            ctx,
+		cancel:         cancel,
+		exec:           exec,
+		jobs:           make(map[uuid.UUID]job, 0),
+		newJobs:        make(chan job),
+		removeJobs:     make(chan uuid.UUID),
+		start:          make(chan struct{}),
+		jobOutRequest:  jobOutRequestChan,
+		jobsOutRequest: make(chan jobsOutRequest),
+		location:       time.Local,
+		clock:          clockwork.NewRealClock(),
 	}
 
 	for _, option := range options {
@@ -123,6 +129,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				}
 				j.stop()
 				delete(s.jobs, id)
+
 			case out := <-s.jobOutRequest:
 				if j, ok := s.jobs[out.id]; ok {
 					out.outChan <- j
@@ -130,6 +137,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				} else {
 					close(out.outChan)
 				}
+
+			case out := <-s.jobsOutRequest:
+				out.outChan <- s.jobs
 
 			case <-s.start:
 				s.started = true
@@ -143,6 +153,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 					})
 					s.jobs[id] = j
 				}
+
 			case <-s.ctx.Done():
 				for _, j := range s.jobs {
 					j.stop()
@@ -159,10 +170,19 @@ func (s *scheduler) now() time.Time {
 	return s.clock.Now().In(s.location)
 }
 
-func (s *scheduler) NewJob(definition JobDefinition) (Job, error) {
-	j := job{
-		id: uuid.New(),
+func (s *scheduler) NewJob(jobDefinition JobDefinition) (Job, error) {
+	return s.addOrUpdateJob(uuid.Nil, jobDefinition)
+}
+
+func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job, error) {
+	j := job{}
+	if id == uuid.Nil {
+		j.id = uuid.New()
+	} else {
+		s.removeJobs <- id
+		j.id = id
 	}
+
 	j.ctx, j.cancel = context.WithCancel(context.Background())
 
 	task := definition.task()
@@ -203,14 +223,25 @@ func (s *scheduler) NewJob(definition JobDefinition) (Job, error) {
 	}, nil
 }
 
-func (s *scheduler) RemoveByTags(s2 ...string) error {
-	//TODO implement me
-	panic("implement me")
+func (s *scheduler) RemoveByTags(tags ...string) {
+	jr := jobsOutRequest{outChan: make(chan map[uuid.UUID]job)}
+	s.jobsOutRequest <- jr
+	jobs := <-jr.outChan
+
+	for _, j := range jobs {
+		if contains(j.tags, tags) {
+			s.removeJobs <- j.id
+		}
+	}
 }
 
-func (s *scheduler) RemoveJob(uuid2 uuid.UUID) error {
-	//TODO implement me
-	panic("implement me")
+func (s *scheduler) RemoveJob(id uuid.UUID) error {
+	j := requestJob(id, s.jobOutRequest)
+	if j.id == uuid.Nil {
+		return ErrJobNotFound
+	}
+	s.removeJobs <- id
+	return nil
 }
 
 func (s *scheduler) Start() {
@@ -224,8 +255,7 @@ func (s *scheduler) Stop() error {
 }
 
 func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, error) {
-	//TODO implement me
-	panic("implement me")
+	return s.addOrUpdateJob(id, jobDefinition)
 }
 
 // -----------------------------------------------

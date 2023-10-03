@@ -254,18 +254,30 @@ type EventListener func(*job) error
 
 func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
 	return func(j *job) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.afterJobRuns = eventListenerFunc
 		return nil
 	}
 }
 
 func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, err error)) EventListener {
 	return func(j *job) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.afterJobRunsWithError = eventListenerFunc
 		return nil
 	}
 }
 
 func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
 	return func(j *job) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.beforeJobRuns = eventListenerFunc
 		return nil
 	}
 }
