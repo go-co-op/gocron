@@ -508,7 +508,7 @@ func TestDaylightSavingsScheduled(t *testing.T) {
 		{"EST no change", beforeToEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("01:59") }, time.Date(2023, 3, 12, 1, 59, 0, 0, loc)},
 		{"EST->EDT every day", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("20:00") }, time.Date(2023, 3, 12, 20, 0, 0, 0, loc)},
 		{"EST->EDT every 2 week", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("17:00") }, time.Date(2023, 3, 12, 17, 0, 0, 0, loc)},
-		{"EST->EDT every 2 Tuesday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("16:00") }, time.Date(2023, 3, 14, 16, 0, 0, 0, loc)},
+		{"EST->EDT every 2 Tuesday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("16:00") }, time.Date(2023, 3, 21, 16, 0, 0, 0, loc)},
 		{"EST->EDT every Sunday", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).Sunday().At("04:30") }, time.Date(2023, 3, 19, 4, 30, 0, 0, loc)},
 		{"EST->EDT every month", toEDT, func(s *Scheduler) *Scheduler { return s.Every(3).Month(12).At("14:00") }, time.Date(2023, 6, 12, 14, 0, 0, 0, loc)},
 		{"EST->EDT every last day of month", toEDT, func(s *Scheduler) *Scheduler { return s.Every(1).MonthLastDay().At("13:00") }, time.Date(2023, 3, 31, 13, 0, 0, 0, loc)},
@@ -516,7 +516,7 @@ func TestDaylightSavingsScheduled(t *testing.T) {
 		{"EDT no change", beforeToEST, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("01:59") }, time.Date(2022, 11, 6, 1, 59, 0, 0, loc)},
 		{"EDT->EST every day", toEST, func(s *Scheduler) *Scheduler { return s.Every(1).Day().At("20:00") }, time.Date(2022, 11, 6, 20, 0, 0, 0, loc)},
 		{"EDT->EST every 2 week", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Week().At("18:00") }, time.Date(2022, 11, 6, 18, 0, 0, 0, loc)},
-		{"EDT->EST every 2 Tuesday", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("15:00") }, time.Date(2022, 11, 8, 15, 0, 0, 0, loc)},
+		{"EDT->EST every 2 Tuesday", toEST, func(s *Scheduler) *Scheduler { return s.Every(2).Tuesday().At("15:00") }, time.Date(2022, 11, 15, 15, 0, 0, 0, loc)},
 		{"EDT->EST every Sunday", afterToEST, func(s *Scheduler) *Scheduler { return s.Every(1).Sunday().At("01:30") }, time.Date(2022, 11, 13, 1, 30, 0, 0, loc)},
 		{"EDT->EST every month", toEST, func(s *Scheduler) *Scheduler { return s.Every(3).Month(6).At("14:30") }, time.Date(2023, 2, 6, 14, 30, 0, 0, loc)},
 		{"EDT->EST every last day of month", toEST, func(s *Scheduler) *Scheduler { return s.Every(1).MonthLastDay().At("13:15") }, time.Date(2022, 11, 30, 13, 15, 0, 0, loc)},
@@ -1199,7 +1199,7 @@ func TestScheduler_CalculateNextRun(t *testing.T) {
 		//// WEEKDAYS
 		{name: "every weekday starting on one day before it should run this weekday", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 1 * day},
 		{name: "every weekday starting on same weekday should run in 7 days", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0).AddDate(0, 0, 1), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 7 * day},
-		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: calculateNextRunHelper(2, weeks, mondayAt(0, 0, 0), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: day},
+		{name: "every 2 weekdays counting this week's weekday should run next weekday", job: calculateNextRunHelper(2, weeks, mondayAt(0, 0, 0), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: day * 8},
 		{name: "every weekday starting on one day after should count days remaining", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0).AddDate(0, 0, 2), nil, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 6 * day},
 		{name: "every weekday starting before jobs .At() time should run at same day at time", job: calculateNextRunHelper(1, weeks, mondayAt(0, 0, 0).AddDate(0, 0, 1), []time.Duration{_getHours(9) + _getMinutes(30)}, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: _getHours(9) + _getMinutes(30)},
 		{name: "every weekday starting at same day at time that already passed should run at next week at time", job: calculateNextRunHelper(1, weeks, mondayAt(10, 30, 0).AddDate(0, 0, 1), []time.Duration{_getHours(9) + _getMinutes(30)}, []time.Weekday{*_tuesdayWeekday()}, nil), wantTimeUntilNextRun: 6*day + _getHours(23) + _getMinutes(0)},
@@ -2309,16 +2309,7 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 		{description: "every two weeks after run the first 2 scheduled tasks", interval: 2, weekDays: []time.Weekday{time.Thursday, time.Friday}, daysToTest: []int{1, 2, 3}, caseTest: 3},
 	}
 
-	const (
-		wantTimeUntilNextRunOneDay = 24 * time.Hour
-		// two weeks difference
-		wantTimeUntilNextRunTwoWeeks = 24 * time.Hour * 14
-		// three weeks difference
-		wantTimeUntilNextRunThreeWeeks = 24 * time.Hour * 21
-		// two weeks difference less one day
-		wantTimeUntilNextRunTwoWeeksLessOneDay = 24 * time.Hour * (14 - 1)
-	)
-
+	const day = 24 * time.Hour
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
 			s := NewScheduler(time.UTC)
@@ -2329,22 +2320,31 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 			}
 			job, err := s.Do(func() {})
 			require.NoError(t, err)
-			for numJob, day := range tc.daysToTest {
-				lastRun := januaryDay2020At(day)
-
+			for _, at := range tc.daysToTest {
+				lastRun := januaryDay2020At(at)
 				job.lastRun = lastRun
 				got := s.durationToNextRun(lastRun, job).duration
 
-				if numJob < len(tc.weekDays) {
-					assert.Equal(t, wantTimeUntilNextRunOneDay, got)
-				} else {
-					if tc.caseTest == 1 {
-						assert.Equal(t, wantTimeUntilNextRunTwoWeeks, got)
-					} else if tc.caseTest == 2 {
-						assert.Equal(t, wantTimeUntilNextRunThreeWeeks, got)
-					} else if tc.caseTest == 3 {
-						assert.Equal(t, wantTimeUntilNextRunTwoWeeksLessOneDay, got)
+				switch at {
+				case 1:
+					switch tc.caseTest {
+					case 1, 3:
+						assert.Equal(t, day*8, got)
+					case 2:
+						assert.Equal(t, day*15, got)
 					}
+
+				case 2:
+					switch tc.caseTest {
+					case 1:
+						assert.Equal(t, day*14, got)
+					case 2:
+						assert.Equal(t, day*21, got)
+					case 3:
+						assert.Equal(t, day*8, got)
+					}
+				case 3:
+					assert.Equal(t, day*13, got)
 				}
 				job.runStartCount.Add(1)
 			}
