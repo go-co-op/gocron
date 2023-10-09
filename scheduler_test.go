@@ -588,9 +588,11 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 
 		assert.Equal(t, 2, s.Len(), "Incorrect number of jobs")
 
-		s.RemoveByReference(job1)
-		assert.NotContains(t, s.jobsMap(), job1.id)
-		assert.Contains(t, s.jobsMap(), job2.id)
+		_ = s.RemoveByID(job1)
+		s.jobsMutex.RLock()
+		defer s.jobsMutex.RUnlock()
+		assert.NotContains(t, s.jobs, job1.id)
+		assert.Contains(t, s.jobs, job2.id)
 	})
 
 	t.Run("remove from running scheduler", func(t *testing.T) {
@@ -605,7 +607,7 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 
 		s.StartAsync()
 
-		s.RemoveByReference(j)
+		_ = s.RemoveByID(j)
 
 		select {
 		case <-time.After(200 * time.Millisecond):
@@ -631,15 +633,19 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 		j2, err := s.Every(1).Second().Tag(tag2).Do(taskWithParams, 2, "world") // index 1
 		require.NoError(t, err)
 
+		s.jobsMutex.RLock()
 		// check j1 tags is equal with tag "a" (tag1)
-		assert.Equal(t, s.jobsMap()[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Equal(t, s.jobs[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
+		s.jobsMutex.RUnlock()
 
 		err = s.RemoveByTags(tag1)
 		require.NoError(t, err)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
+		s.jobsMutex.RLock()
 		// check j2 tags is equal with tag "tag two" (tag2) after removing "a"
-		assert.Equal(t, s.jobsMap()[j2.id].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
+		assert.Equal(t, s.jobs[j2.id].Tags()[0], tag2, "Job With Tag 'tag two' is removed from index 0")
+		s.jobsMutex.RUnlock()
 
 		// Removing Non-Existent Job with "a" because already removed above (will not removing any jobs because tag not match)
 		err = s.RemoveByTags(tag1)
@@ -679,16 +685,20 @@ func TestScheduler_RemoveByTags(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags contains tag "a" (tag1) and "abc" (tag3)
-		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
-		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
+		s.jobsMutex.RLock()
+		assert.Contains(t, s.jobs[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Contains(t, s.jobs[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
+		s.jobsMutex.RUnlock()
 
 		err = s.RemoveByTags(tag1, tag3)
 		require.NoError(t, err)
 		assert.Equal(t, 1, s.Len(), "Incorrect number of jobs after removing 1 job")
 
 		// check j2 tags is equal with tag "a" (tag1) and "ab" (tag2) after removing "a"+"abc"
-		assert.Contains(t, s.jobsMap()[j2.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
-		assert.Contains(t, s.jobsMap()[j2.id].Tags(), tag2, "Job With Tag 'ab' is removed from index 0")
+		s.jobsMutex.RLock()
+		assert.Contains(t, s.jobs[j2.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Contains(t, s.jobs[j2.id].Tags(), tag2, "Job With Tag 'ab' is removed from index 0")
+		s.jobsMutex.RUnlock()
 
 		// Removing Non-Existent Job with "a"+"abc" because already removed above (will not removing any jobs because tag not match)
 		err = s.RemoveByTags(tag1, tag3)
@@ -730,7 +740,9 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags is equal with tag "a" (tag1)
-		assert.Equal(t, s.jobsMap()[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
+		s.jobsMutex.RLock()
+		assert.Equal(t, s.jobs[j1.id].Tags()[0], tag1, "Job With Tag 'a' is removed from index 0")
+		s.jobsMutex.RUnlock()
 
 		err = s.RemoveByTagsAny(tag1, tag2)
 		require.NoError(t, err)
@@ -774,8 +786,10 @@ func TestScheduler_RemoveByTagsAny(t *testing.T) {
 		require.NoError(t, err)
 
 		// check j1 tags contains tag "a" (tag1) and "abc" (tag3)
-		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
-		assert.Contains(t, s.jobsMap()[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
+		s.jobsMutex.RLock()
+		assert.Contains(t, s.jobs[j1.id].Tags(), tag1, "Job With Tag 'a' is removed from index 0")
+		assert.Contains(t, s.jobs[j1.id].Tags(), tag3, "Job With Tag 'abc' is removed from index 0")
+		s.jobsMutex.RUnlock()
 
 		err = s.RemoveByTagsAny(tag1, tag2, tag3)
 		require.NoError(t, err)
@@ -814,8 +828,10 @@ func TestScheduler_Jobs(t *testing.T) {
 	_, _ = s.Every(2).Minutes().Do(task)
 	_, _ = s.Every(3).Minutes().Do(task)
 	_, _ = s.Every(4).Minutes().Do(task)
-	js := s.jobsMap()
-	assert.Len(t, js, 4)
+
+	s.jobsMutex.RLock()
+	defer s.jobsMutex.RUnlock()
+	assert.Len(t, s.jobs, 4)
 }
 
 func TestScheduler_Len(t *testing.T) {
@@ -1476,7 +1492,8 @@ func TestScheduler_SingletonMode(t *testing.T) {
 			time.Sleep(200 * time.Millisecond)
 
 			if tc.removeJob {
-				s.RemoveByReference(j)
+				err = s.RemoveByID(j)
+				require.NoError(t, err)
 				time.Sleep(300 * time.Millisecond)
 			}
 			s.Stop()
@@ -1513,7 +1530,8 @@ func TestScheduler_SingletonModeAll(t *testing.T) {
 			time.Sleep(200 * time.Millisecond)
 
 			if tc.removeJob {
-				s.RemoveByReference(j)
+				err = s.RemoveByID(j)
+				require.NoError(t, err)
 				time.Sleep(300 * time.Millisecond)
 			}
 			s.Stop()
@@ -1675,9 +1693,9 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			}
 
 			if tc.removeJobs {
-				s.RemoveByReference(j1)
-				s.RemoveByReference(j2)
-				s.RemoveByReference(j3)
+				_ = s.RemoveByID(j1)
+				_ = s.RemoveByID(j2)
+				_ = s.RemoveByID(j3)
 			} else {
 				s.Stop()
 			}
@@ -1894,7 +1912,7 @@ func TestScheduler_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		time.Sleep(550 * time.Millisecond)
-		s.RemoveByReference(j)
+		_ = s.RemoveByID(j)
 
 		j, err = s.Every("750ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 		require.NoError(t, err)
