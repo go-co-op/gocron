@@ -588,7 +588,7 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 
 		assert.Equal(t, 2, s.Len(), "Incorrect number of jobs")
 
-		s.RemoveByReference(job1)
+		_ = s.RemoveByID(job1)
 		s.jobsMutex.RLock()
 		defer s.jobsMutex.RUnlock()
 		assert.NotContains(t, s.jobs, job1.id)
@@ -607,7 +607,7 @@ func TestScheduler_RemoveByReference(t *testing.T) {
 
 		s.StartAsync()
 
-		s.RemoveByReference(j)
+		_ = s.RemoveByID(j)
 
 		select {
 		case <-time.After(200 * time.Millisecond):
@@ -1693,9 +1693,9 @@ func TestScheduler_SetMaxConcurrentJobs(t *testing.T) {
 			}
 
 			if tc.removeJobs {
-				s.RemoveByReference(j1)
-				s.RemoveByReference(j2)
-				s.RemoveByReference(j3)
+				_ = s.RemoveByID(j1)
+				_ = s.RemoveByID(j2)
+				_ = s.RemoveByID(j3)
 			} else {
 				s.Stop()
 			}
@@ -1912,7 +1912,7 @@ func TestScheduler_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		time.Sleep(550 * time.Millisecond)
-		s.RemoveByReference(j)
+		_ = s.RemoveByID(j)
 
 		j, err = s.Every("750ms").WaitForSchedule().Do(func() { counterMutex.Lock(); defer counterMutex.Unlock(); counter++ })
 		require.NoError(t, err)

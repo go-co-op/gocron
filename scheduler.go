@@ -221,7 +221,7 @@ func (s *Scheduler) scheduleNextRun(job *Job) (bool, nextRun) {
 	}
 
 	if !job.shouldRun() {
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 		return false, nextRun{}
 	}
 
@@ -750,7 +750,7 @@ func (s *Scheduler) RemoveByTags(tags ...string) error {
 	}
 
 	for _, job := range jobs {
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 	}
 	return nil
 }
@@ -770,7 +770,7 @@ func (s *Scheduler) RemoveByTagsAny(tags ...string) error {
 	}
 
 	for job := range mJob {
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 	}
 
 	return errs
@@ -947,7 +947,7 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 	if job.error != nil {
 		// delete the job from the scheduler as this job
 		// cannot be executed
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 		return nil, job.error
 	}
 
@@ -958,7 +958,7 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 
 	if val.Kind() != reflect.Func {
 		// delete the job for the same reason as above
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 		return nil, ErrNotAFunction
 	}
 
@@ -985,13 +985,13 @@ func (s *Scheduler) doCommon(jobFun interface{}, params ...interface{}) (*Job, e
 	}
 
 	if len(params) != expectedParamLength {
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 		job.error = wrapOrError(job.error, ErrWrongParams)
 		return nil, job.error
 	}
 
 	if job.runWithDetails && val.Type().In(len(params)).Kind() != reflect.ValueOf(*job).Kind() {
-		s.RemoveByReference(job)
+		_ = s.RemoveByID(job)
 		job.error = wrapOrError(job.error, ErrDoWithJobDetails)
 		return nil, job.error
 	}
