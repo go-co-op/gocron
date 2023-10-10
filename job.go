@@ -378,8 +378,10 @@ func (j job) Id() uuid.UUID {
 }
 
 func (j job) LastRun() (time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
-	if ij.id == uuid.Nil {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ij := requestJob(j.id, j.jobOutRequest, ctx)
+	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
 	return ij.lastRun, nil
@@ -390,8 +392,10 @@ func (j job) Name() string {
 }
 
 func (j job) NextRun() (time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
-	if ij.id == uuid.Nil {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	ij := requestJob(j.id, j.jobOutRequest, ctx)
+	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
 	return ij.nextRun, nil

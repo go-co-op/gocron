@@ -61,7 +61,10 @@ func (e *executor) start() {
 					e.limitMode.in <- id
 				}
 			} else {
-				j := requestJob(id, e.jobOutRequest)
+				j := requestJob(id, e.jobOutRequest, e.schCtx)
+				if j == nil {
+					continue
+				}
 				if j.singletonMode {
 					runner, ok := e.singletonRunners[id]
 					if !ok {
@@ -76,7 +79,7 @@ func (e *executor) start() {
 					go func(j internalJob) {
 						e.runJob(j)
 						wg.Done()
-					}(j)
+					}(*j)
 				}
 			}
 
@@ -84,13 +87,26 @@ func (e *executor) start() {
 			e.cancel()
 			waitForJobs := make(chan struct{})
 			waitForSingletons := make(chan struct{})
+
+			waiterCtx, waiterCancel := context.WithCancel(context.Background())
+
 			go func() {
 				wg.Wait()
+				select {
+				case <-waiterCtx.Done():
+					return
+				default:
+				}
 				waitForJobs <- struct{}{}
 			}()
 			go func() {
 				for _, sr := range e.singletonRunners {
 					<-sr.done
+				}
+				select {
+				case <-waiterCtx.Done():
+					return
+				default:
 				}
 				waitForSingletons <- struct{}{}
 			}()
@@ -111,6 +127,7 @@ func (e *executor) start() {
 			} else {
 				e.done <- nil
 			}
+			waiterCancel()
 			return
 		}
 	}
@@ -120,8 +137,10 @@ func (e *executor) singletonRunner(in chan uuid.UUID, done chan struct{}) {
 	for {
 		select {
 		case id := <-in:
-			j := requestJob(id, e.jobOutRequest)
-			e.runJob(j)
+			j := requestJob(id, e.jobOutRequest, e.schCtx)
+			if j != nil {
+				e.runJob(*j)
+			}
 		case <-e.ctx.Done():
 			done <- struct{}{}
 			return
@@ -133,8 +152,11 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
 	for {
 		select {
 		case id := <-in:
-			j := requestJob(id, e.jobOutRequest)
-			e.runJob(j)
+			j := requestJob(id, e.jobOutRequest, e.schCtx)
+			if j != nil {
+				e.runJob(*j)
+			}
+
 			// remove the limiter block to allow another job to be scheduled
 			if e.limitMode.mode == LimitModeReschedule {
 				<-e.limitMode.rescheduleLimiter

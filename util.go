@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"reflect"
 
 	"github.com/google/uuid"
@@ -41,17 +42,25 @@ func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
 	return nil
 }
 
-func requestJob(id uuid.UUID, ch chan jobOutRequest) internalJob {
+func requestJob(id uuid.UUID, ch chan jobOutRequest, ctx context.Context) *internalJob {
 	resp := make(chan internalJob)
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+	}
 	ch <- jobOutRequest{
 		id:      id,
 		outChan: resp,
 	}
 	var j internalJob
-	for jobReceived := range resp {
+	select {
+	case <-ctx.Done():
+		return nil
+	case jobReceived := <-resp:
 		j = jobReceived
 	}
-	return j
+	return &j
 }
 
 func mapKeysContainAnySliceElement(m map[string]struct{}, sl []string) bool {

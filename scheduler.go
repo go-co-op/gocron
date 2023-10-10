@@ -29,20 +29,21 @@ type Scheduler interface {
 // -----------------------------------------------
 
 type scheduler struct {
-	ctx               context.Context
-	cancel            context.CancelFunc
-	exec              executor
-	jobs              map[uuid.UUID]internalJob
-	allJobsOutRequest chan allJobsOutRequest
-	jobOutRequest     chan jobOutRequest
-	newJobs           chan internalJob
-	removeJobs        chan uuid.UUID
-	removeJobsByTags  chan []string
-	location          *time.Location
-	clock             clockwork.Clock
-	started           bool
-	start             chan struct{}
-	globalJobOptions  []JobOption
+	ctx              context.Context
+	cancel           context.CancelFunc
+	exec             executor
+	jobs             map[uuid.UUID]internalJob
+	location         *time.Location
+	clock            clockwork.Clock
+	started          bool
+	globalJobOptions []JobOption
+
+	startCh            chan struct{}
+	allJobsOutRequest  chan allJobsOutRequest
+	jobOutRequestCh    chan jobOutRequest
+	newJobCh           chan internalJob
+	removeJobCh        chan uuid.UUID
+	removeJobsByTagsCh chan []string
 }
 
 type jobOutRequest struct {
@@ -62,27 +63,29 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		ctx:              execCtx,
 		cancel:           execCancel,
 		schCtx:           ctx,
-		jobsIDsIn:        make(chan uuid.UUID),
-		jobIDsOut:        make(chan uuid.UUID),
-		jobOutRequest:    make(chan jobOutRequest),
 		shutdownTimeout:  time.Second * 10,
-		done:             make(chan error),
 		singletonRunners: make(map[uuid.UUID]singletonRunner),
+
+		jobsIDsIn:     make(chan uuid.UUID),
+		jobIDsOut:     make(chan uuid.UUID),
+		jobOutRequest: make(chan jobOutRequest, 1000),
+		done:          make(chan error),
 	}
 
 	s := &scheduler{
-		ctx:               ctx,
-		cancel:            cancel,
-		exec:              exec,
-		jobs:              make(map[uuid.UUID]internalJob, 0),
-		newJobs:           make(chan internalJob),
-		removeJobs:        make(chan uuid.UUID),
-		removeJobsByTags:  make(chan []string),
-		start:             make(chan struct{}),
-		jobOutRequest:     make(chan jobOutRequest),
-		allJobsOutRequest: make(chan allJobsOutRequest),
-		location:          time.Local,
-		clock:             clockwork.NewRealClock(),
+		ctx:      ctx,
+		cancel:   cancel,
+		exec:     exec,
+		jobs:     make(map[uuid.UUID]internalJob, 0),
+		location: time.Local,
+		clock:    clockwork.NewRealClock(),
+
+		newJobCh:           make(chan internalJob),
+		removeJobCh:        make(chan uuid.UUID),
+		removeJobsByTagsCh: make(chan []string),
+		startCh:            make(chan struct{}),
+		jobOutRequestCh:    make(chan jobOutRequest),
+		allJobsOutRequest:  make(chan allJobsOutRequest),
 	}
 
 	for _, option := range options {
@@ -102,11 +105,16 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				next := j.next(j.lastRun)
 				j.nextRun = next
 				j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
+					select {
+					case <-s.ctx.Done():
+						return
+					default:
+					}
 					s.exec.jobsIDsIn <- id
 				})
 				s.jobs[id] = j
 
-			case j := <-s.newJobs:
+			case j := <-s.newJobCh:
 				if _, ok := s.jobs[j.id]; !ok {
 					next := j.next(s.now())
 					j.nextRun = next
@@ -124,42 +132,22 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 					// and we'd have to handle that here
 				}
 
-			case id := <-s.removeJobs:
-				j, ok := s.jobs[id]
-				if !ok {
-					break
-				}
-				j.stop()
-				delete(s.jobs, id)
+			case id := <-s.removeJobCh:
+				s.selectRemoveJob(id)
 
-			case tags := <-s.removeJobsByTags:
-				for _, j := range s.jobs {
-					if mapKeysContainAnySliceElement(j.tags, tags) {
-						j.stop()
-						delete(s.jobs, j.id)
-					}
-				}
+			case tags := <-s.removeJobsByTagsCh:
+				s.selectRemoveJobsByTags(tags)
 
 			case out := <-s.exec.jobOutRequest:
-				if j, ok := s.jobs[out.id]; ok {
-					out.outChan <- j
-					close(out.outChan)
-				} else {
-					close(out.outChan)
-				}
+				s.selectJobOutRequest(out)
 
-			case out := <-s.jobOutRequest:
-				if j, ok := s.jobs[out.id]; ok {
-					out.outChan <- j
-					close(out.outChan)
-				} else {
-					close(out.outChan)
-				}
+			case out := <-s.jobOutRequestCh:
+				s.selectJobOutRequest(out)
 
 			case out := <-s.allJobsOutRequest:
 				s.selectAllJobsOutRequest(out)
 
-			case <-s.start:
+			case <-s.startCh:
 				s.selectStart()
 
 			case <-s.ctx.Done():
@@ -198,6 +186,32 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 	out.outChan <- outJobs
 }
 
+func (s *scheduler) selectRemoveJob(id uuid.UUID) {
+	j, ok := s.jobs[id]
+	if !ok {
+		return
+	}
+	j.stop()
+	delete(s.jobs, id)
+}
+
+func (s *scheduler) selectJobOutRequest(out jobOutRequest) {
+	if j, ok := s.jobs[out.id]; ok {
+		out.outChan <- j
+		close(out.outChan)
+	} else {
+		close(out.outChan)
+	}
+}
+
+func (s *scheduler) selectRemoveJobsByTags(tags []string) {
+	for _, j := range s.jobs {
+		if mapKeysContainAnySliceElement(j.tags, tags) {
+			j.stop()
+			delete(s.jobs, j.id)
+		}
+	}
+}
 func (s *scheduler) selectStart() {
 	s.started = true
 	for id, j := range s.jobs {
@@ -227,7 +241,7 @@ func (s *scheduler) jobFromInternalJob(in internalJob) job {
 		id:            in.id,
 		name:          in.name,
 		tags:          maps.Keys(in.tags),
-		jobOutRequest: s.jobOutRequest,
+		jobOutRequest: s.jobOutRequestCh,
 	}
 }
 
@@ -256,7 +270,14 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 	if id == uuid.Nil {
 		j.id = uuid.New()
 	} else {
-		s.removeJobs <- id
+
+		currentJob := requestJob(id, s.jobOutRequestCh, s.ctx)
+		s.removeJobCh <- id
+		select {
+		case <-currentJob.ctx.Done():
+		case <-s.ctx.Done():
+		}
+
 		j.id = id
 	}
 
@@ -293,31 +314,31 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 		return nil, err
 	}
 
-	s.newJobs <- j
+	s.newJobCh <- j
 	return &job{
 		id:            j.id,
 		name:          j.name,
 		tags:          maps.Keys(j.tags),
-		jobOutRequest: s.jobOutRequest,
+		jobOutRequest: s.jobOutRequestCh,
 	}, nil
 }
 
 func (s *scheduler) RemoveByTags(tags ...string) {
-	s.removeJobsByTags <- tags
+	s.removeJobsByTagsCh <- tags
 }
 
 func (s *scheduler) RemoveJob(id uuid.UUID) error {
-	j := requestJob(id, s.jobOutRequest)
-	if j.id == uuid.Nil {
+	j := requestJob(id, s.jobOutRequestCh, s.ctx)
+	if j == nil || j.id == uuid.Nil {
 		return ErrJobNotFound
 	}
-	s.removeJobs <- id
+	s.removeJobCh <- id
 	return nil
 }
 
 func (s *scheduler) Start() {
 	go s.exec.start()
-	s.start <- struct{}{}
+	s.startCh <- struct{}{}
 }
 
 func (s *scheduler) Stop() error {
