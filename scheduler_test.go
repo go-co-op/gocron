@@ -25,11 +25,11 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			CronJob(
 				"* * * * * *",
 				true,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						cronNoOptionsCh <- struct{}{}
 					},
-				},
+				),
 			),
 		},
 		{
@@ -37,11 +37,11 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			durationNoOptionsCh,
 			DurationJob(
 				time.Second,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						durationNoOptionsCh <- struct{}{}
 					},
-				},
+				),
 			),
 		},
 	}
@@ -97,12 +97,12 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			durationCh,
 			DurationJob(
 				time.Millisecond*500,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						time.Sleep(1 * time.Second)
 						durationCh <- struct{}{}
 					},
-				},
+				),
 			),
 			[]SchedulerOption{WithShutdownTimeout(time.Second * 2)},
 			3,
@@ -112,12 +112,12 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			durationSingletonCh,
 			DurationJob(
 				time.Millisecond*500,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						time.Sleep(1 * time.Second)
 						durationSingletonCh <- struct{}{}
 					},
-				},
+				),
 				SingletonMode(),
 			),
 			[]SchedulerOption{WithShutdownTimeout(time.Second * 5)},
@@ -178,12 +178,12 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			durationCh,
 			DurationJob(
 				time.Millisecond*500,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						time.Sleep(10 * time.Second)
 						durationCh <- struct{}{}
 					},
-				},
+				),
 			),
 		},
 		{
@@ -191,12 +191,12 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			durationSingletonCh,
 			DurationJob(
 				time.Millisecond*500,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						time.Sleep(10 * time.Second)
 						durationSingletonCh <- struct{}{}
 					},
-				},
+				),
 				SingletonMode(),
 			),
 		},
@@ -239,19 +239,19 @@ func TestScheduler_Update(t *testing.T) {
 			"duration, updated to another duration",
 			DurationJob(
 				time.Millisecond*500,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						durationJobCh <- struct{}{}
 					},
-				},
+				),
 			),
 			DurationJob(
 				time.Second,
-				Task{
-					Function: func() {
+				NewTask(
+					func() {
 						durationJobCh <- struct{}{}
 					},
-				},
+				),
 			),
 			durationJobCh,
 			2,

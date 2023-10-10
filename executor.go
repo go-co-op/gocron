@@ -73,7 +73,7 @@ func (e *executor) start() {
 					runner.in <- id
 				} else {
 					wg.Add(1)
-					go func(j job) {
+					go func(j internalJob) {
 						e.runJob(j)
 						wg.Done()
 					}(j)
@@ -146,7 +146,7 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
 	}
 }
 
-func (e *executor) runJob(j job) {
+func (e *executor) runJob(j internalJob) {
 	select {
 	case <-j.ctx.Done():
 	default:

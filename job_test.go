@@ -3,6 +3,8 @@ package gocron
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDurationJob(t *testing.T) {
@@ -17,23 +19,22 @@ func TestDurationJob(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s, err := NewScheduler()
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			_, err = s.NewJob(
 				DurationJob(
 					tt.duration,
-					Task{
-						Function:   func() {},
-						Parameters: nil,
-					},
+					NewTask(
+						func() {},
+						nil,
+					),
 				),
 			)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			s.Start()
-			s.Stop()
+			err = s.Stop()
+			require.NoError(t, err)
 		})
 	}
 }

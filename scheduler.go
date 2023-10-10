@@ -7,11 +7,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
+	"golang.org/x/exp/maps"
 )
 
 var _ Scheduler = (*scheduler)(nil)
 
 type Scheduler interface {
+	Jobs() []Job
 	NewJob(JobDefinition) (Job, error)
 	RemoveByTags(...string)
 	RemoveJob(uuid.UUID) error
@@ -27,28 +29,29 @@ type Scheduler interface {
 // -----------------------------------------------
 
 type scheduler struct {
-	ctx              context.Context
-	cancel           context.CancelFunc
-	exec             executor
-	jobs             map[uuid.UUID]job
-	jobsOutRequest   chan jobsOutRequest
-	jobOutRequest    chan jobOutRequest
-	newJobs          chan job
-	removeJobs       chan uuid.UUID
-	location         *time.Location
-	clock            clockwork.Clock
-	started          bool
-	start            chan struct{}
-	globalJobOptions []JobOption
+	ctx               context.Context
+	cancel            context.CancelFunc
+	exec              executor
+	jobs              map[uuid.UUID]internalJob
+	allJobsOutRequest chan allJobsOutRequest
+	jobOutRequest     chan jobOutRequest
+	newJobs           chan internalJob
+	removeJobs        chan uuid.UUID
+	removeJobsByTags  chan []string
+	location          *time.Location
+	clock             clockwork.Clock
+	started           bool
+	start             chan struct{}
+	globalJobOptions  []JobOption
 }
 
 type jobOutRequest struct {
 	id      uuid.UUID
-	outChan chan job
+	outChan chan internalJob
 }
 
-type jobsOutRequest struct {
-	outChan chan map[uuid.UUID]job
+type allJobsOutRequest struct {
+	outChan chan map[uuid.UUID]internalJob
 }
 
 func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
@@ -70,17 +73,18 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	}
 
 	s := &scheduler{
-		ctx:            ctx,
-		cancel:         cancel,
-		exec:           exec,
-		jobs:           make(map[uuid.UUID]job, 0),
-		newJobs:        make(chan job),
-		removeJobs:     make(chan uuid.UUID),
-		start:          make(chan struct{}),
-		jobOutRequest:  jobOutRequestChan,
-		jobsOutRequest: make(chan jobsOutRequest),
-		location:       time.Local,
-		clock:          clockwork.NewRealClock(),
+		ctx:               ctx,
+		cancel:            cancel,
+		exec:              exec,
+		jobs:              make(map[uuid.UUID]internalJob, 0),
+		newJobs:           make(chan internalJob),
+		removeJobs:        make(chan uuid.UUID),
+		removeJobsByTags:  make(chan []string),
+		start:             make(chan struct{}),
+		jobOutRequest:     jobOutRequestChan,
+		allJobsOutRequest: make(chan allJobsOutRequest),
+		location:          time.Local,
+		clock:             clockwork.NewRealClock(),
 	}
 
 	for _, option := range options {
@@ -130,6 +134,14 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				j.stop()
 				delete(s.jobs, id)
 
+			case tags := <-s.removeJobsByTags:
+				for _, j := range s.jobs {
+					if mapKeysContainAnySliceElement(j.tags, tags) {
+						j.stop()
+						delete(s.jobs, j.id)
+					}
+				}
+
 			case out := <-s.jobOutRequest:
 				if j, ok := s.jobs[out.id]; ok {
 					out.outChan <- j
@@ -138,26 +150,14 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 					close(out.outChan)
 				}
 
-			case out := <-s.jobsOutRequest:
-				out.outChan <- s.jobs
+			case out := <-s.allJobsOutRequest:
+				s.selectAllJobsOutRequest(out)
 
 			case <-s.start:
-				s.started = true
-				for id, j := range s.jobs {
-					next := j.next(s.now())
-					j.nextRun = next
-
-					jobId := id
-					j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
-						s.exec.jobsIDsIn <- jobId
-					})
-					s.jobs[id] = j
-				}
+				s.selectStart()
 
 			case <-s.ctx.Done():
-				for _, j := range s.jobs {
-					j.stop()
-				}
+				s.selectDone()
 				return
 			}
 		}
@@ -166,8 +166,79 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	return s, nil
 }
 
+// -----------------------------------------------
+// -----------------------------------------------
+// --------- Scheduler Channel Methods -----------
+// -----------------------------------------------
+// -----------------------------------------------
+
+// The scheduler's channel functions are broken out here
+// to allow prioritizing within the select blocks. The idea
+// being that we want to make sure that scheduling tasks
+// are not blocked by requests from the caller for information
+// about jobs.
+
+func (s *scheduler) selectDone() {
+	for _, j := range s.jobs {
+		j.stop()
+	}
+}
+
+func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
+	outJobs := make(map[uuid.UUID]internalJob, len(s.jobs))
+	for id, j := range s.jobs {
+		outJobs[id] = j.copy()
+	}
+	out.outChan <- outJobs
+}
+
+func (s *scheduler) selectStart() {
+	s.started = true
+	for id, j := range s.jobs {
+		next := j.next(s.now())
+		j.nextRun = next
+
+		jobId := id
+		j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
+			s.exec.jobsIDsIn <- jobId
+		})
+		s.jobs[id] = j
+	}
+}
+
+// -----------------------------------------------
+// -----------------------------------------------
+// ------------- Scheduler Methods ---------------
+// -----------------------------------------------
+// -----------------------------------------------
+
 func (s *scheduler) now() time.Time {
 	return s.clock.Now().In(s.location)
+}
+
+func (s *scheduler) jobFromInternalJob(in internalJob) job {
+	return job{
+		id:            in.id,
+		name:          in.name,
+		tags:          maps.Keys(in.tags),
+		jobOutRequest: s.jobOutRequest,
+	}
+}
+
+func (s *scheduler) Jobs() []Job {
+	outChan := make(chan map[uuid.UUID]internalJob)
+	s.allJobsOutRequest <- allJobsOutRequest{outChan: outChan}
+	jobs := <-outChan
+
+	outJobs := make([]Job, len(jobs))
+
+	var counter int
+	for _, j := range jobs {
+		outJobs[counter] = s.jobFromInternalJob(j)
+		counter++
+	}
+
+	return outJobs
 }
 
 func (s *scheduler) NewJob(jobDefinition JobDefinition) (Job, error) {
@@ -175,7 +246,7 @@ func (s *scheduler) NewJob(jobDefinition JobDefinition) (Job, error) {
 }
 
 func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job, error) {
-	j := job{}
+	j := internalJob{}
 	if id == uuid.Nil {
 		j.id = uuid.New()
 	} else {
@@ -185,8 +256,8 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 
 	j.ctx, j.cancel = context.WithCancel(context.Background())
 
-	task := definition.task()
-	taskFunc := reflect.ValueOf(task.Function)
+	tsk := definition.task()()
+	taskFunc := reflect.ValueOf(tsk.function)
 	for taskFunc.Kind() == reflect.Ptr {
 		taskFunc = taskFunc.Elem()
 	}
@@ -195,8 +266,8 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 		return nil, ErrNewJobTask
 	}
 
-	j.function = task.Function
-	j.parameters = task.Parameters
+	j.function = tsk.function
+	j.parameters = tsk.parameters
 
 	// apply global job options
 	for _, option := range s.globalJobOptions {
@@ -217,22 +288,16 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 	}
 
 	s.newJobs <- j
-	return &publicJob{
+	return &job{
 		id:            j.id,
+		name:          j.name,
+		tags:          maps.Keys(j.tags),
 		jobOutRequest: s.jobOutRequest,
 	}, nil
 }
 
 func (s *scheduler) RemoveByTags(tags ...string) {
-	jr := jobsOutRequest{outChan: make(chan map[uuid.UUID]job)}
-	s.jobsOutRequest <- jr
-	jobs := <-jr.outChan
-
-	for _, j := range jobs {
-		if contains(j.tags, tags) {
-			s.removeJobs <- j.id
-		}
-	}
+	s.removeJobsByTags <- tags
 }
 
 func (s *scheduler) RemoveJob(id uuid.UUID) error {
@@ -282,7 +347,6 @@ func WithDistributedElector(elector Elector) SchedulerOption {
 
 // WithFakeClock sets the clock used by the Scheduler
 // to the clock provided. See https://github.com/jonboulle/clockwork
-// Example: clockwork.NewFakeClock()
 func WithFakeClock(clock clockwork.Clock) SchedulerOption {
 	return func(s *scheduler) error {
 		if clock == nil {

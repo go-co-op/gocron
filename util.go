@@ -41,20 +41,20 @@ func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
 	return nil
 }
 
-func requestJob(id uuid.UUID, ch chan jobOutRequest) job {
-	resp := make(chan job)
+func requestJob(id uuid.UUID, ch chan jobOutRequest) internalJob {
+	resp := make(chan internalJob)
 	ch <- jobOutRequest{
 		id:      id,
 		outChan: resp,
 	}
-	var j job
+	var j internalJob
 	for jobReceived := range resp {
 		j = jobReceived
 	}
 	return j
 }
 
-func contains(m map[string]struct{}, sl []string) bool {
+func mapKeysContainAnySliceElement(m map[string]struct{}, sl []string) bool {
 	for x := range m {
 		for _, y := range sl {
 			if x == y {

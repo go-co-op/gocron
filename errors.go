@@ -12,7 +12,6 @@ var (
 	ErrWithContextNilContext       = fmt.Errorf("gocron: WithContext: context must not be nil")
 	ErrWithContextNilCancel        = fmt.Errorf("gocron: WithContext: cancel must not be nil")
 	ErrWithDistributedElector      = fmt.Errorf("gocron: WithDistributedElector: elector must not be nil")
-	ErrWithDistributedLocker       = fmt.Errorf("gocron: WithDistributedLocker: locker must not be nil")
 	ErrWithFakeClockNil            = fmt.Errorf("gocron: WithFakeClock: clock must not be nil")
 	ErrWithLimitConcurrentJobsZero = fmt.Errorf("gocron: WithLimitConcurrentJobs: limit must be greater than 0")
 	ErrWithLocationNil             = fmt.Errorf("gocron: WithLocation: location must not be nil")

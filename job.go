@@ -7,12 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/robfig/cron/v3"
 )
 
-type job struct {
+type internalJob struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	id     uuid.UUID
@@ -32,14 +35,42 @@ type job struct {
 	afterJobRunsWithError func(jobID uuid.UUID, err error)
 }
 
-func (j *job) stop() {
+func (j *internalJob) copy() internalJob {
+	return internalJob{
+		ctx:           j.ctx,
+		cancel:        j.cancel,
+		id:            j.id,
+		name:          j.name,
+		tags:          maps.Clone(j.tags),
+		lastRun:       j.lastRun,
+		nextRun:       j.nextRun,
+		function:      j.function,
+		parameters:    slices.Clone(j.parameters),
+		singletonMode: j.singletonMode,
+		lockerKey:     j.lockerKey,
+		startTime:     j.startTime,
+	}
+}
+
+func (j *internalJob) stop() {
 	j.timer.Stop()
 	j.cancel()
 }
 
-type Task struct {
-	Function   interface{}
-	Parameters []interface{}
+type task struct {
+	function   interface{}
+	parameters []interface{}
+}
+
+type Task func() task
+
+func NewTask(function interface{}, parameters ...interface{}) Task {
+	return func() task {
+		return task{
+			function:   function,
+			parameters: parameters,
+		}
+	}
 }
 
 // -----------------------------------------------
@@ -50,7 +81,7 @@ type Task struct {
 
 type JobDefinition interface {
 	options() []JobOption
-	setup(*job, *time.Location) error
+	setup(*internalJob, *time.Location) error
 	task() Task
 }
 
@@ -71,7 +102,7 @@ func (c cronJobDefinition) task() Task {
 	return c.tas
 }
 
-func (c cronJobDefinition) setup(j *job, location *time.Location) error {
+func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error {
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
@@ -121,7 +152,7 @@ func (d durationJobDefinition) options() []JobOption {
 	return d.opts
 }
 
-func (d durationJobDefinition) setup(j *job, location *time.Location) error {
+func (d durationJobDefinition) setup(j *internalJob, location *time.Location) error {
 	if d.duration <= 0 {
 		return ErrDurationJobZero
 	}
@@ -176,23 +207,23 @@ func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, task Task, options ..
 // -----------------------------------------------
 // -----------------------------------------------
 
-type JobOption func(*job) error
+type JobOption func(*internalJob) error
 
 func LimitRunsTo(runLimit int) JobOption {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		return nil
 	}
 }
 
 func SingletonMode() JobOption {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		j.singletonMode = true
 		return nil
 	}
 }
 
 func WithContext(ctx context.Context, cancel context.CancelFunc) JobOption {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		if ctx == nil {
 			return ErrWithContextNilContext
 		}
@@ -205,18 +236,8 @@ func WithContext(ctx context.Context, cancel context.CancelFunc) JobOption {
 	}
 }
 
-func WithDistributedLockerKey(key string) JobOption {
-	return func(j *job) error {
-		if key == "" {
-			return fmt.Errorf("gocron: WithDistributedLockerKey: key must not be empty")
-		}
-		j.lockerKey = key
-		return nil
-	}
-}
-
 func WithEventListeners(eventListeners ...EventListener) JobOption {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		for _, eventListener := range eventListeners {
 			if err := eventListener(j); err != nil {
 				return err
@@ -230,7 +251,7 @@ func WithEventListeners(eventListeners ...EventListener) JobOption {
 // a human-readable identifier for the job.
 func WithName(name string) JobOption {
 	// TODO use the name for metrics and future logging option
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		if name == "" {
 			return fmt.Errorf("gocron: WithName: name must not be empty")
 		}
@@ -241,7 +262,7 @@ func WithName(name string) JobOption {
 
 // WithStartDateTime sets the first date & time at which the job should run.
 func WithStartDateTime(start time.Time) JobOption {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		if start.IsZero() || start.Before(time.Now()) {
 			return fmt.Errorf("gocron: WithStartDateTime: start must not be in the past")
 		}
@@ -251,7 +272,7 @@ func WithStartDateTime(start time.Time) JobOption {
 }
 
 func WithTags(tags ...string) JobOption {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		mapTags := make(map[string]struct{})
 		for _, t := range tags {
 			mapTags[t] = struct{}{}
@@ -267,10 +288,10 @@ func WithTags(tags ...string) JobOption {
 // -----------------------------------------------
 // -----------------------------------------------
 
-type EventListener func(*job) error
+type EventListener func(*internalJob) error
 
 func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
 		}
@@ -280,7 +301,7 @@ func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
 }
 
 func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, err error)) EventListener {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
 		}
@@ -290,7 +311,7 @@ func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, err error)) E
 }
 
 func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
-	return func(j *job) error {
+	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
 		}
@@ -338,32 +359,44 @@ func (j *durationJob) next(lastRun time.Time) time.Time {
 type Job interface {
 	Id() uuid.UUID
 	LastRun() (time.Time, error)
+	Name() string
 	NextRun() (time.Time, error)
+	Tags() []string
 }
 
-var _ Job = (*publicJob)(nil)
+var _ Job = (*job)(nil)
 
-type publicJob struct {
+type job struct {
 	id            uuid.UUID
+	name          string
+	tags          []string
 	jobOutRequest chan jobOutRequest
 }
 
-func (pj publicJob) Id() uuid.UUID {
-	return pj.id
+func (j job) Id() uuid.UUID {
+	return j.id
 }
 
-func (pj publicJob) LastRun() (time.Time, error) {
-	j := requestJob(pj.id, pj.jobOutRequest)
-	if j.id == uuid.Nil {
+func (j job) LastRun() (time.Time, error) {
+	ij := requestJob(j.id, j.jobOutRequest)
+	if ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
-	return j.lastRun, nil
+	return ij.lastRun, nil
 }
 
-func (pj publicJob) NextRun() (time.Time, error) {
-	j := requestJob(pj.id, pj.jobOutRequest)
-	if j.id == uuid.Nil {
+func (j job) Name() string {
+	return j.name
+}
+
+func (j job) NextRun() (time.Time, error) {
+	ij := requestJob(j.id, j.jobOutRequest)
+	if ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
-	return j.nextRun, nil
+	return ij.nextRun, nil
+}
+
+func (j job) Tags() []string {
+	return j.tags
 }
