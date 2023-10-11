@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"github.com/google/uuid"
@@ -20,7 +19,7 @@ type internalJob struct {
 	cancel context.CancelFunc
 	id     uuid.UUID
 	name   string
-	tags   map[string]struct{}
+	tags   []string
 	jobSchedule
 	lastRun, nextRun time.Time
 	function         interface{}
@@ -41,7 +40,7 @@ func (j *internalJob) copy() internalJob {
 		cancel:        j.cancel,
 		id:            j.id,
 		name:          j.name,
-		tags:          maps.Clone(j.tags),
+		tags:          slices.Clone(j.tags),
 		lastRun:       j.lastRun,
 		nextRun:       j.nextRun,
 		function:      j.function,
@@ -273,11 +272,7 @@ func WithStartDateTime(start time.Time) JobOption {
 
 func WithTags(tags ...string) JobOption {
 	return func(j *internalJob) error {
-		mapTags := make(map[string]struct{})
-		for _, t := range tags {
-			mapTags[t] = struct{}{}
-		}
-		j.tags = mapTags
+		j.tags = tags
 		return nil
 	}
 }

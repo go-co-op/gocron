@@ -5,9 +5,10 @@ import (
 	"reflect"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
-	"golang.org/x/exp/maps"
 )
 
 var _ Scheduler = (*scheduler)(nil)
@@ -116,7 +117,10 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 			case j := <-s.newJobCh:
 				if _, ok := s.jobs[j.id]; !ok {
-					next := j.next(s.now())
+					next := j.startTime
+					if next.IsZero() {
+						next = j.next(s.now())
+					}
 					j.nextRun = next
 					if s.started {
 						id := j.id
@@ -206,16 +210,23 @@ func (s *scheduler) selectJobOutRequest(out jobOutRequest) {
 
 func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 	for _, j := range s.jobs {
-		if mapKeysContainAnySliceElement(j.tags, tags) {
-			j.stop()
-			delete(s.jobs, j.id)
+		for _, tag := range tags {
+			if slices.Contains(j.tags, tag) {
+				j.stop()
+				delete(s.jobs, j.id)
+				break
+			}
 		}
 	}
 }
 func (s *scheduler) selectStart() {
 	s.started = true
 	for id, j := range s.jobs {
-		next := j.next(s.now())
+		next := j.startTime
+		if next.IsZero() {
+			next = j.next(s.now())
+		}
+
 		j.nextRun = next
 
 		jobId := id
@@ -240,7 +251,7 @@ func (s *scheduler) jobFromInternalJob(in internalJob) job {
 	return job{
 		id:            in.id,
 		name:          in.name,
-		tags:          maps.Keys(in.tags),
+		tags:          slices.Clone(in.tags),
 		jobOutRequest: s.jobOutRequestCh,
 	}
 }
@@ -318,7 +329,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 	return &job{
 		id:            j.id,
 		name:          j.name,
-		tags:          maps.Keys(j.tags),
+		tags:          slices.Clone(j.tags),
 		jobOutRequest: s.jobOutRequestCh,
 	}, nil
 }
@@ -390,7 +401,8 @@ func WithFakeClock(clock clockwork.Clock) SchedulerOption {
 }
 
 // WithGlobalJobOptions sets JobOption's that will be applied to
-// all jobs added to the scheduler
+// all jobs added to the scheduler. JobOption's set on the job
+// itself will override if the same JobOption is set globally.
 func WithGlobalJobOptions(jobOptions ...JobOption) SchedulerOption {
 	return func(s *scheduler) error {
 		s.globalJobOptions = jobOptions

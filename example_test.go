@@ -140,11 +140,57 @@ func ExampleWithFakeClock() {
 }
 
 func ExampleWithGlobalJobOptions() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler(
+		gocron.WithGlobalJobOptions(
+			gocron.WithTags("tag1", "tag2", "tag3"),
+		),
+	)
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func(one string, two int) {
+					fmt.Printf("%s, %d", one, two)
+				},
+				"one", 2,
+			),
+		),
+	)
+	// The job will have the globally applied tags
+	fmt.Println(j.Tags())
+
+	s2, _ := gocron.NewScheduler(
+		gocron.WithGlobalJobOptions(
+			gocron.WithTags("tag1", "tag2", "tag3"),
+		),
+	)
+	j2, _ := s2.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func(one string, two int) {
+					fmt.Printf("%s, %d", one, two)
+				},
+				"one", 2,
+			),
+			gocron.WithTags("tag4", "tag5", "tag6"),
+		),
+	)
+	// The job will have the tags set specifically on the job
+	// overriding those set globally by the scheduler
+	fmt.Println(j2.Tags())
+	// Output:
+	// [tag1 tag2 tag3]
+	// [tag4 tag5 tag6]
 }
 
 func ExampleWithLimitConcurrentJobs() {
-	_, _ = gocron.NewScheduler()
+	_, _ = gocron.NewScheduler(
+		gocron.WithLimitConcurrentJobs(
+			1,
+			gocron.LimitModeReschedule,
+		),
+	)
 }
 
 func ExampleWithLocation() {
@@ -175,9 +221,41 @@ func ExampleWithName() {
 }
 
 func ExampleWithStartDateTime() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler()
+	start := time.Date(9999, 9, 9, 9, 9, 9, 9, time.UTC)
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func(one string, two int) {
+					fmt.Printf("%s, %d", one, two)
+				},
+				"one", 2,
+			),
+			gocron.WithStartDateTime(start),
+		),
+	)
+	next, _ := j.NextRun()
+	fmt.Println(next)
+	// Output:
+	// 9999-09-09 09:09:09.000000009 +0000 UTC
 }
 
 func ExampleWithTags() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler()
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func(one string, two int) {
+					fmt.Printf("%s, %d", one, two)
+				},
+				"one", 2,
+			),
+			gocron.WithTags("tag1", "tag2", "tag3"),
+		),
+	)
+	fmt.Println(j.Tags())
+	// Output:
+	// [tag1 tag2 tag3]
 }
