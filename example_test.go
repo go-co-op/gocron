@@ -140,10 +140,11 @@ func ExampleWithFakeClock() {
 			),
 		),
 	)
+	s.Start()
 	fakeClock.BlockUntil(1)
 	fakeClock.Advance(time.Second * 5)
 	wg.Wait()
-	_ = s.Done()
+	_ = s.Stop()
 	// Output:
 	// one, 2
 }
@@ -216,9 +217,10 @@ func ExampleWithLimitedRuns() {
 			gocron.WithLimitedRuns(1),
 		),
 	)
+	s.Start()
 	time.Sleep(100 * time.Millisecond)
 	fmt.Printf("no jobs in scheduler: %v\n", s.Jobs())
-	_ = s.Done()
+	_ = s.Stop()
 	// Output:
 	// one, 2
 	// no jobs in scheduler: []
@@ -257,9 +259,6 @@ func ExampleWithSingletonMode() {
 
 func ExampleWithStartAt() {
 	s, _ := gocron.NewScheduler()
-	defer func() {
-		_ = s.Done()
-	}()
 	start := time.Date(9999, 9, 9, 9, 9, 9, 9, time.UTC)
 	j, _ := s.NewJob(
 		gocron.DurationJob(
@@ -275,7 +274,10 @@ func ExampleWithStartAt() {
 			),
 		),
 	)
-
+	s.Start()
+	defer func() {
+		_ = s.Stop()
+	}()
 	next, _ := j.NextRun()
 	fmt.Println(next)
 	// Output:

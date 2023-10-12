@@ -11,11 +11,10 @@ import (
 type executor struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
-	schCtx           context.Context
 	jobsIDsIn        chan uuid.UUID
 	jobIDsOut        chan uuid.UUID
 	jobOutRequest    chan jobOutRequest
-	shutdownTimeout  time.Duration
+	stopTimeout      time.Duration
 	done             chan error
 	singletonRunners map[uuid.UUID]singletonRunner
 	limitMode        *limitMode
@@ -61,7 +60,7 @@ func (e *executor) start() {
 					e.limitMode.in <- id
 				}
 			} else {
-				j := requestJob(id, e.jobOutRequest, e.schCtx)
+				j := requestJob(id, e.jobOutRequest, e.ctx)
 				if j == nil {
 					continue
 				}
@@ -83,8 +82,7 @@ func (e *executor) start() {
 				}
 			}
 
-		case <-e.schCtx.Done():
-			e.cancel()
+		case <-e.ctx.Done():
 			waitForJobs := make(chan struct{})
 			waitForSingletons := make(chan struct{})
 
@@ -112,7 +110,7 @@ func (e *executor) start() {
 			}()
 
 			var count int
-			timeout := time.Now().Add(e.shutdownTimeout)
+			timeout := time.Now().Add(e.stopTimeout)
 			for time.Now().Before(timeout) && count < 2 {
 				select {
 				case <-waitForJobs:
@@ -137,7 +135,7 @@ func (e *executor) singletonRunner(in chan uuid.UUID, done chan struct{}) {
 	for {
 		select {
 		case id := <-in:
-			j := requestJob(id, e.jobOutRequest, e.schCtx)
+			j := requestJob(id, e.jobOutRequest, e.ctx)
 			if j != nil {
 				e.runJob(*j)
 			}
@@ -152,7 +150,7 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
 	for {
 		select {
 		case id := <-in:
-			j := requestJob(id, e.jobOutRequest, e.schCtx)
+			j := requestJob(id, e.jobOutRequest, e.ctx)
 			if j != nil {
 				e.runJob(*j)
 			}
@@ -170,9 +168,7 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
 
 func (e *executor) runJob(j internalJob) {
 	select {
-	case <-j.ctx.Done():
 	case <-e.ctx.Done():
-	case <-e.schCtx.Done():
 	default:
 		if e.elector != nil {
 			if err := e.elector.IsLeader(j.ctx); err != nil {

@@ -43,7 +43,7 @@ func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
 }
 
 func requestJob(id uuid.UUID, ch chan jobOutRequest, ctx context.Context) *internalJob {
-	resp := make(chan internalJob)
+	resp := make(chan internalJob, 1)
 	select {
 	case <-ctx.Done():
 		return nil

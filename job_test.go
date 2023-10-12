@@ -32,7 +32,8 @@ func TestDurationJob(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			err = s.Done()
+			s.Start()
+			err = s.Shutdown()
 			require.NoError(t, err)
 		})
 	}

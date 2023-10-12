@@ -14,5 +14,5 @@ var (
 	ErrWithLimitConcurrentJobsZero = fmt.Errorf("gocron: WithLimitConcurrentJobs: limit must be greater than 0")
 	ErrWithLimitedRunsZero         = fmt.Errorf("gocron: WithLimitedRuns: limit must be greater than 0")
 	ErrWithLocationNil             = fmt.Errorf("gocron: WithLocation: location must not be nil")
-	ErrWithShutdownTimeoutZero     = fmt.Errorf("gocron: WithShutdownTimeout: timeout must be greater than 0")
+	ErrWithShutdownTimeoutZero     = fmt.Errorf("gocron: WithStopTimeout: timeout must be greater than 0")
 )

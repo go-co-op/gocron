@@ -54,13 +54,15 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			_, err = s.NewJob(tt.jd)
 			require.NoError(t, err)
 
+			s.Start()
+
 			startTime := time.Now()
 			var runCount int
 			for runCount < 1 {
 				<-tt.ch
 				runCount++
 			}
-			err = s.Done()
+			err = s.Shutdown()
 			require.NoError(t, err)
 			stopTime := time.Now()
 
@@ -102,7 +104,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 					},
 				),
 			),
-			[]SchedulerOption{WithShutdownTimeout(time.Second * 2)},
+			[]SchedulerOption{WithStopTimeout(time.Second * 2)},
 			3,
 		},
 		{
@@ -118,7 +120,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 				),
 				WithSingletonMode(),
 			),
-			[]SchedulerOption{WithShutdownTimeout(time.Second * 5)},
+			[]SchedulerOption{WithStopTimeout(time.Second * 5)},
 			2,
 		},
 	}
@@ -131,8 +133,9 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			_, err = s.NewJob(tt.jd)
 			require.NoError(t, err)
 
+			s.Start()
 			time.Sleep(1600 * time.Millisecond)
-			err = s.Done()
+			err = s.Shutdown()
 			require.NoError(t, err)
 
 			var runCount int
@@ -206,6 +209,7 @@ func TestScheduler_Update(t *testing.T) {
 			require.NoError(t, err)
 
 			startTime := time.Now()
+			s.Start()
 
 			var runCount int
 			for runCount < tt.runCount {
@@ -219,7 +223,7 @@ func TestScheduler_Update(t *testing.T) {
 				default:
 				}
 			}
-			err = s.Done()
+			err = s.Shutdown()
 			require.NoError(t, err)
 			stopTime := time.Now()
 
@@ -287,17 +291,48 @@ func TestScheduler_StopTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s, err := NewScheduler(
-				WithShutdownTimeout(time.Second * 1),
+				WithStopTimeout(time.Second * 1),
 			)
 			require.NoError(t, err)
 
 			_, err = s.NewJob(tt.jd)
 			require.NoError(t, err)
 
+			s.Start()
 			time.Sleep(time.Second)
-			err = s.Done()
+			err = s.Shutdown()
 			assert.ErrorIs(t, err, ErrStopTimedOut)
 			testDone <- struct{}{}
 		})
 	}
+}
+
+func TestScheduler_Start_Stop_Start_Shutdown(t *testing.T) {
+	goleak.VerifyNone(t)
+	s, err := NewScheduler(
+		WithStopTimeout(time.Second),
+	)
+	require.NoError(t, err)
+	_, err = s.NewJob(
+		DurationJob(
+			5*time.Millisecond,
+			NewTask(
+				func() {},
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+		),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	time.Sleep(5 * time.Millisecond)
+	require.NoError(t, s.Stop())
+
+	time.Sleep(50 * time.Millisecond)
+	s.Start()
+
+	time.Sleep(5 * time.Millisecond)
+	require.NoError(t, s.Shutdown())
 }
