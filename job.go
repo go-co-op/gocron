@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/exp/slices"
-
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/robfig/cron/v3"
@@ -26,29 +24,14 @@ type internalJob struct {
 	parameters       []interface{}
 	timer            clockwork.Timer
 	singletonMode    bool
+	limitRunsTo      *limitRunsTo
 	lockerKey        string
 	startTime        time.Time
+	startImmediately bool
 	// event listeners
 	afterJobRuns          func(jobID uuid.UUID)
 	beforeJobRuns         func(jobID uuid.UUID)
 	afterJobRunsWithError func(jobID uuid.UUID, err error)
-}
-
-func (j *internalJob) copy() internalJob {
-	return internalJob{
-		ctx:           j.ctx,
-		cancel:        j.cancel,
-		id:            j.id,
-		name:          j.name,
-		tags:          slices.Clone(j.tags),
-		lastRun:       j.lastRun,
-		nextRun:       j.nextRun,
-		function:      j.function,
-		parameters:    slices.Clone(j.parameters),
-		singletonMode: j.singletonMode,
-		lockerKey:     j.lockerKey,
-		startTime:     j.startTime,
-	}
 }
 
 func (j *internalJob) stop() {
@@ -70,6 +53,11 @@ func NewTask(function interface{}, parameters ...interface{}) Task {
 			parameters: parameters,
 		}
 	}
+}
+
+type limitRunsTo struct {
+	limit    int
+	runCount int
 }
 
 // -----------------------------------------------
@@ -208,39 +196,27 @@ func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, task Task, options ..
 
 type JobOption func(*internalJob) error
 
-func LimitRunsTo(runLimit int) JobOption {
-	return func(j *internalJob) error {
-		return nil
-	}
-}
-
-func SingletonMode() JobOption {
-	return func(j *internalJob) error {
-		j.singletonMode = true
-		return nil
-	}
-}
-
-func WithContext(ctx context.Context, cancel context.CancelFunc) JobOption {
-	return func(j *internalJob) error {
-		if ctx == nil {
-			return ErrWithContextNilContext
-		}
-		if cancel == nil {
-			return ErrWithContextNilCancel
-		}
-		j.ctx = ctx
-		j.cancel = cancel
-		return nil
-	}
-}
-
 func WithEventListeners(eventListeners ...EventListener) JobOption {
 	return func(j *internalJob) error {
 		for _, eventListener := range eventListeners {
 			if err := eventListener(j); err != nil {
 				return err
 			}
+		}
+		return nil
+	}
+}
+
+// WithLimitedRuns limits the number of executions of this job to n.
+// Upon reaching the limit, the job is removed from the scheduler.
+func WithLimitedRuns(limit int) JobOption {
+	return func(j *internalJob) error {
+		if limit <= 0 {
+			return ErrWithLimitedRunsZero
+		}
+		j.limitRunsTo = &limitRunsTo{
+			limit:    limit,
+			runCount: 0,
 		}
 		return nil
 	}
@@ -259,8 +235,30 @@ func WithName(name string) JobOption {
 	}
 }
 
+func WithSingletonMode() JobOption {
+	return func(j *internalJob) error {
+		j.singletonMode = true
+		return nil
+	}
+}
+
+func WithStartAt(option StartAtOption) JobOption {
+	return func(j *internalJob) error {
+		return option(j)
+	}
+}
+
+type StartAtOption func(*internalJob) error
+
+func WithStartImmediately() StartAtOption {
+	return func(j *internalJob) error {
+		j.startImmediately = true
+		return nil
+	}
+}
+
 // WithStartDateTime sets the first date & time at which the job should run.
-func WithStartDateTime(start time.Time) JobOption {
+func WithStartDateTime(start time.Time) StartAtOption {
 	return func(j *internalJob) error {
 		if start.IsZero() || start.Before(time.Now()) {
 			return fmt.Errorf("gocron: WithStartDateTime: start must not be in the past")
@@ -269,6 +267,13 @@ func WithStartDateTime(start time.Time) JobOption {
 		return nil
 	}
 }
+
+//func WithStartImmediately() JobOption {
+//	return func(j *internalJob) error {
+//		j.startImmediately = true
+//		return nil
+//	}
+//}
 
 func WithTags(tags ...string) JobOption {
 	return func(j *internalJob) error {

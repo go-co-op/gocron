@@ -54,15 +54,13 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			_, err = s.NewJob(tt.jd)
 			require.NoError(t, err)
 
-			s.Start()
-
 			startTime := time.Now()
 			var runCount int
 			for runCount < 1 {
 				<-tt.ch
 				runCount++
 			}
-			err = s.Stop()
+			err = s.Done()
 			require.NoError(t, err)
 			stopTime := time.Now()
 
@@ -118,7 +116,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 						durationSingletonCh <- struct{}{}
 					},
 				),
-				SingletonMode(),
+				WithSingletonMode(),
 			),
 			[]SchedulerOption{WithShutdownTimeout(time.Second * 5)},
 			2,
@@ -133,9 +131,8 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			_, err = s.NewJob(tt.jd)
 			require.NoError(t, err)
 
-			s.Start()
 			time.Sleep(1600 * time.Millisecond)
-			err = s.Stop()
+			err = s.Done()
 			require.NoError(t, err)
 
 			var runCount int
@@ -209,7 +206,6 @@ func TestScheduler_Update(t *testing.T) {
 			require.NoError(t, err)
 
 			startTime := time.Now()
-			s.Start()
 
 			var runCount int
 			for runCount < tt.runCount {
@@ -223,7 +219,7 @@ func TestScheduler_Update(t *testing.T) {
 				default:
 				}
 			}
-			err = s.Stop()
+			err = s.Done()
 			require.NoError(t, err)
 			stopTime := time.Now()
 
@@ -241,9 +237,6 @@ func TestScheduler_Update(t *testing.T) {
 }
 
 func TestScheduler_StopTimeout(t *testing.T) {
-	// We expect goroutines to leak here because we timed-out
-	// and one or both of the go routines waiting for singleton
-	// runner and job wait group never returned.
 	defer goleak.VerifyNone(t)
 
 	durationCh := make(chan struct{}, 10)
@@ -286,7 +279,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 						durationSingletonCh <- struct{}{}
 					},
 				),
-				SingletonMode(),
+				WithSingletonMode(),
 			),
 		},
 	}
@@ -301,9 +294,8 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			_, err = s.NewJob(tt.jd)
 			require.NoError(t, err)
 
-			s.Start()
 			time.Sleep(time.Second)
-			err = s.Stop()
+			err = s.Done()
 			assert.ErrorIs(t, err, ErrStopTimedOut)
 			testDone <- struct{}{}
 		})

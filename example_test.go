@@ -2,6 +2,7 @@ package gocron_test
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -57,10 +58,6 @@ func ExampleJob_NextRun() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleLimitRunsTo() {
-	_, _ = gocron.NewScheduler()
-}
-
 func ExampleMillisecondJob() {
 	_, _ = gocron.NewScheduler()
 }
@@ -112,15 +109,7 @@ func ExampleSecondJob() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleSingletonMode() {
-	_, _ = gocron.NewScheduler()
-}
-
 func ExampleWeeklyJob() {
-	_, _ = gocron.NewScheduler()
-}
-
-func ExampleWithContext() {
 	_, _ = gocron.NewScheduler()
 }
 
@@ -134,9 +123,29 @@ func ExampleWithEventListeners() {
 
 func ExampleWithFakeClock() {
 	fakeClock := clockwork.NewFakeClock()
-	_, _ = gocron.NewScheduler(
+	s, _ := gocron.NewScheduler(
 		gocron.WithFakeClock(fakeClock),
 	)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second*5,
+			gocron.NewTask(
+				func(one string, two int) {
+					fmt.Printf("%s, %d\n", one, two)
+					wg.Done()
+				},
+				"one", 2,
+			),
+		),
+	)
+	fakeClock.BlockUntil(1)
+	fakeClock.Advance(time.Second * 5)
+	wg.Wait()
+	_ = s.Done()
+	// Output:
+	// one, 2
 }
 
 func ExampleWithGlobalJobOptions() {
@@ -193,6 +202,28 @@ func ExampleWithLimitConcurrentJobs() {
 	)
 }
 
+func ExampleWithLimitedRuns() {
+	s, _ := gocron.NewScheduler()
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Millisecond,
+			gocron.NewTask(
+				func(one string, two int) {
+					fmt.Printf("%s, %d\n", one, two)
+				},
+				"one", 2,
+			),
+			gocron.WithLimitedRuns(1),
+		),
+	)
+	time.Sleep(100 * time.Millisecond)
+	fmt.Printf("no jobs in scheduler: %v\n", s.Jobs())
+	_ = s.Done()
+	// Output:
+	// one, 2
+	// no jobs in scheduler: []
+}
+
 func ExampleWithLocation() {
 	location, _ := time.LoadLocation("Asia/Kolkata")
 
@@ -220,8 +251,15 @@ func ExampleWithName() {
 	// job 1
 }
 
-func ExampleWithStartDateTime() {
+func ExampleWithSingletonMode() {
+	_, _ = gocron.NewScheduler()
+}
+
+func ExampleWithStartAt() {
 	s, _ := gocron.NewScheduler()
+	defer func() {
+		_ = s.Done()
+	}()
 	start := time.Date(9999, 9, 9, 9, 9, 9, 9, time.UTC)
 	j, _ := s.NewJob(
 		gocron.DurationJob(
@@ -232,9 +270,12 @@ func ExampleWithStartDateTime() {
 				},
 				"one", 2,
 			),
-			gocron.WithStartDateTime(start),
+			gocron.WithStartAt(
+				gocron.WithStartDateTime(start),
+			),
 		),
 	)
+
 	next, _ := j.NextRun()
 	fmt.Println(next)
 	// Output:
