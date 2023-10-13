@@ -2322,9 +2322,9 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 		daysToTest  []int
 		caseTest    int
 	}{
-		{description: "every two weeks after run the first scheduled task", interval: 2, weekDays: []time.Weekday{time.Thursday}, daysToTest: []int{1, 2}, caseTest: 1},
-		{description: "every three weeks after run the first scheduled task", interval: 3, weekDays: []time.Weekday{time.Thursday}, daysToTest: []int{1, 2}, caseTest: 2},
-		{description: "every two weeks after run the first 2 scheduled tasks", interval: 2, weekDays: []time.Weekday{time.Thursday, time.Friday}, daysToTest: []int{1, 2, 3}, caseTest: 3},
+		{description: "every two weeks after run the first scheduled task", interval: 2, weekDays: []time.Weekday{time.Thursday}, daysToTest: []int{1, 2, 15, 16}, caseTest: 1},
+		{description: "every three weeks after run the first scheduled task", interval: 3, weekDays: []time.Weekday{time.Thursday}, daysToTest: []int{1, 2, 15, 16}, caseTest: 2},
+		{description: "every two weeks after run the first 2 scheduled tasks", interval: 2, weekDays: []time.Weekday{time.Friday, time.Thursday}, daysToTest: []int{1, 2, 3, 15, 16, 17}, caseTest: 3},
 	}
 
 	const (
@@ -2347,13 +2347,14 @@ func TestScheduler_CheckEveryWeekHigherThanOne(t *testing.T) {
 			}
 			job, err := s.Do(func() {})
 			require.NoError(t, err)
-			for numJob, day := range tc.daysToTest {
+			for _, day := range tc.daysToTest {
 				lastRun := januaryDay2020At(day)
 
 				job.lastRun = lastRun
 				got := s.durationToNextRun(lastRun, job).duration
 
-				if numJob < len(tc.weekDays) {
+				jobWeekdays := job.Weekdays()
+				if lastRun.Weekday() < jobWeekdays[len(jobWeekdays)-1] {
 					assert.Equal(t, wantTimeUntilNextRunOneDay, got)
 				} else {
 					if tc.caseTest == 1 {

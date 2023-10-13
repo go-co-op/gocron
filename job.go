@@ -482,6 +482,9 @@ func (j *Job) Weekdays() []time.Weekday {
 	if len(j.scheduledWeekdays) == 0 {
 		return []time.Weekday{time.Sunday}
 	}
+	sort.Slice(j.scheduledWeekdays, func(i, k int) bool {
+		return j.scheduledWeekdays[i] < j.scheduledWeekdays[k]
+	})
 
 	return j.scheduledWeekdays
 }
