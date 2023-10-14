@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -139,7 +140,7 @@ func (d durationJobDefinition) options() []JobOption {
 	return d.opts
 }
 
-func (d durationJobDefinition) setup(j *internalJob, location *time.Location) error {
+func (d durationJobDefinition) setup(j *internalJob, _ *time.Location) error {
 	if d.duration <= 0 {
 		return ErrDurationJobZero
 	}
@@ -160,27 +161,45 @@ func DurationJob(duration time.Duration, task Task, options ...JobOption) JobDef
 	}
 }
 
-func DurationRandomJob(minDuration, maxDuration string, task Task, options ...JobOption) JobDefinition {
+var _ JobDefinition = (*durationRandomJobDefinition)(nil)
+
+type durationRandomJobDefinition struct {
+	min, max time.Duration
+	opts     []JobOption
+	tas      Task
+}
+
+func (d durationRandomJobDefinition) options() []JobOption {
+	return d.opts
+}
+
+func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location) error {
+	if d.min >= d.max {
+		return ErrDurationRandomJobMinMax
+	}
+
+	j.jobSchedule = &durationRandomJob{
+		min:  d.min,
+		max:  d.max,
+		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
 	return nil
+}
+
+func (d durationRandomJobDefinition) task() Task {
+	return d.tas
+}
+
+func DurationRandomJob(minDuration, maxDuration time.Duration, task Task, options ...JobOption) JobDefinition {
+	return durationRandomJobDefinition{
+		min:  minDuration,
+		max:  maxDuration,
+		opts: options,
+		tas:  task,
+	}
 }
 
 func DailyJob(interval int, at time.Duration, task Task, options ...JobOption) JobDefinition {
-	return nil
-}
-
-func HourlyJob(interval int, task Task, options ...JobOption) JobDefinition {
-	return nil
-}
-
-func MinuteJob(interval int, task Task, options ...JobOption) JobDefinition {
-	return nil
-}
-
-func MillisecondJob(interval int, task Task, options ...JobOption) JobDefinition {
-	return nil
-}
-
-func SecondJob(interval int, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
@@ -348,6 +367,18 @@ type durationJob struct {
 
 func (j *durationJob) next(lastRun time.Time) time.Time {
 	return lastRun.Add(j.duration)
+}
+
+var _ jobSchedule = (*durationRandomJob)(nil)
+
+type durationRandomJob struct {
+	min, max time.Duration
+	rand     *rand.Rand
+}
+
+func (j *durationRandomJob) next(lastRun time.Time) time.Time {
+	r := j.rand.Int63n(int64(j.max - j.min))
+	return lastRun.Add(j.min + time.Duration(r))
 }
 
 // -----------------------------------------------
