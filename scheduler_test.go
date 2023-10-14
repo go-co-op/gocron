@@ -217,7 +217,7 @@ func TestScheduler_Update(t *testing.T) {
 				case <-tt.ch:
 					runCount++
 					if runCount == tt.updateAfterCount {
-						_, err = s.Update(j.Id(), tt.updateJob)
+						_, err = s.Update(j.ID(), tt.updateJob)
 						require.NoError(t, err)
 					}
 				default:
@@ -328,7 +328,7 @@ func TestScheduler_Start_Stop_Start_Shutdown(t *testing.T) {
 
 	s.Start()
 	time.Sleep(5 * time.Millisecond)
-	require.NoError(t, s.Stop())
+	require.NoError(t, s.StopJobs())
 
 	time.Sleep(50 * time.Millisecond)
 	s.Start()

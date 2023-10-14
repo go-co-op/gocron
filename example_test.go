@@ -46,7 +46,7 @@ func ExampleHourlyJob() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleJob_Id() {
+func ExampleJob_ID() {
 	_, _ = gocron.NewScheduler()
 }
 
@@ -78,7 +78,7 @@ func ExampleScheduler_NewJob() {
 	if err != nil {
 		// handle error
 	}
-	fmt.Println(j.Id())
+	fmt.Println(j.ID())
 }
 
 func ExampleScheduler_RemoveByTags() {
@@ -144,7 +144,7 @@ func ExampleWithFakeClock() {
 	fakeClock.BlockUntil(1)
 	fakeClock.Advance(time.Second * 5)
 	wg.Wait()
-	_ = s.Stop()
+	_ = s.StopJobs()
 	// Output:
 	// one, 2
 }
@@ -220,7 +220,7 @@ func ExampleWithLimitedRuns() {
 	s.Start()
 	time.Sleep(100 * time.Millisecond)
 	fmt.Printf("no jobs in scheduler: %v\n", s.Jobs())
-	_ = s.Stop()
+	_ = s.StopJobs()
 	// Output:
 	// one, 2
 	// no jobs in scheduler: []
@@ -276,7 +276,7 @@ func ExampleWithStartAt() {
 	)
 	s.Start()
 	defer func() {
-		_ = s.Stop()
+		_ = s.StopJobs()
 	}()
 	next, _ := j.NextRun()
 	fmt.Println(next)

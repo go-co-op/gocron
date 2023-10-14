@@ -388,7 +388,7 @@ func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 // -----------------------------------------------
 
 type Job interface {
-	Id() uuid.UUID
+	ID() uuid.UUID
 	LastRun() (time.Time, error)
 	Name() string
 	NextRun() (time.Time, error)
@@ -404,7 +404,7 @@ type job struct {
 	jobOutRequest chan jobOutRequest
 }
 
-func (j job) Id() uuid.UUID {
+func (j job) ID() uuid.UUID {
 	return j.id
 }
 

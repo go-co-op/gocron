@@ -19,7 +19,7 @@ type Scheduler interface {
 	RemoveByTags(...string)
 	RemoveJob(uuid.UUID) error
 	Start()
-	Stop() error
+	StopJobs() error
 	Shutdown() error
 	Update(uuid.UUID, JobDefinition) (Job, error)
 }
@@ -269,9 +269,9 @@ func (s *scheduler) selectStart() {
 				next = j.next(s.now())
 			}
 
-			jobId := id
+			jobID := id
 			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
-				s.exec.jobsIDsIn <- jobId
+				s.exec.jobsIDsIn <- jobID
 			})
 		}
 		j.nextRun = next
@@ -380,11 +380,18 @@ func (s *scheduler) RemoveJob(id uuid.UUID) error {
 	return nil
 }
 
+// Start begins scheduling jobs for execution based
+// on each job's definition. Job's added to an already
+// running scheduler will be scheduled immediately based
+// on definition.
 func (s *scheduler) Start() {
 	s.startCh <- struct{}{}
 }
 
-func (s *scheduler) Stop() error {
+// StopJobs stops the execution of all jobs in the scheduler.
+// This can be useful in situations where jobs need to be
+// paused globally and then restarted with Start().
+func (s *scheduler) StopJobs() error {
 	s.stopCh <- struct{}{}
 	select {
 	case err := <-s.exec.done:
@@ -394,6 +401,9 @@ func (s *scheduler) Stop() error {
 	}
 }
 
+// Shutdown should be called when you no longer need
+// the Scheduler or Job's as the Scheduler cannot
+// be restarted after calling Shutdown.
 func (s *scheduler) Shutdown() error {
 	s.cancel()
 	select {
@@ -404,6 +414,8 @@ func (s *scheduler) Shutdown() error {
 	}
 }
 
+// Update replaces the existing Job's JobDefinition with the provided
+// JobDefinition. The Job's Job.ID() remains the same.
 func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, error) {
 	return s.addOrUpdateJob(id, jobDefinition)
 }
@@ -414,6 +426,8 @@ func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, erro
 // -----------------------------------------------
 // -----------------------------------------------
 
+// SchedulerOption defines the function for setting
+// options on the Scheduler.
 type SchedulerOption func(*scheduler) error
 
 // WithDistributedElector sets the elector to be used by multiple
@@ -525,7 +539,7 @@ func WithLocation(location *time.Location) SchedulerOption {
 
 // WithStopTimeout sets the amount of time the Scheduler should
 // wait gracefully for jobs to complete before returning when
-// Stop() or Shutdown() are called.
+// StopJobs() or Shutdown() are called.
 // Default: 10 * time.Second
 func WithStopTimeout(timeout time.Duration) SchedulerOption {
 	return func(s *scheduler) error {
