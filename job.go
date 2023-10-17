@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/robfig/cron/v3"
+	"golang.org/x/exp/slices"
 )
 
 type internalJob struct {
@@ -199,12 +200,130 @@ func DurationRandomJob(minDuration, maxDuration time.Duration, task Task, option
 	}
 }
 
-func DailyJob(interval int, at time.Duration, task Task, options ...JobOption) JobDefinition {
+func DailyJob(interval int, atTimes []time.Duration, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
 
-func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, task Task, options ...JobOption) JobDefinition {
+func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, atTimes []time.Duration, task Task, options ...JobOption) JobDefinition {
 	return nil
+}
+
+var _ JobDefinition = (*monthlyJobDefinition)(nil)
+
+type monthlyJobDefinition struct {
+	interval       uint
+	daysOfTheMonth DaysOfTheMonth
+	atTimes        AtTimes
+	opts           []JobOption
+	tas            Task
+}
+
+func (m monthlyJobDefinition) options() []JobOption {
+	return m.opts
+}
+
+func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) error {
+	var ms monthlyJob
+
+	if m.daysOfTheMonth != nil {
+		var days, daysEnd []int
+		for _, day := range m.daysOfTheMonth() {
+			if day > 31 || day == 0 || day < -31 {
+				return ErrMonthlyJobDays
+			}
+			if day > 0 {
+				days = append(days, day)
+			} else {
+				daysEnd = append(daysEnd, day)
+			}
+		}
+		slices.Sort(days)
+		slices.Sort(daysEnd)
+		ms.days = days
+		ms.daysFromEnd = daysEnd
+	}
+
+	if m.atTimes != nil {
+		var atTimesDate []time.Time
+		for _, a := range m.atTimes() {
+			if a == nil {
+				continue
+			}
+			at := a()
+			if at.hours > 23 {
+				return ErrMonthlyJobHours
+			} else if at.minutes > 59 || at.seconds > 59 {
+				return ErrMonthlyJobMinutesSeconds
+			}
+			atTimesDate = append(atTimesDate, at.Time(location))
+		}
+		slices.SortStableFunc(atTimesDate, func(a, b time.Time) int {
+			return a.Compare(b)
+		})
+		ms.atTimes = atTimesDate
+	}
+
+	j.jobSchedule = ms
+	return nil
+}
+
+func (m monthlyJobDefinition) task() Task {
+	return m.tas
+}
+
+type DaysOfTheMonth func() []int
+
+func NewDaysOfTheMonth(days ...int) DaysOfTheMonth {
+	return func() []int {
+		return days
+	}
+}
+
+type atTime struct {
+	hours, minutes, seconds uint
+}
+
+func (a atTime) Time(location *time.Location) time.Time {
+	return time.Date(0, 0, 0, int(a.hours), int(a.minutes), int(a.seconds), 0, location)
+}
+
+type AtTime func() atTime
+
+func NewAtTime(hours, minutes, seconds uint) AtTime {
+	return func() atTime {
+		return atTime{hours: hours, minutes: minutes, seconds: seconds}
+	}
+}
+
+type AtTimes func() []AtTime
+
+func NewAtTimes(atTimes ...AtTime) AtTimes {
+	return func() []AtTime {
+		return atTimes
+	}
+}
+
+// MonthlyJob runs the job on the interval of months, on the specific days of the month
+// specified, and at the set times. Days of the month can be 1 to 31 or negative (-1 to -31), which
+// count backwards from the end of the month. E.g. -1 is the last day of the month.
+//
+// If no days of the month are set, the job will start on the following month and on the
+// first at time set.
+//
+// If no days or at times are set, the job will start X months from now.
+//
+// If a day of the month is selected that does not exist in all months (e.g. 31st)
+// any month that does not have that day will be skipped.
+//
+// A job can always start per your specification using WithStartAt.
+func MonthlyJob(interval uint, daysOfTheMonth DaysOfTheMonth, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
+	return monthlyJobDefinition{
+		interval:       interval,
+		daysOfTheMonth: daysOfTheMonth,
+		atTimes:        atTimes,
+		tas:            task,
+		opts:           options,
+	}
 }
 
 // -----------------------------------------------
@@ -379,6 +498,41 @@ type durationRandomJob struct {
 func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 	r := j.rand.Int63n(int64(j.max - j.min))
 	return lastRun.Add(j.min + time.Duration(r))
+}
+
+var _ jobSchedule = (*monthlyJob)(nil)
+
+type monthlyJob struct {
+	days        []int
+	daysFromEnd []int
+	atTimes     []time.Time
+}
+
+func (m monthlyJob) next(lastRun time.Time) time.Time {
+	// if the days or daysFromEnd is today, then have to evaluate if atTime is after lastRun
+	var days []int
+	copy(days, m.days)
+	firstDayNextMonth := time.Date(lastRun.Year(), lastRun.Month()+1, 1, 0, 0, 0, 0, lastRun.Location())
+	for _, daySub := range m.daysFromEnd {
+		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
+		days = append(days, day)
+	}
+	slices.Sort(days)
+
+	var next time.Time
+	for _, day := range days {
+		if day >= lastRun.Day() {
+			for _, at := range m.atTimes {
+				if at.AddDate(lastRun.Year(), lastRun.Month())
+			}
+
+			next = time.Date(lastRun.Year(), lastRun.Month(), day, lastRun.Hour(), lastRun.Minute(), lastRun.Second(), lastRun.Nanosecond(), lastRun.Location())
+			break
+		}
+	}
+
+	//TODO implement me
+	panic("implement me")
 }
 
 // -----------------------------------------------
