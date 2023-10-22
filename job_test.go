@@ -54,7 +54,7 @@ func TestMonthlyJob_next(t *testing.T) {
 		expectedDurationToNextRun time.Duration
 	}{
 		{
-			"same day",
+			"same day - before at time",
 			[]int{1},
 			nil,
 			[]time.Time{
@@ -63,6 +63,17 @@ func TestMonthlyJob_next(t *testing.T) {
 			time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 			time.Date(2000, 1, 1, 5, 30, 0, 0, time.UTC),
 			5*time.Hour + 30*time.Minute,
+		},
+		{
+			"same day - after at time, runs next available date",
+			[]int{1, 10},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 1, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 10, 5, 30, 0, 0, time.UTC),
+			9 * 24 * time.Hour,
 		},
 		{
 			"daylight savings time",
@@ -87,7 +98,7 @@ func TestMonthlyJob_next(t *testing.T) {
 			2 * 24 * time.Hour,
 		},
 		{
-			"day not in current month, runs next month",
+			"day not in current month, runs next month (leap year)",
 			[]int{31},
 			nil,
 			[]time.Time{
