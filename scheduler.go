@@ -327,6 +327,9 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 
 	j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
 
+	if definition.task() == nil {
+		return nil, ErrNewJobTaskNil
+	}
 	tsk := definition.task()()
 	taskFunc := reflect.ValueOf(tsk.function)
 	for taskFunc.Kind() == reflect.Ptr {
