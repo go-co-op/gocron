@@ -30,19 +30,11 @@ func ExampleDailyJob() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleMinuteJob() {
-	_, _ = gocron.NewScheduler()
-}
-
 func ExampleDurationJob() {
 	_, _ = gocron.NewScheduler()
 }
 
 func ExampleDurationRandomJob() {
-	_, _ = gocron.NewScheduler()
-}
-
-func ExampleHourlyJob() {
 	_, _ = gocron.NewScheduler()
 }
 
@@ -58,8 +50,22 @@ func ExampleJob_NextRun() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleMillisecondJob() {
-	_, _ = gocron.NewScheduler()
+func ExampleMonthlyJob() {
+	s, _ := gocron.NewScheduler()
+
+	_, _ = s.NewJob(
+		gocron.MonthlyJob(
+			1,
+			gocron.NewDaysOfTheMonth(3, -5, -1),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(10, 30, 0),
+				gocron.NewAtTime(11, 15, 0),
+			),
+			gocron.NewTask(
+				func() {},
+			),
+		),
+	)
 }
 
 func ExampleNewScheduler() {
@@ -89,7 +95,7 @@ func ExampleScheduler_RemoveJob() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleWithShutdownTimeout() {
+func ExampleWithStopTimeout() {
 	_, _ = gocron.NewScheduler()
 }
 
@@ -97,18 +103,13 @@ func ExampleScheduler_Start() {
 	_, _ = gocron.NewScheduler()
 }
 
-func ExampleScheduler_Stop() {
+func ExampleScheduler_StopJobs() {
 	_, _ = gocron.NewScheduler()
 }
 
 func ExampleScheduler_Update() {
 	_, _ = gocron.NewScheduler()
 }
-
-func ExampleSecondJob() {
-	_, _ = gocron.NewScheduler()
-}
-
 func ExampleWeeklyJob() {
 	_, _ = gocron.NewScheduler()
 }

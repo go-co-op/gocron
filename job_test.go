@@ -86,6 +86,17 @@ func TestMonthlyJob_next(t *testing.T) {
 			time.Date(2000, 1, 31, 5, 30, 0, 0, time.UTC),
 			2 * 24 * time.Hour,
 		},
+		{
+			"day not in current month, runs next month",
+			[]int{31},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 31, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 3, 31, 5, 30, 0, 0, time.UTC),
+			29*24*time.Hour + 31*24*time.Hour,
+		},
 	}
 
 	for _, tt := range tests {

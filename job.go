@@ -524,7 +524,12 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	if !next.IsZero() {
 		return next
 	}
-	return m.nextMonthDayAtTime(firstDayNextMonth, days)
+	for next.IsZero() {
+		next = m.nextMonthDayAtTime(firstDayNextMonth, days)
+		firstDayNextMonth = firstDayNextMonth.AddDate(0, 1, 0)
+	}
+
+	return next
 }
 
 func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time {
@@ -532,6 +537,11 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time 
 		if day >= lastRun.Day() {
 			for _, at := range m.atTimes {
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+				// this check handles if we're setting a day not in the current month
+				// e.g. setting day 31 in Feb results in March 2nd
+				if atDate.Month() != lastRun.Month() {
+					continue
+				}
 				if atDate.After(lastRun) {
 					return atDate
 				}
