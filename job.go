@@ -273,8 +273,9 @@ func (m monthlyJobDefinition) task() Task {
 
 type DaysOfTheMonth func() []int
 
-func NewDaysOfTheMonth(days ...int) DaysOfTheMonth {
+func NewDaysOfTheMonth(day int, days ...int) DaysOfTheMonth {
 	return func() []int {
+		days = append(days, day)
 		return days
 	}
 }
@@ -297,8 +298,9 @@ func NewAtTime(hours, minutes, seconds uint) AtTime {
 
 type AtTimes func() []AtTime
 
-func NewAtTimes(atTimes ...AtTime) AtTimes {
+func NewAtTimes(atTime AtTime, atTimes ...AtTime) AtTimes {
 	return func() []AtTime {
+		atTimes = append(atTimes, atTime)
 		return atTimes
 	}
 }
@@ -509,8 +511,7 @@ type monthlyJob struct {
 }
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
-	// if the days or daysFromEnd is today, then have to evaluate if atTime is after lastRun
-	var days []int
+	days := make([]int, len(m.days))
 	copy(days, m.days)
 	firstDayNextMonth := time.Date(lastRun.Year(), lastRun.Month()+1, 1, 0, 0, 0, 0, lastRun.Location())
 	for _, daySub := range m.daysFromEnd {
@@ -519,20 +520,26 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	}
 	slices.Sort(days)
 
-	var next time.Time
+	next := m.nextMonthDayAtTime(lastRun, days)
+	if !next.IsZero() {
+		return next
+	}
+	return m.nextMonthDayAtTime(firstDayNextMonth, days)
+}
+
+func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time {
 	for _, day := range days {
 		if day >= lastRun.Day() {
 			for _, at := range m.atTimes {
-				if at.AddDate(lastRun.Year(), lastRun.Month())
+				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+				if atDate.After(lastRun) {
+					return atDate
+				}
 			}
-
-			next = time.Date(lastRun.Year(), lastRun.Month(), day, lastRun.Hour(), lastRun.Minute(), lastRun.Second(), lastRun.Nanosecond(), lastRun.Location())
-			break
+			continue
 		}
 	}
-
-	//TODO implement me
-	panic("implement me")
+	return time.Time{}
 }
 
 // -----------------------------------------------
