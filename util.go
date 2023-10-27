@@ -5,17 +5,8 @@ import (
 	"reflect"
 
 	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 )
-
-//func callJobFunc(jobFunc interface{}) {
-//	if jobFunc == nil {
-//		return
-//	}
-//	f := reflect.ValueOf(jobFunc)
-//	if !f.IsZero() {
-//		f.Call([]reflect.Value{})
-//	}
-//}
 
 func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
 	if jobFunc == nil {
@@ -63,13 +54,11 @@ func requestJob(id uuid.UUID, ch chan jobOutRequest, ctx context.Context) *inter
 	return &j
 }
 
-func mapKeysContainAnySliceElement(m map[string]struct{}, sl []string) bool {
-	for x := range m {
-		for _, y := range sl {
-			if x == y {
-				return true
-			}
-		}
+func removeSliceDuplicatesInt(in []int) []int {
+	m := make(map[int]struct{})
+
+	for _, i := range in {
+		m[i] = struct{}{}
 	}
-	return false
+	return maps.Keys(m)
 }

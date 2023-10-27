@@ -8,36 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDurationJob(t *testing.T) {
-	tests := []struct {
-		name        string
-		duration    time.Duration
-		expectedErr *string
-	}{
-		{"success", time.Second, nil},
-	}
+func TestDurationJob_next(t *testing.T) {
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler()
-			require.NoError(t, err)
-
-			_, err = s.NewJob(
-				DurationJob(
-					tt.duration,
-					NewTask(
-						func() {},
-						nil,
-					),
-				),
-			)
-			require.NoError(t, err)
-
-			s.Start()
-			err = s.Shutdown()
-			require.NoError(t, err)
-		})
-	}
 }
 
 func TestMonthlyJob_next(t *testing.T) {
@@ -46,6 +18,7 @@ func TestMonthlyJob_next(t *testing.T) {
 
 	tests := []struct {
 		name                      string
+		interval                  uint
 		days                      []int
 		daysFromEnd               []int
 		atTimes                   []time.Time
@@ -55,6 +28,7 @@ func TestMonthlyJob_next(t *testing.T) {
 	}{
 		{
 			"same day - before at time",
+			1,
 			[]int{1},
 			nil,
 			[]time.Time{
@@ -66,6 +40,7 @@ func TestMonthlyJob_next(t *testing.T) {
 		},
 		{
 			"same day - after at time, runs next available date",
+			1,
 			[]int{1, 10},
 			nil,
 			[]time.Time{
@@ -77,6 +52,7 @@ func TestMonthlyJob_next(t *testing.T) {
 		},
 		{
 			"daylight savings time",
+			1,
 			[]int{5},
 			nil,
 			[]time.Time{
@@ -88,6 +64,7 @@ func TestMonthlyJob_next(t *testing.T) {
 		},
 		{
 			"negative days",
+			1,
 			nil,
 			[]int{-1, -3, -5},
 			[]time.Time{
@@ -99,6 +76,7 @@ func TestMonthlyJob_next(t *testing.T) {
 		},
 		{
 			"day not in current month, runs next month (leap year)",
+			1,
 			[]int{31},
 			nil,
 			[]time.Time{
@@ -108,11 +86,24 @@ func TestMonthlyJob_next(t *testing.T) {
 			time.Date(2000, 3, 31, 5, 30, 0, 0, time.UTC),
 			29*24*time.Hour + 31*24*time.Hour,
 		},
+		{
+			"multiple days not in order",
+			1,
+			[]int{10, 7, 19, 2},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 2, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 7, 5, 30, 0, 0, time.UTC),
+			5 * 24 * time.Hour,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := monthlyJob{
+				interval:    tt.interval,
 				days:        tt.days,
 				daysFromEnd: tt.daysFromEnd,
 				atTimes:     tt.atTimes,

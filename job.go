@@ -204,6 +204,26 @@ func DailyJob(interval int, atTimes []time.Duration, task Task, options ...JobOp
 	return nil
 }
 
+var _ JobDefinition = (*weeklyJobDefinition)(nil)
+
+type weeklyJobDefinition struct {
+}
+
+func (w weeklyJobDefinition) options() []JobOption {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w weeklyJobDefinition) setup(i *internalJob, location *time.Location) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (w weeklyJobDefinition) task() Task {
+	//TODO implement me
+	panic("implement me")
+}
+
 func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, atTimes []time.Duration, task Task, options ...JobOption) JobDefinition {
 	return nil
 }
@@ -224,6 +244,7 @@ func (m monthlyJobDefinition) options() []JobOption {
 
 func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) error {
 	var ms monthlyJob
+	ms.interval = m.interval
 
 	if m.daysOfTheMonth != nil {
 		var days, daysEnd []int
@@ -237,9 +258,12 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) err
 				daysEnd = append(daysEnd, day)
 			}
 		}
+		days = removeSliceDuplicatesInt(days)
 		slices.Sort(days)
-		slices.Sort(daysEnd)
 		ms.days = days
+
+		daysEnd = removeSliceDuplicatesInt(daysEnd)
+		slices.Sort(daysEnd)
 		ms.daysFromEnd = daysEnd
 	}
 
@@ -502,9 +526,22 @@ func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 	return lastRun.Add(j.min + time.Duration(r))
 }
 
+var _ jobSchedule = (*weeklyJob)(nil)
+
+type weeklyJob struct {
+	daysOfWeek []time.Weekday
+	atTimes    []time.Time
+}
+
+func (w weeklyJob) next(lastRun time.Time) time.Time {
+	//TODO implement me
+	panic("implement me")
+}
+
 var _ jobSchedule = (*monthlyJob)(nil)
 
 type monthlyJob struct {
+	interval    uint
 	days        []int
 	daysFromEnd []int
 	atTimes     []time.Time
@@ -515,6 +552,9 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	copy(days, m.days)
 	firstDayNextMonth := time.Date(lastRun.Year(), lastRun.Month()+1, 1, 0, 0, 0, 0, lastRun.Location())
 	for _, daySub := range m.daysFromEnd {
+		// getting a combined list of all the days and the negative days
+		// which count backwards from the first day of the next month
+		// -1 == the last day of the month
 		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
 		days = append(days, day)
 	}
@@ -524,25 +564,35 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	if !next.IsZero() {
 		return next
 	}
+
+	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
 	for next.IsZero() {
-		next = m.nextMonthDayAtTime(firstDayNextMonth, days)
-		firstDayNextMonth = firstDayNextMonth.AddDate(0, 1, 0)
+		next = m.nextMonthDayAtTime(from, days)
+		from = from.AddDate(0, int(m.interval), 0)
 	}
 
 	return next
 }
 
 func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time {
+	// find the next day in the month that should run and then check for an at time
 	for _, day := range days {
 		if day >= lastRun.Day() {
 			for _, at := range m.atTimes {
+				// sub the day, and the at time hour/min/sec onto the lastRun's values
+				// to use in checks to see if we've got our next run time
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
-				// this check handles if we're setting a day not in the current month
-				// e.g. setting day 31 in Feb results in March 2nd
+
 				if atDate.Month() != lastRun.Month() {
+					// this check handles if we're setting a day not in the current month
+					// e.g. setting day 31 in Feb results in March 2nd
 					continue
 				}
+
 				if atDate.After(lastRun) {
+					// checking to see if it is after i.e. greater than,
+					// and not greater or equal as our lastRun day/time
+					// will be in the loop, and we don't want to select it again
 					return atDate
 				}
 			}
