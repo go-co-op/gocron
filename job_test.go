@@ -51,6 +51,18 @@ func TestMonthlyJob_next(t *testing.T) {
 			9 * 24 * time.Hour,
 		},
 		{
+			"same day - after at time, runs next available date, following interval month",
+			2,
+			[]int{1},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 1, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 3, 1, 5, 30, 0, 0, time.UTC),
+			60 * 24 * time.Hour,
+		},
+		{
 			"daylight savings time",
 			1,
 			[]int{5},
@@ -97,6 +109,18 @@ func TestMonthlyJob_next(t *testing.T) {
 			time.Date(2000, 1, 2, 5, 30, 0, 0, time.UTC),
 			time.Date(2000, 1, 7, 5, 30, 0, 0, time.UTC),
 			5 * 24 * time.Hour,
+		},
+		{
+			"day not in next interval month, selects next available option, skips Feb, April & June",
+			2,
+			[]int{31},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(1999, 12, 31, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 8, 31, 5, 30, 0, 0, time.UTC),
+			244 * 24 * time.Hour,
 		},
 	}
 

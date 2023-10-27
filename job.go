@@ -333,15 +333,18 @@ func NewAtTimes(atTime AtTime, atTimes ...AtTime) AtTimes {
 // specified, and at the set times. Days of the month can be 1 to 31 or negative (-1 to -31), which
 // count backwards from the end of the month. E.g. -1 is the last day of the month.
 //
-// If no days of the month are set, the job will start on the following month and on the
-// first at time set.
-//
-// If no days or at times are set, the job will start X months from now.
-//
 // If a day of the month is selected that does not exist in all months (e.g. 31st)
 // any month that does not have that day will be skipped.
 //
-// A job can always start per your specification using WithStartAt.
+// By default, the job will start the next available day, considering the last run to be now,
+// and the time and month based on the interval, days and times you input.
+// This means, if you select an interval greater than 1, your job by default will run
+// X (interval) months from now.
+// You can use WithStartAt to tell the scheduler to start the job sooner.
+//
+// Carefully consider your configuration!
+//   - For example: an interval of 2 months on the 31st of each month, starting 12/31
+//     would skip Feb, April, June, and next run would be in August.
 func MonthlyJob(interval uint, daysOfTheMonth DaysOfTheMonth, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
 	return monthlyJobDefinition{
 		interval:       interval,
