@@ -5,25 +5,92 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 
 	"github.com/go-co-op/gocron/v2"
 )
 
 func ExampleAfterJobRuns() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler()
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func() {},
+			),
+			gocron.WithEventListeners(
+				gocron.AfterJobRuns(
+					func(jobID uuid.UUID) {
+						// do something after the job completes
+					},
+				),
+			),
+		),
+	)
 }
 
 func ExampleAfterJobRunsWithError() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler()
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func() {},
+			),
+			gocron.WithEventListeners(
+				gocron.AfterJobRunsWithError(
+					func(jobID uuid.UUID, err error) {
+						// do something when the job returns an error
+					},
+				),
+			),
+		),
+	)
 }
 
 func ExampleBeforeJobRuns() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler()
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+			gocron.NewTask(
+				func() {},
+			),
+			gocron.WithEventListeners(
+				gocron.BeforeJobRuns(
+					func(jobID uuid.UUID) {
+						// do something immediately before the job is run
+					},
+				),
+			),
+		),
+	)
 }
 
 func ExampleCronJob() {
-	_, _ = gocron.NewScheduler()
+	s, _ := gocron.NewScheduler()
+
+	_, _ = s.NewJob(
+		gocron.CronJob(
+			// standard cron tab parsing
+			"1 * * * *",
+			false,
+			gocron.NewTask(
+				func() {},
+			),
+		),
+	)
+	_, _ = s.NewJob(
+		gocron.CronJob(
+			// optionally include seconds as the first field
+			"* 1 * * * *",
+			true,
+			gocron.NewTask(
+				func() {},
+			),
+		),
+	)
 }
 
 func ExampleDailyJob() {

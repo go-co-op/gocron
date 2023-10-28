@@ -409,14 +409,19 @@ func WithSingletonMode() JobOption {
 	}
 }
 
+// WithStartAt sets the option for starting the job
 func WithStartAt(option StartAtOption) JobOption {
 	return func(j *internalJob) error {
 		return option(j)
 	}
 }
 
+// StartAtOption defines options for starting the job
 type StartAtOption func(*internalJob) error
 
+// WithStartImmediately tells the scheduler to run the job immediately
+// regardless of the type or schedule of job. After this immediate run
+// the job is scheduled from this time based on the job definition.
 func WithStartImmediately() StartAtOption {
 	return func(j *internalJob) error {
 		j.startImmediately = true
@@ -434,13 +439,6 @@ func WithStartDateTime(start time.Time) StartAtOption {
 		return nil
 	}
 }
-
-//func WithStartImmediately() JobOption {
-//	return func(j *internalJob) error {
-//		j.startImmediately = true
-//		return nil
-//	}
-//}
 
 func WithTags(tags ...string) JobOption {
 	return func(j *internalJob) error {
