@@ -152,9 +152,8 @@ func (s *scheduler) stopScheduler() {
 	s.started = false
 	for id, j := range s.jobs {
 		j.stop()
-		select {
-		case <-j.ctx.Done():
-		}
+		<-j.ctx.Done()
+
 		j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
 		s.jobs[id] = j
 	}
@@ -318,9 +317,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 	} else {
 		currentJob := requestJob(s.shutdownCtx, id, s.jobOutRequestCh)
 		s.removeJobCh <- id
-		select {
-		case <-currentJob.ctx.Done():
-		}
+		<-currentJob.ctx.Done()
 
 		j.id = id
 	}

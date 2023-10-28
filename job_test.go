@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDurationJob_next(t *testing.T) {
-}
+//func TestDurationJob_next(t *testing.T) {
+//}
 
 func TestWeeklyJob_next(t *testing.T) {
 	tests := []struct {

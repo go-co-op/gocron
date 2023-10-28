@@ -29,7 +29,6 @@ type internalJob struct {
 	timer            clockwork.Timer
 	singletonMode    bool
 	limitRunsTo      *limitRunsTo
-	lockerKey        string
 	startTime        time.Time
 	startImmediately bool
 	// event listeners
@@ -209,7 +208,7 @@ func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location) err
 	j.jobSchedule = &durationRandomJob{
 		min:  d.min,
 		max:  d.max,
-		rand: rand.New(rand.NewSource(time.Now().UnixNano())),
+		rand: rand.New(rand.NewSource(time.Now().UnixNano())), // nolint:gosec
 	}
 	return nil
 }
@@ -247,7 +246,7 @@ func (d dailyJobDefinition) options() []JobOption {
 }
 
 func (d dailyJobDefinition) setup(i *internalJob, location *time.Location) error {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -280,10 +279,8 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) erro
 		return ErrWeeklyJobAtTimesNil
 	}
 
-	var daysOfTheWeek []time.Weekday
-	for _, wd := range w.daysOfTheWeek() {
-		daysOfTheWeek = append(daysOfTheWeek, wd)
-	}
+	daysOfTheWeek := w.daysOfTheWeek()
+
 	slices.Sort(daysOfTheWeek)
 
 	atTimesDate, err := convertAtTimesToDateTime(w.atTimes, location)
@@ -641,7 +638,7 @@ type dailyJob struct {
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 

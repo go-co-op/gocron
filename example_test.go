@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 
-	. "github.com/go-co-op/gocron/v2"
+	. "github.com/go-co-op/gocron/v2" // nolint:revive
 )
 
 func ExampleAfterJobRuns() {
@@ -160,7 +160,7 @@ func ExampleScheduler_NewJob() {
 		),
 	)
 	if err != nil {
-		// handle error
+		panic(err)
 	}
 	fmt.Println(j.ID())
 }
