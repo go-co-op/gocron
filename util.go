@@ -3,12 +3,14 @@ package gocron
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
-func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
+func callJobFuncWithParams(jobFunc any, params ...any) error {
 	if jobFunc == nil {
 		return nil
 	}
@@ -33,7 +35,7 @@ func callJobFuncWithParams(jobFunc interface{}, params ...interface{}) error {
 	return nil
 }
 
-func requestJob(id uuid.UUID, ch chan jobOutRequest, ctx context.Context) *internalJob {
+func requestJob(ctx context.Context, id uuid.UUID, ch chan jobOutRequest) *internalJob {
 	resp := make(chan internalJob, 1)
 	select {
 	case <-ctx.Done():
@@ -61,4 +63,24 @@ func removeSliceDuplicatesInt(in []int) []int {
 		m[i] = struct{}{}
 	}
 	return maps.Keys(m)
+}
+
+func convertAtTimesToDateTime(atTimes AtTimes, location *time.Location) ([]time.Time, error) {
+	var atTimesDate []time.Time
+	for _, a := range atTimes() {
+		if a == nil {
+			return nil, errAtTimeNil
+		}
+		at := a()
+		if at.hours > 23 {
+			return nil, errAtTimeHours
+		} else if at.minutes > 59 || at.seconds > 59 {
+			return nil, errAtTimeMinSec
+		}
+		atTimesDate = append(atTimesDate, at.time(location))
+	}
+	slices.SortStableFunc(atTimesDate, func(a, b time.Time) int {
+		return a.Compare(b)
+	})
+	return atTimesDate, nil
 }

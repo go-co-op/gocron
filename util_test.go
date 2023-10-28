@@ -31,5 +31,4 @@ func TestRemoveSliceDuplicatesInt(t *testing.T) {
 			assert.ElementsMatch(t, tt.expected, result)
 		})
 	}
-
 }

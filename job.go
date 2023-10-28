@@ -14,6 +14,8 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// internalJob stores the information needed by the scheduler
+// to manage scheduling, starting and stopping the job
 type internalJob struct {
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -22,8 +24,8 @@ type internalJob struct {
 	tags   []string
 	jobSchedule
 	lastRun, nextRun time.Time
-	function         interface{}
-	parameters       []interface{}
+	function         any
+	parameters       []any
 	timer            clockwork.Timer
 	singletonMode    bool
 	limitRunsTo      *limitRunsTo
@@ -36,19 +38,29 @@ type internalJob struct {
 	afterJobRunsWithError func(jobID uuid.UUID, err error)
 }
 
+// stop is used to stop the job's timer and cancel the context
+// stopping the timer is critical for cleaning up jobs that are
+// sleeping in a time.AfterFunc timer when the job is being stopped.
+// cancelling the context keeps the executor from continuing to try
+// and run the job.
 func (j *internalJob) stop() {
 	j.timer.Stop()
 	j.cancel()
 }
 
+// task stores the function and parameters
+// that are actually run when the job is executed.
 type task struct {
-	function   interface{}
-	parameters []interface{}
+	function   any
+	parameters []any
 }
 
+// Task defines a function that returns the task
+// function and parameters.
 type Task func() task
 
-func NewTask(function interface{}, parameters ...interface{}) Task {
+// NewTask provides the job's task function and parameters.
+func NewTask(function any, parameters ...any) Task {
 	return func() task {
 		return task{
 			function:   function,
@@ -57,6 +69,9 @@ func NewTask(function interface{}, parameters ...interface{}) Task {
 	}
 }
 
+// limitRunsTo is used for managing the number of runs
+// when the user only wants the job to run a certain
+// number of times and then be removed from the scheduler.
 type limitRunsTo struct {
 	limit    int
 	runCount int
@@ -64,10 +79,12 @@ type limitRunsTo struct {
 
 // -----------------------------------------------
 // -----------------------------------------------
-// --------------- Job Variants ---------------
+// --------------- Job Variants ------------------
 // -----------------------------------------------
 // -----------------------------------------------
 
+// JobDefinition defines the interface that must be
+// implemented to create a job from the definition.
 type JobDefinition interface {
 	options() []JobOption
 	setup(*internalJob, *time.Location) error
@@ -98,6 +115,8 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error 
 	} else if location != nil {
 		withLocation = fmt.Sprintf("CRON_TZ=%s %s", location.String(), c.crontab)
 	} else {
+		// since the user didn't provide a timezone either in the crontab or within
+		// the Scheduler, we default to time.Local.
 		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local.String(), c.crontab)
 	}
 
@@ -120,6 +139,12 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error 
 	return nil
 }
 
+// CronJob defines a new job using the crontab syntax. `* * * * *`.
+// An optional 6th field can be used at the beginning if withSeconds
+// is set to true. `* * * * * *`.
+// The timezone can be set on the Scheduler using WithLocation. Or in the
+// crontab in the form `TZ=America/Chicago * * * * *` or
+// `CRON_TZ=America/Chicago * * * * *`
 func CronJob(crontab string, withSeconds bool, task Task, options ...JobOption) JobDefinition {
 	return cronJobDefinition{
 		crontab:     crontab,
@@ -154,6 +179,8 @@ func (d durationJobDefinition) task() Task {
 	return d.tas
 }
 
+// DurationJob defines a new job using time.Duration
+// for the interval.
 func DurationJob(duration time.Duration, task Task, options ...JobOption) JobDefinition {
 	return durationJobDefinition{
 		duration: duration,
@@ -191,6 +218,8 @@ func (d durationRandomJobDefinition) task() Task {
 	return d.tas
 }
 
+// DurationRandomJob defines a new job that runs on a random interval
+// between the min and max duration values provided.
 func DurationRandomJob(minDuration, maxDuration time.Duration, task Task, options ...JobOption) JobDefinition {
 	return durationRandomJobDefinition{
 		min:  minDuration,
@@ -200,32 +229,98 @@ func DurationRandomJob(minDuration, maxDuration time.Duration, task Task, option
 	}
 }
 
-func DailyJob(interval int, atTimes []time.Duration, task Task, options ...JobOption) JobDefinition {
+func DailyJob(interval uint, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
 	return nil
+}
+
+var _ JobDefinition = (*dailyJobDefinition)(nil)
+
+type dailyJobDefinition struct {
+	interval uint
+	atTimes  AtTimes
+	opts     []JobOption
+	tas      Task
+}
+
+func (d dailyJobDefinition) options() []JobOption {
+	return d.opts
+}
+
+func (d dailyJobDefinition) setup(i *internalJob, location *time.Location) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (d dailyJobDefinition) task() Task {
+	return d.tas
 }
 
 var _ JobDefinition = (*weeklyJobDefinition)(nil)
 
 type weeklyJobDefinition struct {
+	interval      uint
+	daysOfTheWeek Weekdays
+	atTimes       AtTimes
+	opts          []JobOption
+	tas           Task
 }
 
 func (w weeklyJobDefinition) options() []JobOption {
-	//TODO implement me
-	panic("implement me")
+	return w.opts
 }
 
-func (w weeklyJobDefinition) setup(i *internalJob, location *time.Location) error {
-	//TODO implement me
-	panic("implement me")
+func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) error {
+	var ws weeklyJob
+	ws.interval = w.interval
+
+	if w.daysOfTheWeek == nil {
+		return ErrWeeklyJobDaysOfTheWeekNil
+	}
+	if w.atTimes == nil {
+		return ErrWeeklyJobAtTimesNil
+	}
+
+	var daysOfTheWeek []time.Weekday
+	for _, wd := range w.daysOfTheWeek() {
+		daysOfTheWeek = append(daysOfTheWeek, wd)
+	}
+	slices.Sort(daysOfTheWeek)
+
+	atTimesDate, err := convertAtTimesToDateTime(w.atTimes, location)
+	switch {
+	case errors.Is(err, errAtTimeNil):
+		return ErrWeeklyJobAtTimeNil
+	case errors.Is(err, errAtTimeHours):
+		return ErrWeeklyJobHours
+	case errors.Is(err, errAtTimeMinSec):
+		return ErrWeeklyJobMinutesSeconds
+	}
+	ws.atTimes = atTimesDate
+
+	j.jobSchedule = ws
+	return nil
 }
 
 func (w weeklyJobDefinition) task() Task {
-	//TODO implement me
-	panic("implement me")
+	return w.tas
 }
 
-func WeeklyJob(interval int, daysOfTheWeek []time.Weekday, atTimes []time.Duration, task Task, options ...JobOption) JobDefinition {
-	return nil
+type Weekdays func() []time.Weekday
+
+func NewWeekdays(weekday time.Weekday, weekdays ...time.Weekday) Weekdays {
+	return func() []time.Weekday {
+		return append(weekdays, weekday)
+	}
+}
+
+func WeeklyJob(interval uint, daysOfTheWeek Weekdays, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
+	return weeklyJobDefinition{
+		interval:      interval,
+		daysOfTheWeek: daysOfTheWeek,
+		atTimes:       atTimes,
+		opts:          options,
+		tas:           task,
+	}
 }
 
 var _ JobDefinition = (*monthlyJobDefinition)(nil)
@@ -246,46 +341,42 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) err
 	var ms monthlyJob
 	ms.interval = m.interval
 
-	if m.daysOfTheMonth != nil {
-		var days, daysEnd []int
-		for _, day := range m.daysOfTheMonth() {
-			if day > 31 || day == 0 || day < -31 {
-				return ErrMonthlyJobDays
-			}
-			if day > 0 {
-				days = append(days, day)
-			} else {
-				daysEnd = append(daysEnd, day)
-			}
-		}
-		days = removeSliceDuplicatesInt(days)
-		slices.Sort(days)
-		ms.days = days
-
-		daysEnd = removeSliceDuplicatesInt(daysEnd)
-		slices.Sort(daysEnd)
-		ms.daysFromEnd = daysEnd
+	if m.daysOfTheMonth == nil {
+		return ErrMonthlyJobDaysNil
+	}
+	if m.atTimes == nil {
+		return ErrMonthlyJobAtTimesNil
 	}
 
-	if m.atTimes != nil {
-		var atTimesDate []time.Time
-		for _, a := range m.atTimes() {
-			if a == nil {
-				continue
-			}
-			at := a()
-			if at.hours > 23 {
-				return ErrMonthlyJobHours
-			} else if at.minutes > 59 || at.seconds > 59 {
-				return ErrMonthlyJobMinutesSeconds
-			}
-			atTimesDate = append(atTimesDate, at.Time(location))
+	var daysStart, daysEnd []int
+	for _, day := range m.daysOfTheMonth() {
+		if day > 31 || day == 0 || day < -31 {
+			return ErrMonthlyJobDays
 		}
-		slices.SortStableFunc(atTimesDate, func(a, b time.Time) int {
-			return a.Compare(b)
-		})
-		ms.atTimes = atTimesDate
+		if day > 0 {
+			daysStart = append(daysStart, day)
+		} else {
+			daysEnd = append(daysEnd, day)
+		}
 	}
+	daysStart = removeSliceDuplicatesInt(daysStart)
+	slices.Sort(daysStart)
+	ms.days = daysStart
+
+	daysEnd = removeSliceDuplicatesInt(daysEnd)
+	slices.Sort(daysEnd)
+	ms.daysFromEnd = daysEnd
+
+	atTimesDate, err := convertAtTimesToDateTime(m.atTimes, location)
+	switch {
+	case errors.Is(err, errAtTimeNil):
+		return ErrMonthlyJobAtTimeNil
+	case errors.Is(err, errAtTimeHours):
+		return ErrMonthlyJobHours
+	case errors.Is(err, errAtTimeMinSec):
+		return ErrMonthlyJobMinutesSeconds
+	}
+	ms.atTimes = atTimesDate
 
 	j.jobSchedule = ms
 	return nil
@@ -295,12 +386,21 @@ func (m monthlyJobDefinition) task() Task {
 	return m.tas
 }
 
-type DaysOfTheMonth func() []int
+type days []int
 
-func NewDaysOfTheMonth(day int, days ...int) DaysOfTheMonth {
-	return func() []int {
-		days = append(days, day)
-		return days
+// DaysOfTheMonth defines a function that returns a list of days.
+type DaysOfTheMonth func() days
+
+// NewDaysOfTheMonth provide the days of the month the job should
+// run. The days can be positive 1 to 31 and/or negative -31 to -1.
+// Negative values count backwards from the end of the month.
+// For example: -1 == the last day of the month.
+//
+//	-5 == 5 days before the end of the month.
+func NewDaysOfTheMonth(day int, moreDays ...int) DaysOfTheMonth {
+	return func() days {
+		moreDays = append(moreDays, day)
+		return moreDays
 	}
 }
 
@@ -308,20 +408,26 @@ type atTime struct {
 	hours, minutes, seconds uint
 }
 
-func (a atTime) Time(location *time.Location) time.Time {
+func (a atTime) time(location *time.Location) time.Time {
 	return time.Date(0, 0, 0, int(a.hours), int(a.minutes), int(a.seconds), 0, location)
 }
 
+// AtTime defines a function that returns the internal atTime
 type AtTime func() atTime
 
+// NewAtTime provide the hours, minutes and seconds at which
+// the job should be run
 func NewAtTime(hours, minutes, seconds uint) AtTime {
 	return func() atTime {
 		return atTime{hours: hours, minutes: minutes, seconds: seconds}
 	}
 }
 
+// AtTimes define a list of AtTime
 type AtTimes func() []AtTime
 
+// NewAtTimes provide the hours, minutes and seconds at which
+// the job should be run
 func NewAtTimes(atTime AtTime, atTimes ...AtTime) AtTimes {
 	return func() []AtTime {
 		atTimes = append(atTimes, atTime)
@@ -527,16 +633,58 @@ func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 	return lastRun.Add(j.min + time.Duration(r))
 }
 
+var _ jobSchedule = (*dailyJob)(nil)
+
+type dailyJob struct {
+	interval uint
+	atTimes  []time.Time
+}
+
+func (d dailyJob) next(lastRun time.Time) time.Time {
+	//TODO implement me
+	panic("implement me")
+}
+
 var _ jobSchedule = (*weeklyJob)(nil)
 
 type weeklyJob struct {
+	interval   uint
 	daysOfWeek []time.Weekday
 	atTimes    []time.Time
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
-	//TODO implement me
-	panic("implement me")
+	next := w.nextWeekDayAtTime(lastRun)
+	if !next.IsZero() {
+		return next
+	}
+
+	startOfTheNextIntervalWeek := (lastRun.Day() - int(lastRun.Weekday())) + int(w.interval*7)
+	from := time.Date(lastRun.Year(), lastRun.Month(), startOfTheNextIntervalWeek, 0, 0, 0, 0, lastRun.Location())
+	return w.nextWeekDayAtTime(from)
+}
+
+func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time) time.Time {
+	for _, wd := range w.daysOfWeek {
+		// checking if we're on the same day or later in the same week
+		if wd >= lastRun.Weekday() {
+			// weekDayDiff is used to add the correct amount to the atDate day below
+			weekDayDiff := wd - lastRun.Weekday()
+			for _, at := range w.atTimes {
+				// sub the at time hour/min/sec onto the lastRun's values
+				// to use in checks to see if we've got our next run time
+				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+
+				if atDate.After(lastRun) {
+					// checking to see if it is after i.e. greater than,
+					// and not greater or equal as our lastRun day/time
+					// will be in the loop, and we don't want to select it again
+					return atDate
+				}
+			}
+		}
+	}
+	return time.Time{}
 }
 
 var _ jobSchedule = (*monthlyJob)(nil)
@@ -549,26 +697,26 @@ type monthlyJob struct {
 }
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
-	days := make([]int, len(m.days))
-	copy(days, m.days)
+	daysList := make([]int, len(m.days))
+	copy(daysList, m.days)
 	firstDayNextMonth := time.Date(lastRun.Year(), lastRun.Month()+1, 1, 0, 0, 0, 0, lastRun.Location())
 	for _, daySub := range m.daysFromEnd {
-		// getting a combined list of all the days and the negative days
+		// getting a combined list of all the daysList and the negative daysList
 		// which count backwards from the first day of the next month
 		// -1 == the last day of the month
 		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
-		days = append(days, day)
+		daysList = append(daysList, day)
 	}
-	slices.Sort(days)
+	slices.Sort(daysList)
 
-	next := m.nextMonthDayAtTime(lastRun, days)
+	next := m.nextMonthDayAtTime(lastRun, daysList)
 	if !next.IsZero() {
 		return next
 	}
 
 	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
 	for next.IsZero() {
-		next = m.nextMonthDayAtTime(from, days)
+		next = m.nextMonthDayAtTime(from, daysList)
 		from = from.AddDate(0, int(m.interval), 0)
 	}
 
@@ -609,6 +757,8 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time 
 // -----------------------------------------------
 // -----------------------------------------------
 
+// Job provides the available methods on the job
+// available to the caller.
 type Job interface {
 	ID() uuid.UUID
 	LastRun() (time.Time, error)
@@ -619,6 +769,10 @@ type Job interface {
 
 var _ Job = (*job)(nil)
 
+// job is the internal struct that implements
+// the public interface. This is used to avoid
+// leaking information the caller never needs
+// to have or tinker with.
 type job struct {
 	id            uuid.UUID
 	name          string
@@ -626,34 +780,39 @@ type job struct {
 	jobOutRequest chan jobOutRequest
 }
 
+// ID returns the job's unique identifier.
 func (j job) ID() uuid.UUID {
 	return j.id
 }
 
+// LastRun returns the time of the job's last run
 func (j job) LastRun() (time.Time, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	ij := requestJob(j.id, j.jobOutRequest, ctx)
+	ij := requestJob(ctx, j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
 	return ij.lastRun, nil
 }
 
+// Name returns the name defined on the job.
 func (j job) Name() string {
 	return j.name
 }
 
+// NextRun returns the time of the job's next scheduled run.
 func (j job) NextRun() (time.Time, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	ij := requestJob(j.id, j.jobOutRequest, ctx)
+	ij := requestJob(ctx, j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
 	return ij.nextRun, nil
 }
 
+// Tags returns the job's string tags.
 func (j job) Tags() []string {
 	return j.tags
 }

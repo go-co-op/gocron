@@ -253,6 +253,7 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 		}
 	}
 }
+
 func (s *scheduler) selectStart() {
 	s.exec.ctx, s.exec.cancel = context.WithCancel(s.shutdownCtx)
 
@@ -315,8 +316,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 	if id == uuid.Nil {
 		j.id = uuid.New()
 	} else {
-
-		currentJob := requestJob(id, s.jobOutRequestCh, s.shutdownCtx)
+		currentJob := requestJob(s.shutdownCtx, id, s.jobOutRequestCh)
 		s.removeJobCh <- id
 		select {
 		case <-currentJob.ctx.Done():
@@ -375,7 +375,7 @@ func (s *scheduler) RemoveByTags(tags ...string) {
 }
 
 func (s *scheduler) RemoveJob(id uuid.UUID) error {
-	j := requestJob(id, s.jobOutRequestCh, s.shutdownCtx)
+	j := requestJob(s.shutdownCtx, id, s.jobOutRequestCh)
 	if j == nil || j.id == uuid.Nil {
 		return ErrJobNotFound
 	}
