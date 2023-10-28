@@ -173,10 +173,6 @@ func ExampleScheduler_RemoveJob() {
 	_, _ = NewScheduler()
 }
 
-func ExampleWithStopTimeout() {
-	_, _ = NewScheduler()
-}
-
 func ExampleScheduler_Start() {
 	_, _ = NewScheduler()
 }
@@ -362,6 +358,10 @@ func ExampleWithStartAt() {
 	fmt.Println(next)
 	// Output:
 	// 9999-09-09 09:09:09.000000009 +0000 UTC
+}
+
+func ExampleWithStopTimeout() {
+	_, _ = NewScheduler()
 }
 
 func ExampleWithTags() {
