@@ -136,9 +136,9 @@ func getFunctionNameOfPointer(fn interface{}) string {
 func parseTime(t string) (hour, min, sec int, err error) {
 	var timeLayout string
 	switch {
-	case timeWithSeconds.Match([]byte(t)):
+	case timeWithSeconds.MatchString(t):
 		timeLayout = "15:04:05"
-	case timeWithoutSeconds.Match([]byte(t)):
+	case timeWithoutSeconds.MatchString(t):
 		timeLayout = "15:04"
 	default:
 		return 0, 0, 0, ErrUnsupportedTimeFormat
