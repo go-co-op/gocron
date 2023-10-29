@@ -11,6 +11,53 @@ import (
 //func TestDurationJob_next(t *testing.T) {
 //}
 
+func TestDailyJob_next(t *testing.T) {
+	tests := []struct {
+		name                      string
+		interval                  uint
+		atTimes                   []time.Time
+		lastRun                   time.Time
+		expectedNextRun           time.Time
+		expectedDurationToNextRun time.Duration
+	}{
+		{
+			"daily multiple at times",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+				time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 1, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 1, 12, 30, 0, 0, time.UTC),
+			7 * time.Hour,
+		},
+		{
+			"every 2 days multiple at times",
+			2,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+				time.Date(0, 0, 0, 12, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 1, 12, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 3, 5, 30, 0, 0, time.UTC),
+			41 * time.Hour,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := dailyJob{
+				interval: tt.interval,
+				atTimes:  tt.atTimes,
+			}
+
+			next := d.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+			assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
+		})
+	}
+}
+
 func TestWeeklyJob_next(t *testing.T) {
 	tests := []struct {
 		name                      string
@@ -35,15 +82,17 @@ func TestWeeklyJob_next(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		w := weeklyJob{
-			interval:   tt.interval,
-			daysOfWeek: tt.daysOfWeek,
-			atTimes:    tt.atTimes,
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			w := weeklyJob{
+				interval:   tt.interval,
+				daysOfWeek: tt.daysOfWeek,
+				atTimes:    tt.atTimes,
+			}
 
-		next := w.next(tt.lastRun)
-		assert.Equal(t, tt.expectedNextRun, next)
-		assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
+			next := w.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+			assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
+		})
 	}
 }
 

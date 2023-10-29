@@ -665,7 +665,8 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 	if !next.IsZero() {
 		return next
 	}
-	return d.nextDay(lastRun.AddDate(0, 0, int(d.interval)))
+	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
+	return d.nextDay(startNextDay)
 }
 
 func (d dailyJob) nextDay(lastRun time.Time) time.Time {
