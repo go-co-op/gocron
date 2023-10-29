@@ -229,7 +229,12 @@ func DurationRandomJob(minDuration, maxDuration time.Duration, task Task, option
 }
 
 func DailyJob(interval uint, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
-	return nil
+	return dailyJobDefinition{
+		interval: interval,
+		atTimes:  atTimes,
+		opts:     options,
+		tas:      task,
+	}
 }
 
 var _ JobDefinition = (*dailyJobDefinition)(nil)
@@ -245,9 +250,27 @@ func (d dailyJobDefinition) options() []JobOption {
 	return d.opts
 }
 
-func (d dailyJobDefinition) setup(i *internalJob, location *time.Location) error {
-	// TODO implement me
-	panic("implement me")
+func (d dailyJobDefinition) setup(j *internalJob, location *time.Location) error {
+	if d.atTimes == nil {
+		return ErrDailyJobAtTimesNil
+	}
+
+	atTimesDate, err := convertAtTimesToDateTime(d.atTimes, location)
+	switch {
+	case errors.Is(err, errAtTimeNil):
+		return ErrDailyJobAtTimeNil
+	case errors.Is(err, errAtTimeHours):
+		return ErrDailyJobHours
+	case errors.Is(err, errAtTimeMinSec):
+		return ErrDailyJobMinutesSeconds
+	}
+
+	ds := dailyJob{
+		interval: d.interval,
+		atTimes:  atTimesDate,
+	}
+	j.jobSchedule = ds
+	return nil
 }
 
 func (d dailyJobDefinition) task() Task {
@@ -638,8 +661,27 @@ type dailyJob struct {
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
-	// TODO implement me
-	panic("implement me")
+	next := d.nextDay(lastRun)
+	if !next.IsZero() {
+		return next
+	}
+	return d.nextDay(lastRun.AddDate(0, 0, int(d.interval)))
+}
+
+func (d dailyJob) nextDay(lastRun time.Time) time.Time {
+	for _, at := range d.atTimes {
+		// sub the at time hour/min/sec onto the lastRun's values
+		// to use in checks to see if we've got our next run time
+		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+
+		if atDate.After(lastRun) {
+			// checking to see if it is after i.e. greater than,
+			// and not greater or equal as our lastRun day/time
+			// will be in the loop, and we don't want to select it again
+			return atDate
+		}
+	}
+	return time.Time{}
 }
 
 var _ jobSchedule = (*weeklyJob)(nil)
