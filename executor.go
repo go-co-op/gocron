@@ -22,8 +22,10 @@ type executor struct {
 }
 
 type singletonRunner struct {
-	in   chan uuid.UUID
-	done chan struct{}
+	in                chan uuid.UUID
+	done              chan struct{}
+	mode              LimitMode
+	rescheduleLimiter chan struct{}
 }
 
 type limitMode struct {
@@ -54,6 +56,7 @@ func (e *executor) start() {
 						// all runners are busy, reschedule the work for later
 						// which means we just skip it here and do nothing
 						// TODO when metrics are added, this should increment a rescheduled metric
+						e.jobIDsOut <- id
 					}
 				} else {
 					// TODO when metrics are added, this should increment a wait metric
@@ -69,10 +72,27 @@ func (e *executor) start() {
 					if !ok {
 						runner.in = make(chan uuid.UUID, 1000)
 						runner.done = make(chan struct{})
+						runner.mode = j.singletonLimitMode
+						if runner.mode == LimitModeReschedule {
+							runner.rescheduleLimiter = make(chan struct{}, 1)
+						}
 						e.singletonRunners[id] = runner
-						go e.singletonRunner(runner.in, runner.done)
+						go e.singletonRunner(runner)
 					}
-					runner.in <- id
+
+					if runner.mode == LimitModeReschedule {
+						select {
+						case runner.rescheduleLimiter <- struct{}{}:
+							runner.in <- id
+						default:
+							// runner is busy, reschedule the work for later
+							// which means we just skip it here and do nothing
+							// TODO when metrics are added, this should increment a rescheduled metric
+							e.jobIDsOut <- id
+						}
+					} else {
+						runner.in <- id
+					}
 				} else {
 					wg.Add(1)
 					go func(j internalJob) {
@@ -131,16 +151,21 @@ func (e *executor) start() {
 	}
 }
 
-func (e *executor) singletonRunner(in chan uuid.UUID, done chan struct{}) {
+func (e *executor) singletonRunner(config singletonRunner) {
 	for {
 		select {
-		case id := <-in:
+		case id := <-config.in:
 			j := requestJob(e.ctx, id, e.jobOutRequest)
 			if j != nil {
 				e.runJob(*j)
 			}
+
+			// remove the limiter block to allow another job to be scheduled
+			if config.mode == LimitModeReschedule {
+				<-config.rescheduleLimiter
+			}
 		case <-e.ctx.Done():
-			done <- struct{}{}
+			config.done <- struct{}{}
 			return
 		}
 	}

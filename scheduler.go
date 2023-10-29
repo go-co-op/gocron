@@ -472,13 +472,14 @@ type LimitMode int
 
 const (
 	// LimitModeReschedule causes jobs reaching the limit set in
-	// WithLimitConcurrentJobs to be skipped / rescheduled for the
-	// next run time rather than being queued up to wait.
+	// WithLimitConcurrentJobs or WithSingletonMode to be skipped
+	// and rescheduled for the next run time rather than being
+	// queued up to wait.
 	LimitModeReschedule = 1
 
 	// LimitModeWait causes jobs reaching the limit set in
-	// WithLimitConcurrentJobs to wait in a queue until a slot becomes
-	// available to run.
+	// WithLimitConcurrentJobs or WithSingletonMode to wait
+	// in a queue until a slot becomes available to run.
 	//
 	// Note: this mode can produce unpredictable results as
 	// job execution order isn't guaranteed. For example, a job that
@@ -489,7 +490,7 @@ const (
 	// up beyond the ability of the limit workers to keep up. An example of
 	// what NOT to do:
 	//
-	//     s, _ := gocron.NewScheduler()
+	//     s, _ := gocron.NewScheduler(gocron.WithLimitConcurrentJobs)
 	//     s.NewJob(
 	//         gocron.DurationJob(
 	//				time.Second,

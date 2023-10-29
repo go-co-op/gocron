@@ -118,7 +118,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 						durationSingletonCh <- struct{}{}
 					},
 				),
-				WithSingletonMode(),
+				WithSingletonMode(LimitModeWait),
 			),
 			[]SchedulerOption{WithStopTimeout(time.Second * 5)},
 			2,
@@ -283,7 +283,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 						durationSingletonCh <- struct{}{}
 					},
 				),
-				WithSingletonMode(),
+				WithSingletonMode(LimitModeWait),
 			),
 		},
 	}

@@ -23,14 +23,15 @@ type internalJob struct {
 	name   string
 	tags   []string
 	jobSchedule
-	lastRun, nextRun time.Time
-	function         any
-	parameters       []any
-	timer            clockwork.Timer
-	singletonMode    bool
-	limitRunsTo      *limitRunsTo
-	startTime        time.Time
-	startImmediately bool
+	lastRun, nextRun   time.Time
+	function           any
+	parameters         []any
+	timer              clockwork.Timer
+	singletonMode      bool
+	singletonLimitMode LimitMode
+	limitRunsTo        *limitRunsTo
+	startTime          time.Time
+	startImmediately   bool
 	// event listeners
 	afterJobRuns          func(jobID uuid.UUID)
 	beforeJobRuns         func(jobID uuid.UUID)
@@ -528,9 +529,10 @@ func WithName(name string) JobOption {
 	}
 }
 
-func WithSingletonMode() JobOption {
+func WithSingletonMode(mode LimitMode) JobOption {
 	return func(j *internalJob) error {
 		j.singletonMode = true
+		j.singletonLimitMode = mode
 		return nil
 	}
 }
