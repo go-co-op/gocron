@@ -102,12 +102,10 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error 
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
-	} else if location != nil {
-		withLocation = fmt.Sprintf("CRON_TZ=%s %s", location.String(), c.crontab)
 	} else {
-		// since the user didn't provide a timezone either in the crontab or within
-		// the Scheduler, we default to time.Local.
-		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local.String(), c.crontab)
+		// since the user didn't provide a timezone default to the location
+		// passed in by the scheduler. Default: time.Local
+		withLocation = fmt.Sprintf("CRON_TZ=%s %s", location.String(), c.crontab)
 	}
 
 	var (
@@ -750,9 +748,7 @@ func (j job) ID() uuid.UUID {
 
 // LastRun returns the time of the job's last run
 func (j job) LastRun() (time.Time, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	ij := requestJob(ctx, j.id, j.jobOutRequest)
+	ij := requestJob(j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
@@ -766,9 +762,7 @@ func (j job) Name() string {
 
 // NextRun returns the time of the job's next scheduled run.
 func (j job) NextRun() (time.Time, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	ij := requestJob(ctx, j.id, j.jobOutRequest)
+	ij := requestJob(j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}

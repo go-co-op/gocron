@@ -315,7 +315,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	if id == uuid.Nil {
 		j.id = uuid.New()
 	} else {
-		currentJob := requestJob(s.shutdownCtx, id, s.jobOutRequestCh)
+		currentJob := requestJobCtx(s.shutdownCtx, id, s.jobOutRequestCh)
 		s.removeJobCh <- id
 		<-currentJob.ctx.Done()
 
@@ -373,7 +373,7 @@ func (s *scheduler) RemoveByTags(tags ...string) {
 }
 
 func (s *scheduler) RemoveJob(id uuid.UUID) error {
-	j := requestJob(s.shutdownCtx, id, s.jobOutRequestCh)
+	j := requestJobCtx(s.shutdownCtx, id, s.jobOutRequestCh)
 	if j == nil || j.id == uuid.Nil {
 		return ErrJobNotFound
 	}

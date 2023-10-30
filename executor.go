@@ -63,7 +63,7 @@ func (e *executor) start() {
 					e.limitMode.in <- id
 				}
 			} else {
-				j := requestJob(e.ctx, id, e.jobOutRequest)
+				j := requestJobCtx(e.ctx, id, e.jobOutRequest)
 				if j == nil {
 					continue
 				}
@@ -155,7 +155,7 @@ func (e *executor) singletonRunner(config singletonRunner) {
 	for {
 		select {
 		case id := <-config.in:
-			j := requestJob(e.ctx, id, e.jobOutRequest)
+			j := requestJobCtx(e.ctx, id, e.jobOutRequest)
 			if j != nil {
 				e.runJob(*j)
 			}
@@ -175,7 +175,7 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}) {
 	for {
 		select {
 		case id := <-in:
-			j := requestJob(e.ctx, id, e.jobOutRequest)
+			j := requestJobCtx(e.ctx, id, e.jobOutRequest)
 			if j != nil {
 				e.runJob(*j)
 			}

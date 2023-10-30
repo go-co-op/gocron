@@ -1,15 +1,44 @@
 package gocron
 
 import (
+	"log"
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-//func TestDurationJob_next(t *testing.T) {
-//}
+func TestDurationJob_next(t *testing.T) {
+	tests := []time.Duration{
+		time.Millisecond,
+		time.Second,
+		100 * time.Second,
+		1000 * time.Second,
+		5 * time.Second,
+		50 * time.Second,
+		time.Minute,
+		5 * time.Minute,
+		100 * time.Minute,
+		time.Hour,
+		2 * time.Hour,
+		100 * time.Hour,
+		1000 * time.Hour,
+	}
+
+	lastRun := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	for _, duration := range tests {
+		t.Run(duration.String(), func(t *testing.T) {
+			d := durationJob{duration: duration}
+			next := d.next(lastRun)
+			expected := lastRun.Add(duration)
+
+			assert.Equal(t, expected, next)
+		})
+	}
+}
 
 func TestDailyJob_next(t *testing.T) {
 	tests := []struct {
@@ -69,7 +98,18 @@ func TestWeeklyJob_next(t *testing.T) {
 		expectedDurationToNextRun time.Duration
 	}{
 		{
-			"last run Thurday, next run is Monday",
+			"last run Monday, next run is Thursday",
+			1,
+			[]time.Weekday{time.Monday, time.Thursday},
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 3, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 6, 5, 30, 0, 0, time.UTC),
+			3 * 24 * time.Hour,
+		},
+		{
+			"last run Thursday, next run is Monday",
 			1,
 			[]time.Weekday{time.Monday, time.Thursday},
 			[]time.Time{
@@ -222,4 +262,38 @@ func TestMonthlyJob_next(t *testing.T) {
 			assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
 		})
 	}
+}
+
+func TestJob_LastRun(t *testing.T) {
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s, err := NewScheduler(
+		WithClock(fakeClock),
+	)
+	require.NoError(t, err)
+
+	j, err := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {
+				log.Println("job ran")
+			},
+		),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	time.Sleep(10 * time.Millisecond)
+
+	lastRun, err := j.LastRun()
+	assert.NoError(t, err)
+
+	err = s.Shutdown()
+	require.NoError(t, err)
+
+	assert.Equal(t, testTime, lastRun)
 }
