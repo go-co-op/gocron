@@ -310,32 +310,63 @@ func TestScheduler_StopTimeout(t *testing.T) {
 	}
 }
 
-func TestScheduler_Start_Stop_Start_Shutdown(t *testing.T) {
+func TestScheduler_Shutdown(t *testing.T) {
 	goleak.VerifyNone(t)
-	s, err := NewScheduler(
-		WithStopTimeout(time.Second),
-	)
-	require.NoError(t, err)
-	_, err = s.NewJob(
-		DurationJob(
-			5*time.Millisecond,
-		),
-		NewTask(
-			func() {},
-		),
-		WithStartAt(
-			WithStartImmediately(),
-		),
-	)
-	require.NoError(t, err)
 
-	s.Start()
-	time.Sleep(5 * time.Millisecond)
-	require.NoError(t, s.StopJobs())
+	t.Run("start, stop, start, shutdown", func(t *testing.T) {
+		s, err := NewScheduler(
+			WithStopTimeout(time.Second),
+		)
+		require.NoError(t, err)
+		_, err = s.NewJob(
+			DurationJob(
+				5*time.Millisecond,
+			),
+			NewTask(
+				func() {},
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+		)
+		require.NoError(t, err)
 
-	time.Sleep(50 * time.Millisecond)
-	s.Start()
+		s.Start()
+		time.Sleep(5 * time.Millisecond)
+		require.NoError(t, s.StopJobs())
 
-	time.Sleep(5 * time.Millisecond)
-	require.NoError(t, s.Shutdown())
+		time.Sleep(50 * time.Millisecond)
+		s.Start()
+
+		time.Sleep(5 * time.Millisecond)
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("calling Job methods after shutdown errors", func(t *testing.T) {
+		s, err := NewScheduler(
+			WithStopTimeout(time.Second),
+		)
+		require.NoError(t, err)
+		j, err := s.NewJob(
+			DurationJob(
+				5*time.Millisecond,
+			),
+			NewTask(
+				func() {},
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+		require.NoError(t, s.Shutdown())
+
+		_, err = j.LastRun()
+		assert.ErrorIs(t, err, ErrJobNotFound)
+
+		_, err = j.NextRun()
+		assert.ErrorIs(t, err, ErrJobNotFound)
+	})
 }

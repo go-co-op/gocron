@@ -48,9 +48,15 @@ func requestJobCtx(ctx context.Context, id uuid.UUID, ch chan jobOutRequest) *in
 		return nil
 	default:
 	}
-	ch <- jobOutRequest{
+
+	select {
+
+	case ch <- jobOutRequest{
 		id:      id,
 		outChan: resp,
+	}:
+	default:
+		return nil
 	}
 	var j internalJob
 	select {
