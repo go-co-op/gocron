@@ -41,6 +41,7 @@ type scheduler struct {
 	globalJobOptions []JobOption
 
 	startCh            chan struct{}
+	startedCh          chan struct{}
 	stopCh             chan struct{}
 	allJobsOutRequest  chan allJobsOutRequest
 	jobOutRequestCh    chan jobOutRequest
@@ -83,6 +84,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		removeJobCh:        make(chan uuid.UUID),
 		removeJobsByTagsCh: make(chan []string),
 		startCh:            make(chan struct{}),
+		startedCh:          make(chan struct{}),
 		stopCh:             make(chan struct{}),
 		jobOutRequestCh:    make(chan jobOutRequest),
 		allJobsOutRequest:  make(chan allJobsOutRequest),
@@ -277,6 +279,7 @@ func (s *scheduler) selectStart() {
 		j.nextRun = next
 		s.jobs[id] = j
 	}
+	s.startedCh <- struct{}{}
 }
 
 // -----------------------------------------------
@@ -387,6 +390,7 @@ func (s *scheduler) RemoveJob(id uuid.UUID) error {
 // on definition.
 func (s *scheduler) Start() {
 	s.startCh <- struct{}{}
+	<-s.startedCh
 }
 
 // StopJobs stops the execution of all jobs in the scheduler.
