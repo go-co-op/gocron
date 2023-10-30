@@ -1,7 +1,6 @@
 package gocron_test
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -389,20 +388,20 @@ func ExampleWithClock() {
 	// one, 2
 }
 
-var _ Elector = (*myElector)(nil)
-
-type myElector struct{}
-
-func (m myElector) IsLeader(_ context.Context) error {
-	return nil
-}
-
 func ExampleWithDistributedElector() {
-	elector := myElector{}
-
-	_, _ = NewScheduler(
-		WithDistributedElector(elector),
-	)
+	//var _ Elector = (*myElector)(nil)
+	//
+	//type myElector struct{}
+	//
+	//func (m myElector) IsLeader(_ context.Context) error {
+	//	return nil
+	//}
+	//
+	//elector := myElector{}
+	//
+	//_, _ = NewScheduler(
+	//	WithDistributedElector(elector),
+	//)
 }
 
 func ExampleWithEventListeners() {
