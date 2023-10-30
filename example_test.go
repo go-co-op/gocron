@@ -583,6 +583,7 @@ func ExampleWithStartAt() {
 	defer func() {
 		_ = s.StopJobs()
 	}()
+	time.Sleep(10 * time.Millisecond)
 	next, _ := j.NextRun()
 	fmt.Println(next)
 	// Output:
