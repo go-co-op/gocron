@@ -537,6 +537,7 @@ func (s *Scheduler) EveryRandom(lower, upper int) *Scheduler {
 // Every schedules a new periodic Job with an interval.
 // Interval can be an int, time.Duration or a string that
 // parses with time.ParseDuration().
+// Negative intervals will return an error.
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 //
 // The job is run immediately, unless:
