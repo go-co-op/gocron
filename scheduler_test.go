@@ -82,8 +82,10 @@ func TestScheduler_Every_InvalidInterval(t *testing.T) {
 		interval      interface{}
 		expectedError string
 	}{
-		{"zero", 0, ErrInvalidInterval.Error()},
-		{"negative", -1, ErrInvalidInterval.Error()},
+		{"zero int", 0, ErrInvalidInterval.Error()},
+		{"negative int", -1, ErrInvalidInterval.Error()},
+		{"negative time.Duration", -1 * time.Millisecond, ErrInvalidInterval.Error()},
+		{"negative string duration", "-1ms", ErrInvalidInterval.Error()},
 		{"invalid string duration", "bad", "time: invalid duration \"bad\""},
 	}
 
@@ -93,7 +95,7 @@ func TestScheduler_Every_InvalidInterval(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, err := s.Every(tc.interval).Do(func() {})
 			require.Error(t, err)
-			assert.EqualError(t, err, tc.expectedError)
+			assert.ErrorContains(t, err, tc.expectedError)
 		})
 	}
 }

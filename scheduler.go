@@ -537,6 +537,7 @@ func (s *Scheduler) EveryRandom(lower, upper int) *Scheduler {
 // Every schedules a new periodic Job with an interval.
 // Interval can be an int, time.Duration or a string that
 // parses with time.ParseDuration().
+// Negative intervals will return an error.
 // Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 //
 // The job is run immediately, unless:
@@ -553,6 +554,9 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 	case time.Duration:
+		if interval <= 0 {
+			job.error = wrapOrError(job.error, ErrInvalidInterval)
+		}
 		job.setInterval(0)
 		job.setDuration(interval)
 		job.setUnit(duration)
@@ -560,6 +564,9 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		d, err := time.ParseDuration(interval)
 		if err != nil {
 			job.error = wrapOrError(job.error, err)
+		}
+		if d <= 0 {
+			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 		job.setDuration(d)
 		job.setUnit(duration)
