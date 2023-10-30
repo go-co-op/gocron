@@ -50,7 +50,6 @@ func requestJobCtx(ctx context.Context, id uuid.UUID, ch chan jobOutRequest) *in
 	}
 
 	select {
-
 	case ch <- jobOutRequest{
 		id:      id,
 		outChan: resp,
