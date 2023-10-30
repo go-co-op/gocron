@@ -82,8 +82,10 @@ func TestScheduler_Every_InvalidInterval(t *testing.T) {
 		interval      interface{}
 		expectedError string
 	}{
-		{"zero", 0, ErrInvalidInterval.Error()},
-		{"negative", -1, ErrInvalidInterval.Error()},
+		{"zero int", 0, ErrInvalidInterval.Error()},
+		{"negative int", -1, ErrInvalidInterval.Error()},
+		{"negative time.Duration", -1 * time.Millisecond, ErrInvalidInterval.Error()},
+		{"negative string duration", "-1ms", ErrInvalidInterval.Error()},
 		{"invalid string duration", "bad", "time: invalid duration \"bad\""},
 	}
 
@@ -93,7 +95,7 @@ func TestScheduler_Every_InvalidInterval(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, err := s.Every(tc.interval).Do(func() {})
 			require.Error(t, err)
-			assert.EqualError(t, err, tc.expectedError)
+			assert.ErrorContains(t, err, tc.expectedError)
 		})
 	}
 }
@@ -145,12 +147,6 @@ func TestScheduler_Every(t *testing.T) {
 		}
 		s.Stop()
 		assert.Equal(t, 6, counter)
-
-		_, err = s.Every(-1 * time.Millisecond).Do(func() {
-			// do nothing
-		})
-
-		require.Contains(t, err.Error(), ErrInvalidInterval.Error())
 	})
 
 	t.Run("int", func(t *testing.T) {
@@ -198,12 +194,6 @@ func TestScheduler_Every(t *testing.T) {
 		}
 		s.Stop()
 		assert.Equal(t, 2, counter)
-
-		_, err = s.Every("-1ms").Do(func() {
-			// do nothing
-		})
-
-		require.Contains(t, err.Error(), ErrInvalidInterval.Error())
 	})
 }
 
