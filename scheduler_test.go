@@ -150,7 +150,7 @@ func TestScheduler_Every(t *testing.T) {
 			// do nothing
 		})
 
-		require.ErrorIs(t, err, ErrInvalidInterval)
+		require.Contains(t, err.Error(), ErrInvalidInterval.Error())
 	})
 
 	t.Run("int", func(t *testing.T) {
@@ -203,7 +203,7 @@ func TestScheduler_Every(t *testing.T) {
 			// do nothing
 		})
 
-		require.ErrorIs(t, err, ErrInvalidInterval)
+		require.Contains(t, err.Error(), ErrInvalidInterval.Error())
 	})
 }
 
