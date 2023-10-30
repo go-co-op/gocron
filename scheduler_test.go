@@ -18,6 +18,7 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 		name string
 		ch   chan struct{}
 		jd   JobDefinition
+		tsk  Task
 	}{
 		{
 			"cron",
@@ -25,11 +26,11 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			CronJob(
 				"* * * * * *",
 				true,
-				NewTask(
-					func() {
-						cronNoOptionsCh <- struct{}{}
-					},
-				),
+			),
+			NewTask(
+				func() {
+					cronNoOptionsCh <- struct{}{}
+				},
 			),
 		},
 		{
@@ -37,11 +38,11 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			durationNoOptionsCh,
 			DurationJob(
 				time.Second,
-				NewTask(
-					func() {
-						durationNoOptionsCh <- struct{}{}
-					},
-				),
+			),
+			NewTask(
+				func() {
+					durationNoOptionsCh <- struct{}{}
+				},
 			),
 		},
 	}
@@ -51,7 +52,7 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 			s, err := NewScheduler()
 			require.NoError(t, err)
 
-			_, err = s.NewJob(tt.jd)
+			_, err = s.NewJob(tt.jd, tt.tsk)
 			require.NoError(t, err)
 
 			s.Start()
@@ -89,6 +90,8 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 		name         string
 		ch           chan struct{}
 		jd           JobDefinition
+		tsk          Task
+		opts         []JobOption
 		options      []SchedulerOption
 		expectedRuns int
 	}{
@@ -96,14 +99,15 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			"duration",
 			durationCh,
 			DurationJob(
-				time.Millisecond*500,
-				NewTask(
-					func() {
-						time.Sleep(1 * time.Second)
-						durationCh <- struct{}{}
-					},
-				),
+				time.Millisecond * 500,
 			),
+			NewTask(
+				func() {
+					time.Sleep(1 * time.Second)
+					durationCh <- struct{}{}
+				},
+			),
+			nil,
 			[]SchedulerOption{WithStopTimeout(time.Second * 2)},
 			3,
 		},
@@ -111,15 +115,15 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			"duration singleton",
 			durationSingletonCh,
 			DurationJob(
-				time.Millisecond*500,
-				NewTask(
-					func() {
-						time.Sleep(1 * time.Second)
-						durationSingletonCh <- struct{}{}
-					},
-				),
-				WithSingletonMode(LimitModeWait),
+				time.Millisecond * 500,
 			),
+			NewTask(
+				func() {
+					time.Sleep(1 * time.Second)
+					durationSingletonCh <- struct{}{}
+				},
+			),
+			[]JobOption{WithSingletonMode(LimitModeWait)},
 			[]SchedulerOption{WithStopTimeout(time.Second * 5)},
 			2,
 		},
@@ -130,7 +134,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 			s, err := NewScheduler(tt.options...)
 			require.NoError(t, err)
 
-			_, err = s.NewJob(tt.jd)
+			_, err = s.NewJob(tt.jd, tt.tsk, tt.opts...)
 			require.NoError(t, err)
 
 			s.Start()
@@ -168,6 +172,7 @@ func TestScheduler_Update(t *testing.T) {
 		name               string
 		initialJob         JobDefinition
 		updateJob          JobDefinition
+		tsk                Task
 		ch                 chan struct{}
 		runCount           int
 		updateAfterCount   int
@@ -177,20 +182,15 @@ func TestScheduler_Update(t *testing.T) {
 		{
 			"duration, updated to another duration",
 			DurationJob(
-				time.Millisecond*500,
-				NewTask(
-					func() {
-						durationJobCh <- struct{}{}
-					},
-				),
+				time.Millisecond * 500,
 			),
 			DurationJob(
 				time.Second,
-				NewTask(
-					func() {
-						durationJobCh <- struct{}{}
-					},
-				),
+			),
+			NewTask(
+				func() {
+					durationJobCh <- struct{}{}
+				},
 			),
 			durationJobCh,
 			2,
@@ -205,7 +205,7 @@ func TestScheduler_Update(t *testing.T) {
 			s, err := NewScheduler()
 			require.NoError(t, err)
 
-			j, err := s.NewJob(tt.initialJob)
+			j, err := s.NewJob(tt.initialJob, tt.tsk)
 			require.NoError(t, err)
 
 			startTime := time.Now()
@@ -217,7 +217,7 @@ func TestScheduler_Update(t *testing.T) {
 				case <-tt.ch:
 					runCount++
 					if runCount == tt.updateAfterCount {
-						_, err = s.Update(j.ID(), tt.updateJob)
+						_, err = s.Update(j.ID(), tt.updateJob, tt.tsk)
 						require.NoError(t, err)
 					}
 				default:
@@ -251,40 +251,43 @@ func TestScheduler_StopTimeout(t *testing.T) {
 		name string
 		ch   chan struct{}
 		jd   JobDefinition
+		tsk  Task
+		opts []JobOption
 	}{
 		{
 			"duration",
 			durationCh,
 			DurationJob(
-				time.Millisecond*500,
-				NewTask(
-					func() {
-						select {
-						case <-time.After(10 * time.Second):
-						case <-testDone:
-						}
-						durationCh <- struct{}{}
-					},
-				),
+				time.Millisecond * 500,
 			),
+			NewTask(
+				func() {
+					select {
+					case <-time.After(10 * time.Second):
+					case <-testDone:
+					}
+					durationCh <- struct{}{}
+				},
+			),
+			nil,
 		},
 		{
 			"duration singleton",
 			durationSingletonCh,
 			DurationJob(
-				time.Millisecond*500,
-				NewTask(
-					func() {
-						select {
-						case <-time.After(10 * time.Second):
-						case <-testDone:
-						}
-
-						durationSingletonCh <- struct{}{}
-					},
-				),
-				WithSingletonMode(LimitModeWait),
+				time.Millisecond * 500,
 			),
+			NewTask(
+				func() {
+					select {
+					case <-time.After(10 * time.Second):
+					case <-testDone:
+					}
+
+					durationSingletonCh <- struct{}{}
+				},
+			),
+			[]JobOption{WithSingletonMode(LimitModeWait)},
 		},
 	}
 
@@ -295,7 +298,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			)
 			require.NoError(t, err)
 
-			_, err = s.NewJob(tt.jd)
+			_, err = s.NewJob(tt.jd, tt.tsk, tt.opts...)
 			require.NoError(t, err)
 
 			s.Start()
@@ -316,12 +319,12 @@ func TestScheduler_Start_Stop_Start_Shutdown(t *testing.T) {
 	_, err = s.NewJob(
 		DurationJob(
 			5*time.Millisecond,
-			NewTask(
-				func() {},
-			),
-			WithStartAt(
-				WithStartImmediately(),
-			),
+		),
+		NewTask(
+			func() {},
+		),
+		WithStartAt(
+			WithStartImmediately(),
 		),
 	)
 	require.NoError(t, err)

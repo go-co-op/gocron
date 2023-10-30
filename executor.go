@@ -31,7 +31,7 @@ type singletonRunner struct {
 type limitMode struct {
 	started           bool
 	mode              LimitMode
-	limit             int
+	limit             uint
 	rescheduleLimiter chan struct{}
 	in                chan uuid.UUID
 	done              chan struct{}

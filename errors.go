@@ -9,7 +9,6 @@ var (
 	ErrDailyJobAtTimesNil        = fmt.Errorf("gocron: DailyJob: atTimes must not be nil")
 	ErrDailyJobHours             = fmt.Errorf("gocron: DailyJob: atTimes hours must be between 0 and 23 inclusive")
 	ErrDailyJobMinutesSeconds    = fmt.Errorf("gocron: DailyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
-	ErrDurationJobZero           = fmt.Errorf("gocron: DurationJob: duration must be greater than 0")
 	ErrDurationRandomJobMinMax   = fmt.Errorf("gocron: DurationRandomJob: minimum duration must be less than maximum duration")
 	ErrEventListenerFuncNil      = fmt.Errorf("gocron: eventListenerFunc must not be nil")
 	ErrJobNotFound               = fmt.Errorf("gocron: job not found")
@@ -27,13 +26,9 @@ var (
 	ErrWeeklyJobDaysOfTheWeekNil = fmt.Errorf("gocron: WeeklyJob: daysOfTheWeek must not be nil")
 	ErrWeeklyJobHours            = fmt.Errorf("gocron: WeeklyJob: atTimes hours must be between 0 and 23 inclusive")
 	ErrWeeklyJobMinutesSeconds   = fmt.Errorf("gocron: WeeklyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
-
-	ErrWithDistributedElector      = fmt.Errorf("gocron: WithDistributedElector: elector must not be nil")
-	ErrWithFakeClockNil            = fmt.Errorf("gocron: WithFakeClock: clock must not be nil")
-	ErrWithLimitConcurrentJobsZero = fmt.Errorf("gocron: WithLimitConcurrentJobs: limit must be greater than 0")
-	ErrWithLimitedRunsZero         = fmt.Errorf("gocron: WithLimitedRuns: limit must be greater than 0")
-	ErrWithLocationNil             = fmt.Errorf("gocron: WithLocation: location must not be nil")
-	ErrWithShutdownTimeoutZero     = fmt.Errorf("gocron: WithStopTimeout: timeout must be greater than 0")
+	ErrWithDistributedElector    = fmt.Errorf("gocron: WithDistributedElector: elector must not be nil")
+	ErrWithClockNil              = fmt.Errorf("gocron: WithClock: clock must not be nil")
+	ErrWithLocationNil           = fmt.Errorf("gocron: WithLocation: location must not be nil")
 )
 
 // internal errors

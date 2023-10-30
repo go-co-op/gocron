@@ -15,13 +15,13 @@ var _ Scheduler = (*scheduler)(nil)
 
 type Scheduler interface {
 	Jobs() []Job
-	NewJob(JobDefinition) (Job, error)
+	NewJob(JobDefinition, Task, ...JobOption) (Job, error)
 	RemoveByTags(...string)
 	RemoveJob(uuid.UUID) error
 	Start()
 	StopJobs() error
 	Shutdown() error
-	Update(uuid.UUID, JobDefinition) (Job, error)
+	Update(uuid.UUID, JobDefinition, Task, ...JobOption) (Job, error)
 }
 
 // -----------------------------------------------
@@ -75,7 +75,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		shutdownCtx: schCtx,
 		cancel:      cancel,
 		exec:        exec,
-		jobs:        make(map[uuid.UUID]internalJob, 0),
+		jobs:        make(map[uuid.UUID]internalJob),
 		location:    time.Local,
 		clock:       clockwork.NewRealClock(),
 
@@ -306,11 +306,11 @@ func (s *scheduler) Jobs() []Job {
 	return jobs
 }
 
-func (s *scheduler) NewJob(jobDefinition JobDefinition) (Job, error) {
-	return s.addOrUpdateJob(uuid.Nil, jobDefinition)
+func (s *scheduler) NewJob(jobDefinition JobDefinition, task Task, options ...JobOption) (Job, error) {
+	return s.addOrUpdateJob(uuid.Nil, jobDefinition, task, options)
 }
 
-func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job, error) {
+func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskWrapper Task, options []JobOption) (Job, error) {
 	j := internalJob{}
 	if id == uuid.Nil {
 		j.id = uuid.New()
@@ -324,10 +324,11 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 
 	j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
 
-	if definition.task() == nil {
+	if taskWrapper == nil {
 		return nil, ErrNewJobTaskNil
 	}
-	tsk := definition.task()()
+
+	tsk := taskWrapper()
 	taskFunc := reflect.ValueOf(tsk.function)
 	for taskFunc.Kind() == reflect.Ptr {
 		taskFunc = taskFunc.Elem()
@@ -348,7 +349,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition) (Job,
 	}
 
 	// apply job specific options, which take precedence
-	for _, option := range definition.options() {
+	for _, option := range options {
 		if err := option(&j); err != nil {
 			return nil, err
 		}
@@ -416,8 +417,8 @@ func (s *scheduler) Shutdown() error {
 
 // Update replaces the existing Job's JobDefinition with the provided
 // JobDefinition. The Job's Job.ID() remains the same.
-func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition) (Job, error) {
-	return s.addOrUpdateJob(id, jobDefinition)
+func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition, task Task, options ...JobOption) (Job, error) {
+	return s.addOrUpdateJob(id, jobDefinition, task, options)
 }
 
 // -----------------------------------------------
@@ -444,12 +445,12 @@ func WithDistributedElector(elector Elector) SchedulerOption {
 	}
 }
 
-// WithFakeClock sets the clock used by the Scheduler
+// WithClock sets the clock used by the Scheduler
 // to the clock provided. See https://github.com/jonboulle/clockwork
-func WithFakeClock(clock clockwork.Clock) SchedulerOption {
+func WithClock(clock clockwork.Clock) SchedulerOption {
 	return func(s *scheduler) error {
 		if clock == nil {
-			return ErrWithFakeClockNil
+			return ErrWithClockNil
 		}
 		s.clock = clock
 		return nil
@@ -507,11 +508,8 @@ const (
 // WithLimitConcurrentJobs sets the limit and mode to be used by the
 // Scheduler for limiting the number of jobs that may be running at
 // a given time.
-func WithLimitConcurrentJobs(limit int, mode LimitMode) SchedulerOption {
+func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
-		if limit <= 0 {
-			return ErrWithLimitConcurrentJobsZero
-		}
 		s.exec.limitMode = &limitMode{
 			mode:  mode,
 			limit: limit,
@@ -544,9 +542,6 @@ func WithLocation(location *time.Location) SchedulerOption {
 // Default: 10 * time.Second
 func WithStopTimeout(timeout time.Duration) SchedulerOption {
 	return func(s *scheduler) error {
-		if timeout <= 0 {
-			return ErrWithShutdownTimeoutZero
-		}
 		s.exec.stopTimeout = timeout
 		return nil
 	}

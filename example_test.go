@@ -1,30 +1,31 @@
 package gocron_test
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	. "github.com/go-co-op/gocron/v2" // nolint:revive
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
-
-	. "github.com/go-co-op/gocron/v2" // nolint:revive
 )
 
 func ExampleAfterJobRuns() {
 	s, _ := NewScheduler()
+
 	_, _ = s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func() {},
-			),
-			WithEventListeners(
-				AfterJobRuns(
-					func(jobID uuid.UUID) {
-						// do something after the job completes
-					},
-				),
+		),
+		NewTask(
+			func() {},
+		),
+		WithEventListeners(
+			AfterJobRuns(
+				func(jobID uuid.UUID) {
+					// do something after the job completes
+				},
 			),
 		),
 	)
@@ -32,18 +33,19 @@ func ExampleAfterJobRuns() {
 
 func ExampleAfterJobRunsWithError() {
 	s, _ := NewScheduler()
+
 	_, _ = s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func() {},
-			),
-			WithEventListeners(
-				AfterJobRunsWithError(
-					func(jobID uuid.UUID, err error) {
-						// do something when the job returns an error
-					},
-				),
+		),
+		NewTask(
+			func() {},
+		),
+		WithEventListeners(
+			AfterJobRunsWithError(
+				func(jobID uuid.UUID, err error) {
+					// do something when the job returns an error
+				},
 			),
 		),
 	)
@@ -51,18 +53,19 @@ func ExampleAfterJobRunsWithError() {
 
 func ExampleBeforeJobRuns() {
 	s, _ := NewScheduler()
+
 	_, _ = s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func() {},
-			),
-			WithEventListeners(
-				BeforeJobRuns(
-					func(jobID uuid.UUID) {
-						// do something immediately before the job is run
-					},
-				),
+		),
+		NewTask(
+			func() {},
+		),
+		WithEventListeners(
+			BeforeJobRuns(
+				func(jobID uuid.UUID) {
+					// do something immediately before the job is run
+				},
 			),
 		),
 	)
@@ -76,9 +79,9 @@ func ExampleCronJob() {
 			// standard cron tab parsing
 			"1 * * * *",
 			false,
-			NewTask(
-				func() {},
-			),
+		),
+		NewTask(
+			func() {},
 		),
 	)
 	_, _ = s.NewJob(
@@ -86,19 +89,43 @@ func ExampleCronJob() {
 			// optionally include seconds as the first field
 			"* 1 * * * *",
 			true,
-			NewTask(
-				func() {},
-			),
+		),
+		NewTask(
+			func() {},
 		),
 	)
 }
 
 func ExampleDailyJob() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		DailyJob(
+			1,
+			NewAtTimes(
+				NewAtTime(10, 30, 0),
+				NewAtTime(14, 0, 0),
+			),
+		),
+		NewTask(
+			func(a, b string) {},
+			"a",
+			"b",
+		),
+	)
 }
 
 func ExampleDurationJob() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second*5,
+		),
+		NewTask(
+			func() {},
+		),
+	)
 }
 
 func ExampleDurationRandomJob() {
@@ -108,23 +135,56 @@ func ExampleDurationRandomJob() {
 		DurationRandomJob(
 			time.Second,
 			5*time.Second,
-			NewTask(
-				func() {},
-			),
+		),
+		NewTask(
+			func() {},
 		),
 	)
 }
 
 func ExampleJob_ID() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(j.ID())
 }
 
 func ExampleJob_LastRun() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(j.LastRun())
 }
 
 func ExampleJob_NextRun() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(j.NextRun())
 }
 
 func ExampleMonthlyJob() {
@@ -138,25 +198,28 @@ func ExampleMonthlyJob() {
 				NewAtTime(10, 30, 0),
 				NewAtTime(11, 15, 0),
 			),
-			NewTask(
-				func() {},
-			),
+		),
+		NewTask(
+			func() {},
 		),
 	)
 }
 
 func ExampleNewScheduler() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	fmt.Println(s.Jobs())
 }
 
 func ExampleScheduler_NewJob() {
 	s, _ := NewScheduler()
+
 	j, err := s.NewJob(
 		DurationJob(
 			10*time.Second,
-			NewTask(
-				func() {},
-			),
+		),
+		NewTask(
+			func() {},
 		),
 	)
 	if err != nil {
@@ -166,54 +229,155 @@ func ExampleScheduler_NewJob() {
 }
 
 func ExampleScheduler_RemoveByTags() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+		WithTags("tag1"),
+	)
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+		WithTags("tag2"),
+	)
+	fmt.Println(len(s.Jobs()))
+
+	s.RemoveByTags("tag1", "tag2")
+
+	fmt.Println(len(s.Jobs()))
+	// Output:
+	// 2
+	// 0
 }
 
 func ExampleScheduler_RemoveJob() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(len(s.Jobs()))
+
+	_ = s.RemoveJob(j.ID())
+
+	fmt.Println(len(s.Jobs()))
+	// Output:
+	// 1
+	// 0
 }
 
 func ExampleScheduler_Start() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		CronJob(
+			"* * * * *",
+			false,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	s.Start()
 }
 
 func ExampleScheduler_StopJobs() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		CronJob(
+			"* * * * *",
+			false,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	s.Start()
+
+	_ = s.StopJobs()
 }
 
 func ExampleScheduler_Update() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	j, _ := s.NewJob(
+		CronJob(
+			"* * * * *",
+			false,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	s.Start()
+
+	// after some time, need to change the job
+
+	j, _ = s.Update(
+		j.ID(),
+		DurationJob(
+			5*time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
 }
 
 func ExampleWeeklyJob() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		WeeklyJob(
+			2,
+			NewWeekdays(time.Tuesday, time.Wednesday, time.Saturday),
+			NewAtTimes(
+				NewAtTime(1, 30, 0),
+				NewAtTime(12, 0, 30),
+			),
+		),
+		NewTask(
+			func() {},
+		),
+	)
 }
 
-func ExampleWithDistributedElector() {
-	_, _ = NewScheduler()
-}
-
-func ExampleWithEventListeners() {
-	_, _ = NewScheduler()
-}
-
-func ExampleWithFakeClock() {
+func ExampleWithClock() {
 	fakeClock := clockwork.NewFakeClock()
 	s, _ := NewScheduler(
-		WithFakeClock(fakeClock),
+		WithClock(fakeClock),
 	)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	_, _ = s.NewJob(
 		DurationJob(
 			time.Second*5,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d\n", one, two)
-					wg.Done()
-				},
-				"one", 2,
-			),
+		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d\n", one, two)
+				wg.Done()
+			},
+			"one", 2,
 		),
 	)
 	s.Start()
@@ -225,21 +389,68 @@ func ExampleWithFakeClock() {
 	// one, 2
 }
 
+var _ Elector = (*myElector)(nil)
+
+type myElector struct{}
+
+func (m myElector) IsLeader(_ context.Context) error {
+	return nil
+}
+
+func ExampleWithDistributedElector() {
+	elector := myElector{}
+
+	_, _ = NewScheduler(
+		WithDistributedElector(elector),
+	)
+}
+
+func ExampleWithEventListeners() {
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+		WithEventListeners(
+			AfterJobRuns(
+				func(jobID uuid.UUID) {
+					// do something after the job completes
+				},
+			),
+			AfterJobRunsWithError(
+				func(jobID uuid.UUID, err error) {
+					// do something when the job returns an error
+				},
+			),
+			BeforeJobRuns(
+				func(jobID uuid.UUID) {
+					// do something immediately before the job is run
+				},
+			),
+		),
+	)
+}
+
 func ExampleWithGlobalJobOptions() {
 	s, _ := NewScheduler(
 		WithGlobalJobOptions(
 			WithTags("tag1", "tag2", "tag3"),
 		),
 	)
+
 	j, _ := s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d", one, two)
-				},
-				"one", 2,
-			),
+		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
 		),
 	)
 	// The job will have the globally applied tags
@@ -253,14 +464,14 @@ func ExampleWithGlobalJobOptions() {
 	j2, _ := s2.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d", one, two)
-				},
-				"one", 2,
-			),
-			WithTags("tag4", "tag5", "tag6"),
 		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		WithTags("tag4", "tag5", "tag6"),
 	)
 	// The job will have the tags set specifically on the job
 	// overriding those set globally by the scheduler
@@ -281,19 +492,21 @@ func ExampleWithLimitConcurrentJobs() {
 
 func ExampleWithLimitedRuns() {
 	s, _ := NewScheduler()
+
 	_, _ = s.NewJob(
 		DurationJob(
 			time.Millisecond,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d\n", one, two)
-				},
-				"one", 2,
-			),
-			WithLimitedRuns(1),
 		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d\n", one, two)
+			},
+			"one", 2,
+		),
+		WithLimitedRuns(1),
 	)
 	s.Start()
+
 	time.Sleep(100 * time.Millisecond)
 	fmt.Printf("no jobs in scheduler: %v\n", s.Jobs())
 	_ = s.StopJobs()
@@ -312,17 +525,18 @@ func ExampleWithLocation() {
 
 func ExampleWithName() {
 	s, _ := NewScheduler()
+
 	j, _ := s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d", one, two)
-				},
-				"one", 2,
-			),
-			WithName("job 1"),
 		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		WithName("job 1"),
 	)
 	fmt.Println(j.Name())
 	// Output:
@@ -330,24 +544,40 @@ func ExampleWithName() {
 }
 
 func ExampleWithSingletonMode() {
-	_, _ = NewScheduler()
+	s, _ := NewScheduler()
+
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {
+				// this job will skip half it's executions
+				// and effectively run every 2 seconds
+				time.Sleep(1500 * time.Second)
+			},
+		),
+		WithSingletonMode(LimitModeReschedule),
+	)
 }
 
 func ExampleWithStartAt() {
 	s, _ := NewScheduler()
+
 	start := time.Date(9999, 9, 9, 9, 9, 9, 9, time.UTC)
+
 	j, _ := s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d", one, two)
-				},
-				"one", 2,
-			),
-			WithStartAt(
-				WithStartDateTime(start),
-			),
+		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		WithStartAt(
+			WithStartDateTime(start),
 		),
 	)
 	s.Start()
@@ -361,22 +591,25 @@ func ExampleWithStartAt() {
 }
 
 func ExampleWithStopTimeout() {
-	_, _ = NewScheduler()
+	_, _ = NewScheduler(
+		WithStopTimeout(time.Second * 5),
+	)
 }
 
 func ExampleWithTags() {
 	s, _ := NewScheduler()
+
 	j, _ := s.NewJob(
 		DurationJob(
 			time.Second,
-			NewTask(
-				func(one string, two int) {
-					fmt.Printf("%s, %d", one, two)
-				},
-				"one", 2,
-			),
-			WithTags("tag1", "tag2", "tag3"),
 		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		WithTags("tag1", "tag2", "tag3"),
 	)
 	fmt.Println(j.Tags())
 	// Output:

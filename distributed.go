@@ -7,5 +7,5 @@ import "context"
 type Elector interface {
 	// IsLeader should return  nil if the job should be scheduled by the instance
 	// making the request and an error if the job should not be scheduled.
-	IsLeader(ctx context.Context) error
+	IsLeader(context.Context) error
 }

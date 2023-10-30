@@ -44,7 +44,9 @@ type internalJob struct {
 // cancelling the context keeps the executor from continuing to try
 // and run the job.
 func (j *internalJob) stop() {
-	j.timer.Stop()
+	if j.timer != nil {
+		j.timer.Stop()
+	}
 	j.cancel()
 }
 
@@ -73,8 +75,8 @@ func NewTask(function any, parameters ...any) Task {
 // when the user only wants the job to run a certain
 // number of times and then be removed from the scheduler.
 type limitRunsTo struct {
-	limit    int
-	runCount int
+	limit    uint
+	runCount uint
 }
 
 // -----------------------------------------------
@@ -86,9 +88,7 @@ type limitRunsTo struct {
 // JobDefinition defines the interface that must be
 // implemented to create a job from the definition.
 type JobDefinition interface {
-	options() []JobOption
 	setup(*internalJob, *time.Location) error
-	task() Task
 }
 
 var _ JobDefinition = (*cronJobDefinition)(nil)
@@ -96,16 +96,6 @@ var _ JobDefinition = (*cronJobDefinition)(nil)
 type cronJobDefinition struct {
 	crontab     string
 	withSeconds bool
-	opts        []JobOption
-	tas         Task
-}
-
-func (c cronJobDefinition) options() []JobOption {
-	return c.opts
-}
-
-func (c cronJobDefinition) task() Task {
-	return c.tas
 }
 
 func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error {
@@ -145,12 +135,10 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error 
 // The timezone can be set on the Scheduler using WithLocation. Or in the
 // crontab in the form `TZ=America/Chicago * * * * *` or
 // `CRON_TZ=America/Chicago * * * * *`
-func CronJob(crontab string, withSeconds bool, task Task, options ...JobOption) JobDefinition {
+func CronJob(crontab string, withSeconds bool) JobDefinition {
 	return cronJobDefinition{
 		crontab:     crontab,
 		withSeconds: withSeconds,
-		opts:        options,
-		tas:         task,
 	}
 }
 
@@ -158,34 +146,18 @@ var _ JobDefinition = (*durationJobDefinition)(nil)
 
 type durationJobDefinition struct {
 	duration time.Duration
-	opts     []JobOption
-	tas      Task
-}
-
-func (d durationJobDefinition) options() []JobOption {
-	return d.opts
 }
 
 func (d durationJobDefinition) setup(j *internalJob, _ *time.Location) error {
-	if d.duration <= 0 {
-		return ErrDurationJobZero
-	}
-
 	j.jobSchedule = &durationJob{duration: d.duration}
 	return nil
 }
 
-func (d durationJobDefinition) task() Task {
-	return d.tas
-}
-
 // DurationJob defines a new job using time.Duration
 // for the interval.
-func DurationJob(duration time.Duration, task Task, options ...JobOption) JobDefinition {
+func DurationJob(duration time.Duration) JobDefinition {
 	return durationJobDefinition{
 		duration: duration,
-		opts:     options,
-		tas:      task,
 	}
 }
 
@@ -193,12 +165,6 @@ var _ JobDefinition = (*durationRandomJobDefinition)(nil)
 
 type durationRandomJobDefinition struct {
 	min, max time.Duration
-	opts     []JobOption
-	tas      Task
-}
-
-func (d durationRandomJobDefinition) options() []JobOption {
-	return d.opts
 }
 
 func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location) error {
@@ -214,27 +180,19 @@ func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location) err
 	return nil
 }
 
-func (d durationRandomJobDefinition) task() Task {
-	return d.tas
-}
-
 // DurationRandomJob defines a new job that runs on a random interval
 // between the min and max duration values provided.
-func DurationRandomJob(minDuration, maxDuration time.Duration, task Task, options ...JobOption) JobDefinition {
+func DurationRandomJob(minDuration, maxDuration time.Duration) JobDefinition {
 	return durationRandomJobDefinition{
-		min:  minDuration,
-		max:  maxDuration,
-		opts: options,
-		tas:  task,
+		min: minDuration,
+		max: maxDuration,
 	}
 }
 
-func DailyJob(interval uint, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
+func DailyJob(interval uint, atTimes AtTimes) JobDefinition {
 	return dailyJobDefinition{
 		interval: interval,
 		atTimes:  atTimes,
-		opts:     options,
-		tas:      task,
 	}
 }
 
@@ -243,12 +201,6 @@ var _ JobDefinition = (*dailyJobDefinition)(nil)
 type dailyJobDefinition struct {
 	interval uint
 	atTimes  AtTimes
-	opts     []JobOption
-	tas      Task
-}
-
-func (d dailyJobDefinition) options() []JobOption {
-	return d.opts
 }
 
 func (d dailyJobDefinition) setup(j *internalJob, location *time.Location) error {
@@ -274,22 +226,12 @@ func (d dailyJobDefinition) setup(j *internalJob, location *time.Location) error
 	return nil
 }
 
-func (d dailyJobDefinition) task() Task {
-	return d.tas
-}
-
 var _ JobDefinition = (*weeklyJobDefinition)(nil)
 
 type weeklyJobDefinition struct {
 	interval      uint
 	daysOfTheWeek Weekdays
 	atTimes       AtTimes
-	opts          []JobOption
-	tas           Task
-}
-
-func (w weeklyJobDefinition) options() []JobOption {
-	return w.opts
 }
 
 func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) error {
@@ -322,10 +264,6 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) erro
 	return nil
 }
 
-func (w weeklyJobDefinition) task() Task {
-	return w.tas
-}
-
 type Weekdays func() []time.Weekday
 
 func NewWeekdays(weekday time.Weekday, weekdays ...time.Weekday) Weekdays {
@@ -334,13 +272,11 @@ func NewWeekdays(weekday time.Weekday, weekdays ...time.Weekday) Weekdays {
 	}
 }
 
-func WeeklyJob(interval uint, daysOfTheWeek Weekdays, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
+func WeeklyJob(interval uint, daysOfTheWeek Weekdays, atTimes AtTimes) JobDefinition {
 	return weeklyJobDefinition{
 		interval:      interval,
 		daysOfTheWeek: daysOfTheWeek,
 		atTimes:       atTimes,
-		opts:          options,
-		tas:           task,
 	}
 }
 
@@ -350,12 +286,6 @@ type monthlyJobDefinition struct {
 	interval       uint
 	daysOfTheMonth DaysOfTheMonth
 	atTimes        AtTimes
-	opts           []JobOption
-	tas            Task
-}
-
-func (m monthlyJobDefinition) options() []JobOption {
-	return m.opts
 }
 
 func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) error {
@@ -401,10 +331,6 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) err
 
 	j.jobSchedule = ms
 	return nil
-}
-
-func (m monthlyJobDefinition) task() Task {
-	return m.tas
 }
 
 type days []int
@@ -472,13 +398,11 @@ func NewAtTimes(atTime AtTime, atTimes ...AtTime) AtTimes {
 // Carefully consider your configuration!
 //   - For example: an interval of 2 months on the 31st of each month, starting 12/31
 //     would skip Feb, April, June, and next run would be in August.
-func MonthlyJob(interval uint, daysOfTheMonth DaysOfTheMonth, atTimes AtTimes, task Task, options ...JobOption) JobDefinition {
+func MonthlyJob(interval uint, daysOfTheMonth DaysOfTheMonth, atTimes AtTimes) JobDefinition {
 	return monthlyJobDefinition{
 		interval:       interval,
 		daysOfTheMonth: daysOfTheMonth,
 		atTimes:        atTimes,
-		tas:            task,
-		opts:           options,
 	}
 }
 
@@ -503,11 +427,8 @@ func WithEventListeners(eventListeners ...EventListener) JobOption {
 
 // WithLimitedRuns limits the number of executions of this job to n.
 // Upon reaching the limit, the job is removed from the scheduler.
-func WithLimitedRuns(limit int) JobOption {
+func WithLimitedRuns(limit uint) JobOption {
 	return func(j *internalJob) error {
-		if limit <= 0 {
-			return ErrWithLimitedRunsZero
-		}
 		j.limitRunsTo = &limitRunsTo{
 			limit:    limit,
 			runCount: 0,
