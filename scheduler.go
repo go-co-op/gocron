@@ -553,6 +553,9 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 	case time.Duration:
+		if interval <= 0 {
+			job.error = wrapOrError(job.error, ErrInvalidInterval)
+		}
 		job.setInterval(0)
 		job.setDuration(interval)
 		job.setUnit(duration)
@@ -560,6 +563,9 @@ func (s *Scheduler) Every(interval interface{}) *Scheduler {
 		d, err := time.ParseDuration(interval)
 		if err != nil {
 			job.error = wrapOrError(job.error, err)
+		}
+		if d <= 0 {
+			job.error = wrapOrError(job.error, ErrInvalidInterval)
 		}
 		job.setDuration(d)
 		job.setUnit(duration)

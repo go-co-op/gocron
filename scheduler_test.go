@@ -145,6 +145,12 @@ func TestScheduler_Every(t *testing.T) {
 		}
 		s.Stop()
 		assert.Equal(t, 6, counter)
+
+		_, err = s.Every(-1 * time.Millisecond).Do(func() {
+			// do nothing
+		})
+
+		require.EqualError(t, err, ErrInvalidInterval)
 	})
 
 	t.Run("int", func(t *testing.T) {
@@ -192,6 +198,12 @@ func TestScheduler_Every(t *testing.T) {
 		}
 		s.Stop()
 		assert.Equal(t, 2, counter)
+
+		_, err = s.Every("-1ms").Do(func() {
+			// do nothing
+		})
+
+		require.EqualError(t, err, ErrInvalidInterval)
 	})
 }
 
