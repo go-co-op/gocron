@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"log"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -260,6 +261,50 @@ func TestMonthlyJob_next(t *testing.T) {
 			next := m.next(tt.lastRun)
 			assert.Equal(t, tt.expectedNextRun, next)
 			assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
+		})
+	}
+}
+
+func TestDurationRandomJob_next(t *testing.T) {
+	tests := []struct {
+		name        string
+		min         time.Duration
+		max         time.Duration
+		lastRun     time.Time
+		expectedMin time.Time
+		expectedMax time.Time
+	}{
+		{
+			"min 1s, max 5s",
+			time.Second,
+			5 * time.Second,
+			time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2000, 1, 1, 0, 0, 1, 0, time.UTC),
+			time.Date(2000, 1, 1, 0, 0, 5, 0, time.UTC),
+		},
+		{
+			"min 100ms, max 1s",
+			100 * time.Millisecond,
+			1 * time.Second,
+			time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2000, 1, 1, 0, 0, 0, 100000000, time.UTC),
+			time.Date(2000, 1, 1, 0, 0, 1, 0, time.UTC),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rj := durationRandomJob{
+				min:  tt.min,
+				max:  tt.max,
+				rand: rand.New(rand.NewSource(time.Now().UnixNano())), // nolint:gosec
+			}
+
+			for i := 0; i < 100; i++ {
+				next := rj.next(tt.lastRun)
+				assert.GreaterOrEqual(t, next, tt.expectedMin)
+				assert.LessOrEqual(t, next, tt.expectedMax)
+			}
 		})
 	}
 }

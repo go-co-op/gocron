@@ -274,6 +274,7 @@ func ExampleScheduler_RemoveJob() {
 
 	_ = s.RemoveJob(j.ID())
 
+	time.Sleep(5 * time.Millisecond)
 	fmt.Println(len(s.Jobs()))
 	// Output:
 	// 1

@@ -152,8 +152,10 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 func (s *scheduler) stopScheduler() {
 	s.exec.cancel()
 	s.started = false
-	for id, j := range s.jobs {
+	for _, j := range s.jobs {
 		j.stop()
+	}
+	for id, j := range s.jobs {
 		<-j.ctx.Done()
 
 		j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
@@ -319,8 +321,10 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		j.id = uuid.New()
 	} else {
 		currentJob := requestJobCtx(s.shutdownCtx, id, s.jobOutRequestCh)
-		s.removeJobCh <- id
-		<-currentJob.ctx.Done()
+		if currentJob != nil && currentJob.id != uuid.Nil {
+			s.removeJobCh <- id
+			<-currentJob.ctx.Done()
+		}
 
 		j.id = id
 	}

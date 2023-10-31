@@ -370,3 +370,179 @@ func TestScheduler_Shutdown(t *testing.T) {
 		assert.ErrorIs(t, err, ErrJobNotFound)
 	})
 }
+
+func TestScheduler_NewJob(t *testing.T) {
+	tests := []struct {
+		name string
+		jd   JobDefinition
+		tsk  Task
+		opts []JobOption
+	}{
+		{
+			"cron with timezone",
+			CronJob(
+				"CRON_TZ=America/Chicago * * * * * *",
+				true,
+			),
+			NewTask(
+				func() {},
+			),
+			nil,
+		},
+		{
+			"cron with timezone, no seconds",
+			CronJob(
+				"CRON_TZ=America/Chicago * * * * *",
+				false,
+			),
+			NewTask(
+				func() {},
+			),
+			nil,
+		},
+		{
+			"random duration",
+			DurationRandomJob(
+				time.Second,
+				time.Second*5,
+			),
+			NewTask(
+				func() {},
+			),
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewScheduler()
+			require.NoError(t, err)
+
+			_, err = s.NewJob(tt.jd, tt.tsk, tt.opts...)
+			require.NoError(t, err)
+
+			s.Start()
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_NewJobErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		jd   JobDefinition
+		err  error
+	}{
+		{
+			"cron with timezone",
+			CronJob(
+				"bad cron",
+				true,
+			),
+			ErrCronJobParse,
+		},
+		{
+			"random with bad min/max",
+			DurationRandomJob(
+				time.Second*5,
+				time.Second,
+			),
+			ErrDurationRandomJobMinMax,
+		},
+		{
+			"daily job at times nil",
+			DailyJob(
+				1,
+				nil,
+			),
+			ErrDailyJobAtTimesNil,
+		},
+		{
+			"daily job at time nil",
+			DailyJob(
+				1,
+				NewAtTimes(nil),
+			),
+			ErrDailyJobAtTimeNil,
+		},
+		{
+			"daily job hours out of range",
+			DailyJob(
+				1,
+				NewAtTimes(NewAtTime(100, 0, 0)),
+			),
+			ErrDailyJobHours,
+		},
+		{
+			"daily job minutes out of range",
+			DailyJob(
+				1,
+				NewAtTimes(NewAtTime(1, 100, 0)),
+			),
+			ErrDailyJobMinutesSeconds,
+		},
+		{
+			"daily job seconds out of range",
+			DailyJob(
+				1,
+				NewAtTimes(NewAtTime(1, 0, 100)),
+			),
+			ErrDailyJobMinutesSeconds,
+		},
+		{
+			"weekly job at times nil",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				nil,
+			),
+			ErrWeeklyJobAtTimesNil,
+		},
+		{
+			"weekly job at time nil",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				NewAtTimes(nil),
+			),
+			ErrWeeklyJobAtTimeNil,
+		},
+		{
+			"weekly job hours out of range",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				NewAtTimes(NewAtTime(100, 0, 0)),
+			),
+			ErrWeeklyJobHours,
+		},
+		{
+			"weekly job minutes out of range",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				NewAtTimes(NewAtTime(1, 100, 0)),
+			),
+			ErrWeeklyJobMinutesSeconds,
+		},
+		{
+			"weekly job seconds out of range",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				NewAtTimes(NewAtTime(1, 0, 100)),
+			),
+			ErrWeeklyJobMinutesSeconds,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewScheduler()
+			require.NoError(t, err)
+
+			_, err = s.NewJob(tt.jd, NewTask(func() {}))
+			assert.ErrorIs(t, err, tt.err)
+		})
+	}
+}
