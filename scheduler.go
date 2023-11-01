@@ -236,7 +236,10 @@ func (s *scheduler) selectNewJob(j internalJob) {
 
 			id := j.id
 			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
-				s.exec.jobsIDsIn <- id
+				select {
+				case <-s.shutdownCtx.Done():
+				case s.exec.jobsIDsIn <- id:
+				}
 			})
 		}
 		j.nextRun = next

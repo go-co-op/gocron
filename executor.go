@@ -118,8 +118,13 @@ func (e *executor) start() {
 				waitForJobs <- struct{}{}
 			}()
 			go func() {
+			For:
 				for _, sr := range e.singletonRunners {
-					<-sr.done
+					select {
+					case <-waiterCtx.Done():
+						break For
+					case <-sr.done:
+					}
 				}
 				select {
 				case <-waiterCtx.Done():
@@ -165,7 +170,10 @@ func (e *executor) singletonRunner(config singletonRunner) {
 				<-config.rescheduleLimiter
 			}
 		case <-e.ctx.Done():
-			config.done <- struct{}{}
+			select {
+			case config.done <- struct{}{}:
+			default:
+			}
 			return
 		}
 	}

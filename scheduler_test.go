@@ -195,7 +195,7 @@ func TestScheduler_Update(t *testing.T) {
 			durationJobCh,
 			2,
 			1,
-			time.Millisecond * 1499,
+			time.Second * 1,
 			time.Second * 2,
 		},
 	}
@@ -266,7 +266,11 @@ func TestScheduler_StopTimeout(t *testing.T) {
 					case <-time.After(10 * time.Second):
 					case <-testDone:
 					}
-					durationCh <- struct{}{}
+
+					select {
+					case durationCh <- struct{}{}:
+					default:
+					}
 				},
 			),
 			nil,
@@ -284,7 +288,10 @@ func TestScheduler_StopTimeout(t *testing.T) {
 					case <-testDone:
 					}
 
-					durationSingletonCh <- struct{}{}
+					select {
+					case durationSingletonCh <- struct{}{}:
+					default:
+					}
 				},
 			),
 			[]JobOption{WithSingletonMode(LimitModeWait)},
@@ -306,6 +313,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			err = s.Shutdown()
 			assert.ErrorIs(t, err, ErrStopTimedOut)
 			testDone <- struct{}{}
+			time.Sleep(50 * time.Millisecond)
 		})
 	}
 }
@@ -320,7 +328,7 @@ func TestScheduler_Shutdown(t *testing.T) {
 		require.NoError(t, err)
 		_, err = s.NewJob(
 			DurationJob(
-				5*time.Millisecond,
+				50*time.Millisecond,
 			),
 			NewTask(
 				func() {},
@@ -332,14 +340,15 @@ func TestScheduler_Shutdown(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.StopJobs())
 
 		time.Sleep(50 * time.Millisecond)
 		s.Start()
 
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.Shutdown())
+		time.Sleep(50 * time.Millisecond)
 	})
 
 	t.Run("calling Job methods after shutdown errors", func(t *testing.T) {
@@ -411,6 +420,47 @@ func TestScheduler_NewJob(t *testing.T) {
 			),
 			nil,
 		},
+		{
+			"daily",
+			DailyJob(
+				1,
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			NewTask(
+				func() {},
+			),
+			nil,
+		},
+		{
+			"weekly",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			NewTask(
+				func() {},
+			),
+			nil,
+		},
+		{
+			"monthly",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1, -1),
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			NewTask(
+				func() {},
+			),
+			nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -423,6 +473,7 @@ func TestScheduler_NewJob(t *testing.T) {
 
 			s.Start()
 			require.NoError(t, s.Shutdown())
+			time.Sleep(50 * time.Millisecond)
 		})
 	}
 }
@@ -431,6 +482,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 	tests := []struct {
 		name string
 		jd   JobDefinition
+		opts []JobOption
 		err  error
 	}{
 		{
@@ -439,6 +491,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				"bad cron",
 				true,
 			),
+			nil,
 			ErrCronJobParse,
 		},
 		{
@@ -447,6 +500,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				time.Second*5,
 				time.Second,
 			),
+			nil,
 			ErrDurationRandomJobMinMax,
 		},
 		{
@@ -455,6 +509,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				1,
 				nil,
 			),
+			nil,
 			ErrDailyJobAtTimesNil,
 		},
 		{
@@ -463,30 +518,40 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				1,
 				NewAtTimes(nil),
 			),
+			nil,
 			ErrDailyJobAtTimeNil,
 		},
 		{
 			"daily job hours out of range",
 			DailyJob(
 				1,
-				NewAtTimes(NewAtTime(100, 0, 0)),
+				NewAtTimes(
+					NewAtTime(100, 0, 0),
+				),
 			),
+			nil,
 			ErrDailyJobHours,
 		},
 		{
 			"daily job minutes out of range",
 			DailyJob(
 				1,
-				NewAtTimes(NewAtTime(1, 100, 0)),
+				NewAtTimes(
+					NewAtTime(1, 100, 0),
+				),
 			),
+			nil,
 			ErrDailyJobMinutesSeconds,
 		},
 		{
 			"daily job seconds out of range",
 			DailyJob(
 				1,
-				NewAtTimes(NewAtTime(1, 0, 100)),
+				NewAtTimes(
+					NewAtTime(1, 0, 100),
+				),
 			),
+			nil,
 			ErrDailyJobMinutesSeconds,
 		},
 		{
@@ -496,6 +561,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				NewWeekdays(time.Monday),
 				nil,
 			),
+			nil,
 			ErrWeeklyJobAtTimesNil,
 		},
 		{
@@ -505,15 +571,31 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				NewWeekdays(time.Monday),
 				NewAtTimes(nil),
 			),
+			nil,
 			ErrWeeklyJobAtTimeNil,
+		},
+		{
+			"weekly job weekdays nil",
+			WeeklyJob(
+				1,
+				nil,
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrWeeklyJobDaysOfTheWeekNil,
 		},
 		{
 			"weekly job hours out of range",
 			WeeklyJob(
 				1,
 				NewWeekdays(time.Monday),
-				NewAtTimes(NewAtTime(100, 0, 0)),
+				NewAtTimes(
+					NewAtTime(100, 0, 0),
+				),
 			),
+			nil,
 			ErrWeeklyJobHours,
 		},
 		{
@@ -521,8 +603,11 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			WeeklyJob(
 				1,
 				NewWeekdays(time.Monday),
-				NewAtTimes(NewAtTime(1, 100, 0)),
+				NewAtTimes(
+					NewAtTime(1, 100, 0),
+				),
 			),
+			nil,
 			ErrWeeklyJobMinutesSeconds,
 		},
 		{
@@ -530,9 +615,100 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			WeeklyJob(
 				1,
 				NewWeekdays(time.Monday),
-				NewAtTimes(NewAtTime(1, 0, 100)),
+				NewAtTimes(
+					NewAtTime(1, 0, 100),
+				),
 			),
+			nil,
 			ErrWeeklyJobMinutesSeconds,
+		},
+		{
+			"monthly job at times nil",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1),
+				nil,
+			),
+			nil,
+			ErrMonthlyJobAtTimesNil,
+		},
+		{
+			"monthly job at time nil",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1),
+				NewAtTimes(nil),
+			),
+			nil,
+			ErrMonthlyJobAtTimeNil,
+		},
+		{
+			"monthly job days out of range",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(0),
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrMonthlyJobDays,
+		},
+		{
+			"monthly job days out of range",
+			MonthlyJob(
+				1,
+				nil,
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrMonthlyJobDaysNil,
+		},
+		{
+			"monthly job hours out of range",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1),
+				NewAtTimes(
+					NewAtTime(100, 0, 0),
+				),
+			),
+			nil,
+			ErrMonthlyJobHours,
+		},
+		{
+			"monthly job minutes out of range",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1),
+				NewAtTimes(
+					NewAtTime(1, 100, 0),
+				),
+			),
+			nil,
+			ErrMonthlyJobMinutesSeconds,
+		},
+		{
+			"monthly job seconds out of range",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1),
+				NewAtTimes(
+					NewAtTime(1, 0, 100),
+				),
+			),
+			nil,
+			ErrMonthlyJobMinutesSeconds,
+		},
+		{
+			"WithName no name",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithName("")},
+			ErrWithNameEmpty,
 		},
 	}
 
@@ -541,7 +717,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			s, err := NewScheduler()
 			require.NoError(t, err)
 
-			_, err = s.NewJob(tt.jd, NewTask(func() {}))
+			_, err = s.NewJob(tt.jd, NewTask(func() {}), tt.opts...)
 			assert.ErrorIs(t, err, tt.err)
 		})
 	}

@@ -441,7 +441,7 @@ func WithName(name string) JobOption {
 	// TODO use the name for metrics and future logging option
 	return func(j *internalJob) error {
 		if name == "" {
-			return fmt.Errorf("gocron: WithName: name must not be empty")
+			return ErrWithNameEmpty
 		}
 		j.name = name
 		return nil
@@ -480,7 +480,7 @@ func WithStartImmediately() StartAtOption {
 func WithStartDateTime(start time.Time) StartAtOption {
 	return func(j *internalJob) error {
 		if start.IsZero() || start.Before(time.Now()) {
-			return fmt.Errorf("gocron: WithStartDateTime: start must not be in the past")
+			return ErrWithStartDateTimePast
 		}
 		j.startTime = start
 		return nil
