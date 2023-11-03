@@ -1,7 +1,6 @@
 package gocron
 
 import (
-	"log"
 	"math/rand"
 	"testing"
 	"time"
@@ -323,9 +322,7 @@ func TestJob_LastRun(t *testing.T) {
 			time.Second,
 		),
 		NewTask(
-			func() {
-				log.Println("job ran")
-			},
+			func() {},
 		),
 		WithStartAt(WithStartImmediately()),
 	)

@@ -32,7 +32,7 @@ type Scheduler interface {
 
 type scheduler struct {
 	shutdownCtx      context.Context
-	cancel           context.CancelFunc
+	shutdownCancel   context.CancelFunc
 	exec             executor
 	jobs             map[uuid.UUID]internalJob
 	location         *time.Location
@@ -63,6 +63,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	schCtx, cancel := context.WithCancel(context.Background())
 
 	exec := executor{
+		stopCh:           make(chan struct{}),
 		stopTimeout:      time.Second * 10,
 		singletonRunners: make(map[uuid.UUID]singletonRunner),
 
@@ -73,12 +74,12 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	}
 
 	s := &scheduler{
-		shutdownCtx: schCtx,
-		cancel:      cancel,
-		exec:        exec,
-		jobs:        make(map[uuid.UUID]internalJob),
-		location:    time.Local,
-		clock:       clockwork.NewRealClock(),
+		shutdownCtx:    schCtx,
+		shutdownCancel: cancel,
+		exec:           exec,
+		jobs:           make(map[uuid.UUID]internalJob),
+		location:       time.Local,
+		clock:          clockwork.NewRealClock(),
 
 		newJobCh:           make(chan internalJob),
 		removeJobCh:        make(chan uuid.UUID),
@@ -150,7 +151,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 // about jobs.
 
 func (s *scheduler) stopScheduler() {
-	s.exec.cancel()
+	s.exec.stopCh <- struct{}{}
 	s.started = false
 	for _, j := range s.jobs {
 		j.stop()
@@ -261,9 +262,8 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 }
 
 func (s *scheduler) selectStart() {
-	s.exec.ctx, s.exec.cancel = context.WithCancel(s.shutdownCtx)
 
-	go s.exec.start()
+	go s.exec.start(s.shutdownCtx)
 
 	s.started = true
 	for id, j := range s.jobs {
@@ -417,7 +417,7 @@ func (s *scheduler) StopJobs() error {
 // the Scheduler or Job's as the Scheduler cannot
 // be restarted after calling Shutdown.
 func (s *scheduler) Shutdown() error {
-	s.cancel()
+	s.shutdownCancel()
 	select {
 	case err := <-s.exec.done:
 		return err

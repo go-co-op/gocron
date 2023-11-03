@@ -11,6 +11,7 @@ import (
 type executor struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
+	stopCh           chan struct{}
 	jobsIDsIn        chan uuid.UUID
 	jobIDsOut        chan uuid.UUID
 	jobOutRequest    chan jobOutRequest
@@ -37,85 +38,93 @@ type limitMode struct {
 	done              chan struct{}
 }
 
-func (e *executor) start() {
-	wg := sync.WaitGroup{}
+func (e *executor) start(shutdownCtx context.Context) {
+	e.ctx, e.cancel = context.WithCancel(shutdownCtx)
+	wg := waitGroupWithMutex{
+		wg: sync.WaitGroup{},
+		mu: sync.Mutex{},
+	}
 	for {
 		select {
 		case id := <-e.jobsIDsIn:
-			if e.limitMode != nil {
-				if !e.limitMode.started {
-					for i := e.limitMode.limit; i > 0; i-- {
-						go e.limitModeRunner(e.limitMode.in, e.limitMode.done)
-					}
-				}
-				if e.limitMode.mode == LimitModeReschedule {
-					select {
-					case e.limitMode.rescheduleLimiter <- struct{}{}:
-						e.limitMode.in <- id
-					default:
-						// all runners are busy, reschedule the work for later
-						// which means we just skip it here and do nothing
-						// TODO when metrics are added, this should increment a rescheduled metric
-						e.jobIDsOut <- id
-					}
-				} else {
-					// TODO when metrics are added, this should increment a wait metric
-					e.limitMode.in <- id
-				}
-			} else {
-				j := requestJobCtx(e.ctx, id, e.jobOutRequest)
-				if j == nil {
-					continue
-				}
-				if j.singletonMode {
-					runner, ok := e.singletonRunners[id]
-					if !ok {
-						runner.in = make(chan uuid.UUID, 1000)
-						runner.done = make(chan struct{})
-						runner.mode = j.singletonLimitMode
-						if runner.mode == LimitModeReschedule {
-							runner.rescheduleLimiter = make(chan struct{}, 1)
+			go func() {
+				if e.limitMode != nil {
+					if !e.limitMode.started {
+						for i := e.limitMode.limit; i > 0; i-- {
+							go e.limitModeRunner(e.limitMode.in, e.limitMode.done)
 						}
-						e.singletonRunners[id] = runner
-						go e.singletonRunner(runner)
 					}
-
-					if runner.mode == LimitModeReschedule {
+					if e.limitMode.mode == LimitModeReschedule {
 						select {
-						case runner.rescheduleLimiter <- struct{}{}:
-							runner.in <- id
+						case e.limitMode.rescheduleLimiter <- struct{}{}:
+							e.limitMode.in <- id
 						default:
-							// runner is busy, reschedule the work for later
+							// all runners are busy, reschedule the work for later
 							// which means we just skip it here and do nothing
 							// TODO when metrics are added, this should increment a rescheduled metric
 							e.jobIDsOut <- id
 						}
 					} else {
-						runner.in <- id
+						// TODO when metrics are added, this should increment a wait metric
+						e.limitMode.in <- id
 					}
 				} else {
-					wg.Add(1)
-					go func(j internalJob) {
-						e.runJob(j)
-						wg.Done()
-					}(*j)
-				}
-			}
+					j := requestJobCtx(e.ctx, id, e.jobOutRequest)
+					if j == nil {
+						return
+					}
+					if j.singletonMode {
+						runner, ok := e.singletonRunners[id]
+						if !ok {
+							runner.in = make(chan uuid.UUID, 1000)
+							runner.done = make(chan struct{})
+							runner.mode = j.singletonLimitMode
+							if runner.mode == LimitModeReschedule {
+								runner.rescheduleLimiter = make(chan struct{}, 1)
+							}
+							e.singletonRunners[id] = runner
+							go e.singletonRunner(runner)
+						}
 
-		case <-e.ctx.Done():
+						if runner.mode == LimitModeReschedule {
+							select {
+							case runner.rescheduleLimiter <- struct{}{}:
+								runner.in <- id
+							default:
+								// runner is busy, reschedule the work for later
+								// which means we just skip it here and do nothing
+								// TODO when metrics are added, this should increment a rescheduled metric
+								e.jobIDsOut <- id
+							}
+						} else {
+							runner.in <- id
+						}
+					} else {
+						wg.Add(1)
+						go func(j internalJob) {
+							e.runJob(j)
+							wg.Done()
+						}(*j)
+					}
+				}
+			}()
+		case <-e.stopCh:
+			e.cancel()
 			waitForJobs := make(chan struct{})
 			waitForSingletons := make(chan struct{})
 
 			waiterCtx, waiterCancel := context.WithCancel(context.Background())
 
 			go func() {
-				wg.Wait()
+				go func() {
+					wg.Wait()
+					waitForJobs <- struct{}{}
+				}()
 				select {
 				case <-waiterCtx.Done():
 					return
 				default:
 				}
-				waitForJobs <- struct{}{}
 			}()
 			go func() {
 			For:

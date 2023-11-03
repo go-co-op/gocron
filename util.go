@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,4 +95,27 @@ func convertAtTimesToDateTime(atTimes AtTimes, location *time.Location) ([]time.
 		return a.Compare(b)
 	})
 	return atTimesDate, nil
+}
+
+type waitGroupWithMutex struct {
+	wg sync.WaitGroup
+	mu sync.Mutex
+}
+
+func (w *waitGroupWithMutex) Add(delta int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.wg.Add(delta)
+}
+
+func (w *waitGroupWithMutex) Done() {
+	//w.mu.Lock()
+	//defer w.mu.Unlock()
+	w.wg.Done()
+}
+
+func (w *waitGroupWithMutex) Wait() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.wg.Wait()
 }
