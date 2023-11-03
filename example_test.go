@@ -581,6 +581,7 @@ func ExampleWithStartAt() {
 		),
 	)
 	s.Start()
+	time.Sleep(10 * time.Millisecond)
 	defer func() {
 		_ = s.StopJobs()
 	}()
