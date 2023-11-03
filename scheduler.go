@@ -262,7 +262,6 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 }
 
 func (s *scheduler) selectStart() {
-
 	go s.exec.start()
 
 	s.started = true

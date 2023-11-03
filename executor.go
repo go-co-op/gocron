@@ -146,7 +146,6 @@ func (e *executor) start() {
 							// wait mode, fill up that queue
 							runner.in <- id
 						}
-
 					} else {
 						// we've gotten to the basic / standard jobs --
 						// the ones without anything special that just want
@@ -189,10 +188,7 @@ func (e *executor) start() {
 					standardJobsWg.Wait()
 					waitForJobs <- struct{}{}
 				}()
-				select {
-				case <-waiterCtx.Done():
-					return
-				}
+				<-waiterCtx.Done()
 			}()
 
 			// wait for per job singleton limit mode runner jobs to complete

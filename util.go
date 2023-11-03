@@ -109,8 +109,6 @@ func (w *waitGroupWithMutex) Add(delta int) {
 }
 
 func (w *waitGroupWithMutex) Done() {
-	//w.mu.Lock()
-	//defer w.mu.Unlock()
 	w.wg.Done()
 }
 
