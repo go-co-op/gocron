@@ -263,7 +263,7 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 
 func (s *scheduler) selectStart() {
 
-	go s.exec.start(s.shutdownCtx)
+	go s.exec.start()
 
 	s.started = true
 	for id, j := range s.jobs {
@@ -521,7 +521,7 @@ const (
 // a given time.
 func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
-		s.exec.limitMode = &limitMode{
+		s.exec.limitMode = &limitModeConfig{
 			mode:  mode,
 			limit: limit,
 			in:    make(chan uuid.UUID, 1000),
