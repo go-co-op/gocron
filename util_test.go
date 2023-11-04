@@ -162,5 +162,4 @@ func TestConvertAtTimesToDateTime(t *testing.T) {
 			assert.Equal(t, tt.err, err)
 		})
 	}
-
 }
