@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -11,8 +12,8 @@ import (
 
 func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 	defer goleak.VerifyNone(t)
-	cronNoOptionsCh := make(chan struct{})
-	durationNoOptionsCh := make(chan struct{})
+	cronNoOptionsCh := make(chan struct{}, 10)
+	durationNoOptionsCh := make(chan struct{}, 10)
 
 	tests := []struct {
 		name string
@@ -243,33 +244,27 @@ func TestScheduler_Update(t *testing.T) {
 func TestScheduler_StopTimeout(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	durationCh := make(chan struct{}, 10)
-	durationSingletonCh := make(chan struct{}, 10)
-	testDone := make(chan struct{})
+	var (
+		testDoneCtx context.Context
+		cancel      context.CancelFunc
+	)
 
 	tests := []struct {
 		name string
-		ch   chan struct{}
 		jd   JobDefinition
 		tsk  Task
 		opts []JobOption
 	}{
 		{
 			"duration",
-			durationCh,
 			DurationJob(
-				time.Millisecond * 500,
+				time.Millisecond * 100,
 			),
 			NewTask(
 				func() {
 					select {
 					case <-time.After(10 * time.Second):
-					case <-testDone:
-					}
-
-					select {
-					case durationCh <- struct{}{}:
-					default:
+					case <-testDoneCtx.Done():
 					}
 				},
 			),
@@ -277,20 +272,14 @@ func TestScheduler_StopTimeout(t *testing.T) {
 		},
 		{
 			"duration singleton",
-			durationSingletonCh,
 			DurationJob(
-				time.Millisecond * 500,
+				time.Millisecond * 100,
 			),
 			NewTask(
 				func() {
 					select {
 					case <-time.After(10 * time.Second):
-					case <-testDone:
-					}
-
-					select {
-					case durationSingletonCh <- struct{}{}:
-					default:
+					case <-testDoneCtx.Done():
 					}
 				},
 			),
@@ -300,6 +289,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testDoneCtx, cancel = context.WithCancel(context.Background())
 			s, err := NewScheduler(
 				WithStopTimeout(time.Second * 1),
 			)
@@ -312,8 +302,8 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			time.Sleep(time.Second)
 			err = s.Shutdown()
 			assert.ErrorIs(t, err, ErrStopTimedOut)
-			testDone <- struct{}{}
-			time.Sleep(50 * time.Millisecond)
+			cancel()
+			time.Sleep(200 * time.Millisecond)
 		})
 	}
 }

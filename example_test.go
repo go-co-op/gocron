@@ -250,6 +250,8 @@ func ExampleScheduler_RemoveByTags() {
 	)
 	fmt.Println(len(s.Jobs()))
 
+	time.Sleep(20 * time.Millisecond)
+
 	s.RemoveByTags("tag1", "tag2")
 
 	fmt.Println(len(s.Jobs()))
@@ -274,7 +276,7 @@ func ExampleScheduler_RemoveJob() {
 
 	_ = s.RemoveJob(j.ID())
 
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	fmt.Println(len(s.Jobs()))
 	// Output:
 	// 1
@@ -581,12 +583,12 @@ func ExampleWithStartAt() {
 		),
 	)
 	s.Start()
-	time.Sleep(10 * time.Millisecond)
-	defer func() {
-		_ = s.StopJobs()
-	}()
+	time.Sleep(20 * time.Millisecond)
+
 	next, _ := j.NextRun()
 	fmt.Println(next)
+
+	_ = s.StopJobs()
 	// Output:
 	// 9999-09-09 09:09:09.000000009 +0000 UTC
 }
