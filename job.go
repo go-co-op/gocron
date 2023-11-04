@@ -202,12 +202,10 @@ type dailyJobDefinition struct {
 }
 
 func (d dailyJobDefinition) setup(j *internalJob, location *time.Location) error {
-	if d.atTimes == nil {
-		return ErrDailyJobAtTimesNil
-	}
-
 	atTimesDate, err := convertAtTimesToDateTime(d.atTimes, location)
 	switch {
+	case errors.Is(err, errAtTimesNil):
+		return ErrDailyJobAtTimesNil
 	case errors.Is(err, errAtTimeNil):
 		return ErrDailyJobAtTimeNil
 	case errors.Is(err, errAtTimeHours):
@@ -239,9 +237,6 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) erro
 	if w.daysOfTheWeek == nil {
 		return ErrWeeklyJobDaysOfTheWeekNil
 	}
-	if w.atTimes == nil {
-		return ErrWeeklyJobAtTimesNil
-	}
 
 	daysOfTheWeek := w.daysOfTheWeek()
 
@@ -249,6 +244,8 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) erro
 
 	atTimesDate, err := convertAtTimesToDateTime(w.atTimes, location)
 	switch {
+	case errors.Is(err, errAtTimesNil):
+		return ErrWeeklyJobAtTimesNil
 	case errors.Is(err, errAtTimeNil):
 		return ErrWeeklyJobAtTimeNil
 	case errors.Is(err, errAtTimeHours):
@@ -293,9 +290,6 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) err
 	if m.daysOfTheMonth == nil {
 		return ErrMonthlyJobDaysNil
 	}
-	if m.atTimes == nil {
-		return ErrMonthlyJobAtTimesNil
-	}
 
 	var daysStart, daysEnd []int
 	for _, day := range m.daysOfTheMonth() {
@@ -318,6 +312,8 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) err
 
 	atTimesDate, err := convertAtTimesToDateTime(m.atTimes, location)
 	switch {
+	case errors.Is(err, errAtTimesNil):
+		return ErrMonthlyJobAtTimesNil
 	case errors.Is(err, errAtTimeNil):
 		return ErrMonthlyJobAtTimeNil
 	case errors.Is(err, errAtTimeHours):

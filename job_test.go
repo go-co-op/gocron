@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -338,4 +339,92 @@ func TestJob_LastRun(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, testTime, lastRun)
+}
+
+func TestWithEventListeners(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventListeners []EventListener
+		err            error
+	}{
+		{
+			"no event listeners",
+			nil,
+			nil,
+		},
+		{
+			"afterJobRuns",
+			[]EventListener{
+				AfterJobRuns(func(_ uuid.UUID) {}),
+			},
+			nil,
+		},
+		{
+			"afterJobRunsWithError",
+			[]EventListener{
+				AfterJobRunsWithError(func(_ uuid.UUID, _ error) {}),
+			},
+			nil,
+		},
+		{
+			"beforeJobRuns",
+			[]EventListener{
+				BeforeJobRuns(func(_ uuid.UUID) {}),
+			},
+			nil,
+		},
+		{
+			"multiple event listeners",
+			[]EventListener{
+				AfterJobRuns(func(_ uuid.UUID) {}),
+				AfterJobRunsWithError(func(_ uuid.UUID, _ error) {}),
+				BeforeJobRuns(func(_ uuid.UUID) {}),
+			},
+			nil,
+		},
+		{
+			"nil after job runs listener",
+			[]EventListener{
+				AfterJobRuns(nil),
+			},
+			ErrEventListenerFuncNil,
+		},
+		{
+			"nil after job runs with error listener",
+			[]EventListener{
+				AfterJobRunsWithError(nil),
+			},
+			ErrEventListenerFuncNil,
+		},
+		{
+			"nil before job runs listener",
+			[]EventListener{
+				BeforeJobRuns(nil),
+			},
+			ErrEventListenerFuncNil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var ij internalJob
+			err := WithEventListeners(tt.eventListeners...)(&ij)
+			assert.Equal(t, tt.err, err)
+
+			if err != nil {
+				return
+			}
+			var count int
+			if ij.afterJobRuns != nil {
+				count++
+			}
+			if ij.afterJobRunsWithError != nil {
+				count++
+			}
+			if ij.beforeJobRuns != nil {
+				count++
+			}
+			assert.Equal(t, len(tt.eventListeners), count)
+		})
+	}
 }

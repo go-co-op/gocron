@@ -700,6 +700,22 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			[]JobOption{WithName("")},
 			ErrWithNameEmpty,
 		},
+		{
+			"WithStartDateTime is zero",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithStartAt(WithStartDateTime(time.Time{}))},
+			ErrWithStartDateTimePast,
+		},
+		{
+			"WithStartDateTime is in the past",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithStartAt(WithStartDateTime(time.Now().Add(-time.Second)))},
+			ErrWithStartDateTimePast,
+		},
 	}
 
 	for _, tt := range tests {

@@ -78,6 +78,9 @@ func removeSliceDuplicatesInt(in []int) []int {
 }
 
 func convertAtTimesToDateTime(atTimes AtTimes, location *time.Location) ([]time.Time, error) {
+	if atTimes == nil {
+		return nil, errAtTimesNil
+	}
 	var atTimesDate []time.Time
 	for _, a := range atTimes() {
 		if a == nil {

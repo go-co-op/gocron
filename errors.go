@@ -36,6 +36,7 @@ var (
 // internal errors
 var (
 	errAtTimeNil    = fmt.Errorf("errAtTimeNil")
+	errAtTimesNil   = fmt.Errorf("errAtTimesNil")
 	errAtTimeHours  = fmt.Errorf("errAtTimeHours")
 	errAtTimeMinSec = fmt.Errorf("errAtTimeMinSec")
 )
