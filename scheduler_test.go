@@ -722,3 +722,72 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_LimitMode(t *testing.T) {
+	tests := []struct {
+		name        string
+		numJobs     int
+		limit       uint
+		limitMode   LimitMode
+		duration    time.Duration
+		expectedMin time.Duration
+		expectedMax time.Duration
+	}{
+		{
+			"limit mode reschedule",
+			10,
+			2,
+			LimitModeReschedule,
+			time.Millisecond * 100,
+			time.Millisecond * 400,
+			time.Millisecond * 700,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewScheduler(
+				WithLimitConcurrentJobs(tt.limit, tt.limitMode),
+				WithStopTimeout(time.Second),
+			)
+			require.NoError(t, err)
+
+			jobRanCh := make(chan struct{}, tt.numJobs*2)
+
+			for i := 0; i < tt.numJobs; i++ {
+				_, err = s.NewJob(
+					DurationJob(tt.duration),
+					NewTask(func() {
+						time.Sleep(tt.duration / 2)
+						jobRanCh <- struct{}{}
+					}),
+				)
+				require.NoError(t, err)
+			}
+
+			start := time.Now()
+			s.Start()
+
+			var runCount int
+			for runCount < tt.numJobs {
+				select {
+				case <-jobRanCh:
+					runCount++
+				case <-time.After(time.Second):
+					t.Fatalf("timed out waiting for jobs to run")
+				}
+			}
+			stop := time.Now()
+			err = s.Shutdown()
+			require.NoError(t, err)
+			select {
+			case <-jobRanCh:
+				t.Fatal("job ran after scheduler was stopped")
+			case <-time.After(tt.duration * 2):
+			}
+
+			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
+			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
+		})
+	}
+}

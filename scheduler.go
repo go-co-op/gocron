@@ -524,7 +524,7 @@ func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 			mode:  mode,
 			limit: limit,
 			in:    make(chan uuid.UUID, 1000),
-			done:  make(chan struct{}),
+			done:  make(chan struct{}, limit),
 		}
 		if mode == LimitModeReschedule {
 			s.exec.limitMode.rescheduleLimiter = make(chan struct{}, limit)

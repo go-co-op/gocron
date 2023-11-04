@@ -64,6 +64,15 @@ func (e *executor) start() {
 			// on requests for a job to the scheduler via requestJobCtx
 			ctx, cancel := context.WithCancel(e.ctx)
 
+			if e.limitMode != nil && !e.limitMode.started {
+				// check if we are already running the limit mode runners
+				// if not, spin up the required number i.e. limit!
+				e.limitMode.started = true
+				for i := e.limitMode.limit; i > 0; i-- {
+					go e.limitModeRunner(e.limitMode.in, e.limitMode.done, e.limitMode.mode, e.limitMode.rescheduleLimiter)
+				}
+			}
+
 			// spin off into a goroutine to unblock the executor and
 			// allow for processing for more work
 			go func() {
@@ -75,13 +84,6 @@ func (e *executor) start() {
 				// check for limit mode - this spins up a separate runner which handles
 				// limiting the total number of concurrently running jobs
 				if e.limitMode != nil {
-					// check if we are already running a limit mode runner
-					// if not, spin up the required number i.e. limit!
-					if !e.limitMode.started {
-						for i := e.limitMode.limit; i > 0; i-- {
-							go e.limitModeRunner(e.limitMode.in, e.limitMode.done, e.limitMode.mode, e.limitMode.rescheduleLimiter)
-						}
-					}
 					if e.limitMode.mode == LimitModeReschedule {
 						select {
 						// rescheduleLimiter is a channel the size of the limit

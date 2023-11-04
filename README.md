@@ -44,10 +44,10 @@ func main() {
 	j, err := s.NewJob(
 		gocron.DurationJob(
 			10*time.Second,
-			gocron.NewTask(
-				func() {},
-			),
 		),
+        gocron.NewTask(
+            func() {},
+        ),
 	)
 	if err != nil {
 		// handle error
