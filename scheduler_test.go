@@ -244,15 +244,10 @@ func TestScheduler_Update(t *testing.T) {
 func TestScheduler_StopTimeout(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	var (
-		testDoneCtx context.Context
-		cancel      context.CancelFunc
-	)
-
 	tests := []struct {
 		name string
 		jd   JobDefinition
-		tsk  Task
+		f    any
 		opts []JobOption
 	}{
 		{
@@ -260,14 +255,12 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			DurationJob(
 				time.Millisecond * 100,
 			),
-			NewTask(
-				func() {
-					select {
-					case <-time.After(10 * time.Second):
-					case <-testDoneCtx.Done():
-					}
-				},
-			),
+			func(testDoneCtx context.Context) {
+				select {
+				case <-time.After(10 * time.Second):
+				case <-testDoneCtx.Done():
+				}
+			},
 			nil,
 		},
 		{
@@ -275,27 +268,25 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			DurationJob(
 				time.Millisecond * 100,
 			),
-			NewTask(
-				func() {
-					select {
-					case <-time.After(10 * time.Second):
-					case <-testDoneCtx.Done():
-					}
-				},
-			),
+			func(testDoneCtx context.Context) {
+				select {
+				case <-time.After(10 * time.Second):
+				case <-testDoneCtx.Done():
+				}
+			},
 			[]JobOption{WithSingletonMode(LimitModeWait)},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDoneCtx, cancel = context.WithCancel(context.Background())
+			testDoneCtx, cancel := context.WithCancel(context.Background())
 			s, err := NewScheduler(
 				WithStopTimeout(time.Second * 1),
 			)
 			require.NoError(t, err)
 
-			_, err = s.NewJob(tt.jd, tt.tsk, tt.opts...)
+			_, err = s.NewJob(tt.jd, NewTask(tt.f, testDoneCtx), tt.opts...)
 			require.NoError(t, err)
 
 			s.Start()
@@ -360,6 +351,7 @@ func TestScheduler_Shutdown(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
+		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.Shutdown())
 
 		_, err = j.LastRun()
