@@ -257,7 +257,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			),
 			func(testDoneCtx context.Context) {
 				select {
-				case <-time.After(10 * time.Second):
+				case <-time.After(1 * time.Second):
 				case <-testDoneCtx.Done():
 				}
 			},
@@ -270,7 +270,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			),
 			func(testDoneCtx context.Context) {
 				select {
-				case <-time.After(10 * time.Second):
+				case <-time.After(1 * time.Second):
 				case <-testDoneCtx.Done():
 				}
 			},
@@ -282,7 +282,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testDoneCtx, cancel := context.WithCancel(context.Background())
 			s, err := NewScheduler(
-				WithStopTimeout(time.Second * 1),
+				WithStopTimeout(time.Millisecond * 100),
 			)
 			require.NoError(t, err)
 
@@ -290,11 +290,11 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			require.NoError(t, err)
 
 			s.Start()
-			time.Sleep(time.Second)
+			time.Sleep(time.Millisecond * 200)
 			err = s.Shutdown()
 			assert.ErrorIs(t, err, ErrStopTimedOut)
 			cancel()
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 		})
 	}
 }
