@@ -124,7 +124,7 @@ func (e *executor) start() {
 						runner, ok := e.singletonRunners[id]
 						if !ok {
 							runner.in = make(chan uuid.UUID, 1000)
-							runner.done = make(chan struct{})
+							runner.done = make(chan struct{}, 1)
 							if j.singletonLimitMode == LimitModeReschedule {
 								runner.rescheduleLimiter = make(chan struct{}, 1)
 							}

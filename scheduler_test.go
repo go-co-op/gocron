@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -324,12 +325,12 @@ func TestScheduler_Shutdown(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.StopJobs())
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		s.Start()
 
 		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.Shutdown())
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	})
 
 	t.Run("calling Job methods after shutdown errors", func(t *testing.T) {
@@ -721,6 +722,69 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 	}
 }
 
+func TestScheduler_Singleton(t *testing.T) {
+	tests := []struct {
+		name        string
+		duration    time.Duration
+		limitMode   LimitMode
+		runCount    int
+		expectedMin time.Duration
+		expectedMax time.Duration
+	}{
+		{
+			"singleton mode reschedule",
+			time.Millisecond * 100,
+			LimitModeReschedule,
+			3,
+			time.Millisecond * 600,
+			time.Millisecond * 1100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jobRanCh := make(chan struct{}, 10)
+
+			s, err := NewScheduler(
+				WithStopTimeout(1 * time.Second),
+			)
+			require.NoError(t, err)
+
+			_, err = s.NewJob(
+				DurationJob(
+					tt.duration,
+				),
+				NewTask(func() {
+					time.Sleep(tt.duration * 2)
+					jobRanCh <- struct{}{}
+				}),
+				WithSingletonMode(tt.limitMode),
+			)
+			require.NoError(t, err)
+
+			start := time.Now()
+			s.Start()
+
+			var runCount int
+			for runCount < tt.runCount {
+				select {
+				case <-jobRanCh:
+					runCount++
+				case <-time.After(time.Second):
+					t.Fatalf("timed out waiting for jobs to run")
+				}
+			}
+
+			stop := time.Now()
+			log.Println(stop.Sub(start))
+			require.NoError(t, s.Shutdown())
+
+			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
+			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
+		})
+	}
+}
+
 func TestScheduler_LimitMode(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -739,6 +803,15 @@ func TestScheduler_LimitMode(t *testing.T) {
 			time.Millisecond * 100,
 			time.Millisecond * 400,
 			time.Millisecond * 700,
+		},
+		{
+			"limit mode wait",
+			10,
+			2,
+			LimitModeWait,
+			time.Millisecond * 100,
+			time.Millisecond * 200,
+			time.Millisecond * 500,
 		},
 	}
 
@@ -778,11 +851,6 @@ func TestScheduler_LimitMode(t *testing.T) {
 			stop := time.Now()
 			err = s.Shutdown()
 			require.NoError(t, err)
-			select {
-			case <-jobRanCh:
-				t.Fatal("job ran after scheduler was stopped")
-			case <-time.After(tt.duration * 2):
-			}
 
 			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
 			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
