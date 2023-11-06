@@ -198,7 +198,6 @@ func (e *executor) start() {
 					waitForJobs <- struct{}{}
 				}()
 				<-waiterCtx.Done()
-
 			}()
 
 			// wait for per job singleton limit mode runner jobs to complete

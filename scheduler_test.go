@@ -15,7 +15,7 @@ import (
 func newTestScheduler(options ...SchedulerOption) (Scheduler, error) {
 	// default test options
 	out := []SchedulerOption{
-		WithLogger(NewJsonSlogLogger(slog.LevelDebug)),
+		WithLogger(NewJSONSlogLogger(slog.LevelDebug)),
 		WithStopTimeout(time.Second),
 	}
 

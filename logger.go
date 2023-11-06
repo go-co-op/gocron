@@ -22,10 +22,10 @@ var _ Logger = (*noOpLogger)(nil)
 
 type noOpLogger struct{}
 
-func (_ noOpLogger) Debug(_ string, _ ...any) {}
-func (_ noOpLogger) Error(_ string, _ ...any) {}
-func (_ noOpLogger) Info(_ string, _ ...any)  {}
-func (_ noOpLogger) Warn(_ string, _ ...any)  {}
+func (l noOpLogger) Debug(_ string, _ ...any) {}
+func (l noOpLogger) Error(_ string, _ ...any) {}
+func (l noOpLogger) Info(_ string, _ ...any)  {}
+func (l noOpLogger) Warn(_ string, _ ...any)  {}
 
 var _ Logger = (*slogLogger)(nil)
 
@@ -33,7 +33,7 @@ type slogLogger struct {
 	sl *slog.Logger
 }
 
-func NewJsonSlogLogger(level slog.Level) Logger {
+func NewJSONSlogLogger(level slog.Level) Logger {
 	return NewSlogLogger(
 		slog.New(
 			slog.NewJSONHandler(

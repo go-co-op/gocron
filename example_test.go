@@ -529,7 +529,7 @@ func ExampleWithLocation() {
 func ExampleWithLogger() {
 	_, _ = NewScheduler(
 		WithLogger(
-			NewJsonSlogLogger(slog.LevelInfo),
+			NewJSONSlogLogger(slog.LevelInfo),
 		),
 	)
 }
