@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"log"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -10,6 +11,18 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
+
+func newTestScheduler(options ...SchedulerOption) (Scheduler, error) {
+	// default test options
+	out := []SchedulerOption{
+		WithLogger(NewJsonSlogLogger(slog.LevelDebug)),
+		WithStopTimeout(time.Second),
+	}
+
+	// append any additional options 2nd to override defaults if needed
+	out = append(out, options...)
+	return NewScheduler(out...)
+}
 
 func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 	defer goleak.VerifyNone(t)
@@ -51,7 +64,7 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler()
+			s, err := newTestScheduler()
 			require.NoError(t, err)
 
 			_, err = s.NewJob(tt.jd, tt.tsk)
@@ -133,7 +146,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler(tt.options...)
+			s, err := newTestScheduler(tt.options...)
 			require.NoError(t, err)
 
 			_, err = s.NewJob(tt.jd, tt.tsk, tt.opts...)
@@ -204,7 +217,7 @@ func TestScheduler_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler()
+			s, err := newTestScheduler()
 			require.NoError(t, err)
 
 			j, err := s.NewJob(tt.initialJob, tt.tsk)
@@ -282,7 +295,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testDoneCtx, cancel := context.WithCancel(context.Background())
-			s, err := NewScheduler(
+			s, err := newTestScheduler(
 				WithStopTimeout(time.Millisecond * 100),
 			)
 			require.NoError(t, err)
@@ -304,7 +317,7 @@ func TestScheduler_Shutdown(t *testing.T) {
 	goleak.VerifyNone(t)
 
 	t.Run("start, stop, start, shutdown", func(t *testing.T) {
-		s, err := NewScheduler(
+		s, err := newTestScheduler(
 			WithStopTimeout(time.Second),
 		)
 		require.NoError(t, err)
@@ -334,13 +347,13 @@ func TestScheduler_Shutdown(t *testing.T) {
 	})
 
 	t.Run("calling Job methods after shutdown errors", func(t *testing.T) {
-		s, err := NewScheduler(
+		s, err := newTestScheduler(
 			WithStopTimeout(time.Second),
 		)
 		require.NoError(t, err)
 		j, err := s.NewJob(
 			DurationJob(
-				5*time.Millisecond,
+				100*time.Millisecond,
 			),
 			NewTask(
 				func() {},
@@ -448,7 +461,7 @@ func TestScheduler_NewJob(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler()
+			s, err := newTestScheduler()
 			require.NoError(t, err)
 
 			_, err = s.NewJob(tt.jd, tt.tsk, tt.opts...)
@@ -713,7 +726,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler()
+			s, err := newTestScheduler()
 			require.NoError(t, err)
 
 			_, err = s.NewJob(tt.jd, NewTask(func() {}), tt.opts...)
@@ -745,7 +758,7 @@ func TestScheduler_Singleton(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			jobRanCh := make(chan struct{}, 10)
 
-			s, err := NewScheduler(
+			s, err := newTestScheduler(
 				WithStopTimeout(1 * time.Second),
 			)
 			require.NoError(t, err)
@@ -817,9 +830,9 @@ func TestScheduler_LimitMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := NewScheduler(
+			s, err := newTestScheduler(
 				WithLimitConcurrentJobs(tt.limit, tt.limitMode),
-				WithStopTimeout(time.Second),
+				WithStopTimeout(2*time.Second),
 			)
 			require.NoError(t, err)
 

@@ -29,6 +29,7 @@ var (
 	ErrWithDistributedElector    = fmt.Errorf("gocron: WithDistributedElector: elector must not be nil")
 	ErrWithClockNil              = fmt.Errorf("gocron: WithClock: clock must not be nil")
 	ErrWithLocationNil           = fmt.Errorf("gocron: WithLocation: location must not be nil")
+	ErrWithLoggerNil             = fmt.Errorf("gocron: WithLogger: logger must not be nil")
 	ErrWithNameEmpty             = fmt.Errorf("gocron: WithName: name must not be empty")
 	ErrWithStartDateTimePast     = fmt.Errorf("gocron: WithStartDateTime: start must not be in the past")
 )

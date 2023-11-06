@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 type executor struct {
 	ctx              context.Context
 	cancel           context.CancelFunc
+	logger           Logger
 	stopCh           chan struct{}
 	jobsIDsIn        chan uuid.UUID
 	jobIDsOut        chan uuid.UUID
@@ -38,6 +40,8 @@ type limitModeConfig struct {
 }
 
 func (e *executor) start() {
+	e.logger.Debug("executor started")
+
 	// creating the executor's context here as the executor
 	// is the only goroutine that should access this context
 	// any other uses within the executor should create a context
@@ -69,7 +73,7 @@ func (e *executor) start() {
 				// if not, spin up the required number i.e. limit!
 				e.limitMode.started = true
 				for i := e.limitMode.limit; i > 0; i-- {
-					go e.limitModeRunner(e.limitMode.in, e.limitMode.done, e.limitMode.mode, e.limitMode.rescheduleLimiter)
+					go e.limitModeRunner("limitMode-"+strconv.Itoa(int(i)), e.limitMode.in, e.limitMode.done, e.limitMode.mode, e.limitMode.rescheduleLimiter)
 				}
 			}
 
@@ -129,7 +133,7 @@ func (e *executor) start() {
 								runner.rescheduleLimiter = make(chan struct{}, 1)
 							}
 							e.singletonRunners[id] = runner
-							go e.limitModeRunner(runner.in, runner.done, j.singletonLimitMode, runner.rescheduleLimiter)
+							go e.limitModeRunner("singleton-"+id.String(), runner.in, runner.done, j.singletonLimitMode, runner.rescheduleLimiter)
 						}
 
 						if j.singletonLimitMode == LimitModeReschedule {
@@ -163,6 +167,7 @@ func (e *executor) start() {
 				}
 			}()
 		case <-e.stopCh:
+			e.logger.Debug("stopping executor")
 			// we've been asked to stop. This is either because the scheduler has been told
 			// to stop all jobs or the scheduler has been asked to completely shutdown.
 			//
@@ -181,6 +186,7 @@ func (e *executor) start() {
 
 			// wait for standard jobs to complete
 			go func() {
+				e.logger.Debug("waiting for standard jobs to complete")
 				go func() {
 					// this is done in a separate goroutine, so we aren't
 					// blocked by the WaitGroup's Wait call in the event
@@ -188,13 +194,16 @@ func (e *executor) start() {
 					// This particular goroutine could leak in the event that
 					// some long-running standard job doesn't complete.
 					standardJobsWg.Wait()
+					e.logger.Debug("standard jobs completed")
 					waitForJobs <- struct{}{}
 				}()
 				<-waiterCtx.Done()
+
 			}()
 
 			// wait for per job singleton limit mode runner jobs to complete
 			go func() {
+				e.logger.Debug("waiting for singleton jobs to complete")
 			For:
 				for _, sr := range e.singletonRunners {
 					select {
@@ -207,12 +216,14 @@ func (e *executor) start() {
 				case <-waiterCtx.Done():
 					return
 				default:
+					e.logger.Debug("singleton jobs completed")
 					waitForSingletons <- struct{}{}
 				}
 			}()
 
 			// wait for limit mode runners to complete
 			go func() {
+				e.logger.Debug("waiting for limit mode jobs to complete")
 				if e.limitMode != nil {
 				For:
 					for i := e.limitMode.limit; i > 0; i-- {
@@ -227,6 +238,7 @@ func (e *executor) start() {
 				case <-waiterCtx.Done():
 					return
 				default:
+					e.logger.Debug("limit mode jobs completed")
 					waitForLimitMode <- struct{}{}
 				}
 			}()
@@ -252,8 +264,10 @@ func (e *executor) start() {
 			}
 			if count < 3 {
 				e.done <- ErrStopTimedOut
+				e.logger.Debug("executor stopped - timed out")
 			} else {
 				e.done <- nil
+				e.logger.Debug("executor stopped")
 			}
 			waiterCancel()
 			return
@@ -261,7 +275,8 @@ func (e *executor) start() {
 	}
 }
 
-func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}, limitMode LimitMode, rescheduleLimiter chan struct{}) {
+func (e *executor) limitModeRunner(name string, in chan uuid.UUID, done chan struct{}, limitMode LimitMode, rescheduleLimiter chan struct{}) {
+	e.logger.Debug("limitModeRunner starting", "name", name)
 	for {
 		select {
 		case id := <-in:
@@ -280,6 +295,7 @@ func (e *executor) limitModeRunner(in chan uuid.UUID, done chan struct{}, limitM
 				}
 			}
 		case <-e.ctx.Done():
+			e.logger.Debug("limitModeRunner shutting down", "name", name)
 			select {
 			case done <- struct{}{}:
 			default:

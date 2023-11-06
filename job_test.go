@@ -313,7 +313,7 @@ func TestJob_LastRun(t *testing.T) {
 	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
 	fakeClock := clockwork.NewFakeClockAt(testTime)
 
-	s, err := NewScheduler(
+	s, err := newTestScheduler(
 		WithClock(fakeClock),
 	)
 	require.NoError(t, err)

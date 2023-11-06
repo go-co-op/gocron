@@ -3,9 +3,8 @@ package gocron
 import (
 	"context"
 	"reflect"
+	"slices"
 	"time"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
@@ -39,6 +38,7 @@ type scheduler struct {
 	clock            clockwork.Clock
 	started          bool
 	globalJobOptions []JobOption
+	logger           Logger
 
 	startCh            chan struct{}
 	startedCh          chan struct{}
@@ -66,6 +66,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		stopCh:           make(chan struct{}),
 		stopTimeout:      time.Second * 10,
 		singletonRunners: make(map[uuid.UUID]singletonRunner),
+		logger:           &noOpLogger{},
 
 		jobsIDsIn:     make(chan uuid.UUID),
 		jobIDsOut:     make(chan uuid.UUID),
@@ -80,6 +81,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobs:           make(map[uuid.UUID]internalJob),
 		location:       time.Local,
 		clock:          clockwork.NewRealClock(),
+		logger:         &noOpLogger{},
 
 		newJobCh:           make(chan internalJob),
 		removeJobCh:        make(chan uuid.UUID),
@@ -99,6 +101,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	}
 
 	go func() {
+		s.logger.Info("new scheduler created")
 		for {
 			select {
 			case id := <-s.exec.jobIDsOut:
@@ -151,6 +154,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 // about jobs.
 
 func (s *scheduler) stopScheduler() {
+	s.logger.Debug("stopping scheduler")
 	s.exec.stopCh <- struct{}{}
 	s.started = false
 	for _, j := range s.jobs {
@@ -162,6 +166,7 @@ func (s *scheduler) stopScheduler() {
 		j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
 		s.jobs[id] = j
 	}
+	s.logger.Debug("scheduler stopped")
 }
 
 func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
@@ -262,6 +267,7 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 }
 
 func (s *scheduler) selectStart() {
+	s.logger.Debug("scheduler starting")
 	go s.exec.start()
 
 	s.started = true
@@ -284,6 +290,7 @@ func (s *scheduler) selectStart() {
 		s.jobs[id] = j
 	}
 	s.startedCh <- struct{}{}
+	s.logger.Info("scheduler started")
 }
 
 // -----------------------------------------------
@@ -542,6 +549,17 @@ func WithLocation(location *time.Location) SchedulerOption {
 			return ErrWithLocationNil
 		}
 		s.location = location
+		return nil
+	}
+}
+
+func WithLogger(logger Logger) SchedulerOption {
+	return func(s *scheduler) error {
+		if logger == nil {
+			return ErrWithLoggerNil
+		}
+		s.logger = logger
+		s.exec.logger = logger
 		return nil
 	}
 }

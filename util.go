@@ -3,12 +3,12 @@ package gocron
 import (
 	"context"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 func callJobFuncWithParams(jobFunc any, params ...any) error {

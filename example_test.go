@@ -2,6 +2,7 @@ package gocron_test
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -522,6 +523,14 @@ func ExampleWithLocation() {
 
 	_, _ = NewScheduler(
 		WithLocation(location),
+	)
+}
+
+func ExampleWithLogger() {
+	_, _ = NewScheduler(
+		WithLogger(
+			NewJsonSlogLogger(slog.LevelInfo),
+		),
 	)
 }
 
