@@ -2,7 +2,9 @@ package gocron
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -873,6 +875,108 @@ func TestScheduler_LimitMode(t *testing.T) {
 
 			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
 			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
+		})
+	}
+}
+
+var _ Elector = (*testElector)(nil)
+
+type testElector struct {
+	mu            sync.Mutex
+	leaderElected bool
+}
+
+func (t *testElector) IsLeader(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("done")
+	default:
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.leaderElected {
+		return fmt.Errorf("already elected leader")
+	}
+	t.leaderElected = true
+	return nil
+}
+
+func TestScheduler_WithDistributedElector(t *testing.T) {
+	goleak.VerifyNone(t)
+	tests := []struct {
+		name  string
+		count int
+	}{
+		{
+			"3 schedulers",
+			3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			elector := &testElector{}
+			jobsRan := make(chan struct{}, 20)
+			ctx, cancel := context.WithCancel(context.Background())
+			schedulersDone := make(chan struct{}, tt.count)
+
+			for i := tt.count; i > 0; i-- {
+				go func() {
+					s, err := newTestScheduler(
+						WithDistributedElector(elector),
+					)
+					require.NoError(t, err)
+
+					_, err = s.NewJob(
+						DurationJob(
+							time.Second,
+						),
+						NewTask(
+							func() {
+								jobsRan <- struct{}{}
+							},
+						),
+						WithStartAt(
+							WithStartImmediately(),
+						),
+					)
+					require.NoError(t, err)
+
+					s.Start()
+
+					<-ctx.Done()
+					err = s.Shutdown()
+					require.NoError(t, err)
+					schedulersDone <- struct{}{}
+				}()
+			}
+
+			var runCount int
+			select {
+			case <-jobsRan:
+				cancel()
+				runCount++
+			case <-time.After(time.Second):
+				cancel()
+				t.Error("timed out waiting for job to run")
+			}
+
+			var doneCount int
+			timeout := time.Now().Add(3 * time.Second)
+			for doneCount < tt.count && time.Now().After(timeout) {
+				select {
+				case <-schedulersDone:
+					doneCount++
+				default:
+				}
+			}
+			close(jobsRan)
+			for range jobsRan {
+				runCount++
+			}
+
+			assert.Equal(t, 1, runCount)
 		})
 	}
 }
