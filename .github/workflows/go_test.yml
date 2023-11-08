@@ -1,0 +1,30 @@
+on:
+  push:
+    branches:
+      - v2
+  pull_request:
+    branches:
+      - v2
+
+name: golangci-lint
+jobs:
+  golangci:
+    strategy:
+      matrix:
+        go-version:
+          - "1.21"
+    name: lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v3.7.0
+        with:
+          version: v1.55.2
+      - name: test
+        run: make test
