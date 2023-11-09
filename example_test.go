@@ -2,7 +2,6 @@ package gocron_test
 
 import (
 	"fmt"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -550,7 +549,7 @@ func ExampleWithLocation() {
 func ExampleWithLogger() {
 	_, _ = NewScheduler(
 		WithLogger(
-			NewJSONSlogLogger(slog.LevelInfo),
+			NewLogger(LogLevelDebug),
 		),
 	)
 }

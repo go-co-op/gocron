@@ -1,8 +1,7 @@
 package gocron
 
 import (
-	"log/slog"
-	"os"
+	"log"
 )
 
 // Logger is the interface that wraps the basic logging methods
@@ -12,56 +11,67 @@ import (
 // or implement your own Logger. The actual level of Log that is logged
 // is handled by the implementation.
 type Logger interface {
-	Debug(msg string, args ...any)
-	Error(msg string, args ...any)
-	Info(msg string, args ...any)
-	Warn(msg string, args ...any)
+	Debug(msg string, args ...interface{})
+	Error(msg string, args ...interface{})
+	Info(msg string, args ...interface{})
+	Warn(msg string, args ...interface{})
 }
 
 var _ Logger = (*noOpLogger)(nil)
 
 type noOpLogger struct{}
 
-func (l noOpLogger) Debug(_ string, _ ...any) {}
-func (l noOpLogger) Error(_ string, _ ...any) {}
-func (l noOpLogger) Info(_ string, _ ...any)  {}
-func (l noOpLogger) Warn(_ string, _ ...any)  {}
+func (l noOpLogger) Debug(_ string, _ ...interface{}) {}
+func (l noOpLogger) Error(_ string, _ ...interface{}) {}
+func (l noOpLogger) Info(_ string, _ ...interface{})  {}
+func (l noOpLogger) Warn(_ string, _ ...interface{})  {}
 
-var _ Logger = (*slogLogger)(nil)
+var _ Logger = (*logger)(nil)
 
-type slogLogger struct {
-	sl *slog.Logger
+// LogLevel is the level of logging that should be logged
+// when using the basic NewLogger.
+type LogLevel int
+
+const (
+	LogLevelError LogLevel = iota
+	LogLevelWarn
+	LogLevelInfo
+	LogLevelDebug
+)
+
+type logger struct {
+	level LogLevel
 }
 
-func NewJSONSlogLogger(level slog.Level) Logger {
-	return NewSlogLogger(
-		slog.New(
-			slog.NewJSONHandler(
-				os.Stdout,
-				&slog.HandlerOptions{
-					Level: level,
-				},
-			),
-		),
-	)
+// NewLogger returns a new Logger that logs at the given level.
+func NewLogger(level LogLevel) Logger {
+	return &logger{level: level}
 }
 
-func NewSlogLogger(sl *slog.Logger) Logger {
-	return &slogLogger{sl: sl}
+func (l *logger) Debug(msg string, args ...interface{}) {
+	if l.level < LogLevelDebug {
+		return
+	}
+	log.Printf("DEBUG: %s, %v\n", msg, args)
 }
 
-func (l *slogLogger) Debug(msg string, args ...any) {
-	l.sl.Debug(msg, args...)
+func (l *logger) Error(msg string, args ...interface{}) {
+	if l.level < LogLevelError {
+		return
+	}
+	log.Printf("ERROR: %s, %v\n", msg, args)
 }
 
-func (l *slogLogger) Error(msg string, args ...any) {
-	l.sl.Error(msg, args...)
+func (l *logger) Info(msg string, args ...interface{}) {
+	if l.level < LogLevelInfo {
+		return
+	}
+	log.Printf("INFO: %s, %v\n", msg, args)
 }
 
-func (l *slogLogger) Info(msg string, args ...any) {
-	l.sl.Info(msg, args...)
-}
-
-func (l *slogLogger) Warn(msg string, args ...any) {
-	l.sl.Warn(msg, args...)
+func (l *logger) Warn(msg string, args ...interface{}) {
+	if l.level < LogLevelWarn {
+		return
+	}
+	log.Printf("WARN: %s, %v\n", msg, args)
 }
