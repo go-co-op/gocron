@@ -55,6 +55,8 @@ type executor struct {
 
 	distributedLocker  Locker  // support running jobs across multiple instances
 	distributedElector Elector // support running jobs across multiple instances
+
+	resultReporter JobResultReporter // support reporting job results
 }
 
 func newExecutor() executor {
@@ -69,7 +71,7 @@ func newExecutor() executor {
 	return e
 }
 
-func runJob(f jobFunction) {
+func runJob(f jobFunction, reporter JobResultReporter) {
 	panicHandlerMutex.RLock()
 	defer panicHandlerMutex.RUnlock()
 
@@ -87,8 +89,14 @@ func runJob(f jobFunction) {
 	err := callJobFuncWithParams(f.function, f.parameters)
 	if err != nil {
 		_ = callJobFuncWithParams(f.eventListeners.onError, []interface{}{f.getName(), err})
+		if reporter != nil {
+			reporter.ReportJobResult(JobResult{UUID: f.id, JobName: f.jobName, RunTimes: f.jobRunTimes, ReportTime: time.Now(), Err: err})
+		}
 	} else {
 		_ = callJobFuncWithParams(f.eventListeners.noError, []interface{}{f.getName()})
+		if reporter != nil {
+			reporter.ReportJobResult(JobResult{UUID: f.id, JobName: f.jobName, RunTimes: f.jobRunTimes, ReportTime: time.Now()})
+		}
 	}
 	_ = callJobFuncWithParams(f.eventListeners.afterJobRuns, []interface{}{f.getName()})
 	callJobFunc(f.eventListeners.onAfterJobExecution)
@@ -96,7 +104,7 @@ func runJob(f jobFunction) {
 	f.runFinishCount.Add(1)
 }
 
-func (jf *jobFunction) singletonRunner() {
+func (jf *jobFunction) singletonRunner(reporter JobResultReporter) {
 	jf.singletonRunnerOn.Store(true)
 	jf.singletonWgMu.Lock()
 	jf.singletonWg.Add(1)
@@ -113,7 +121,7 @@ func (jf *jobFunction) singletonRunner() {
 			return
 		case <-jf.singletonQueue:
 			if !jf.stopped.Load() {
-				runJob(*jf)
+				runJob(*jf, reporter)
 			}
 		}
 	}
@@ -174,7 +182,7 @@ func (e *executor) runJob(f jobFunction) {
 			if err != nil {
 				return
 			}
-			runJob(f)
+			runJob(f, e.resultReporter)
 			return
 		}
 		if e.distributedLocker != nil {
@@ -207,15 +215,15 @@ func (e *executor) runJob(f jobFunction) {
 				}
 				_ = l.Unlock(f.ctx)
 			}()
-			runJob(f)
+			runJob(f, e.resultReporter)
 			return
 		}
-		runJob(f)
+		runJob(f, e.resultReporter)
 	case singletonMode:
 		e.singletonWgs.Store(f.singletonWg, f.singletonWgMu)
 
 		if !f.singletonRunnerOn.Load() {
-			go f.singletonRunner()
+			go f.singletonRunner(e.resultReporter)
 		}
 		f.singletonQueueMu.Lock()
 		f.singletonQueue <- struct{}{}

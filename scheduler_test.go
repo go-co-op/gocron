@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
@@ -2944,4 +2945,83 @@ func runTestWithDistributedElector(t *testing.T, maxConcurrentJobs int) {
 	for r := range resultChan {
 		assert.Equal(t, leaderIndex, r)
 	}
+}
+
+func TestLoadJobFromObject(t *testing.T) {
+	// test suite 1: job schedule expression should be parsed correctly
+	monday := time.Monday
+	uid := []uuid.UUID{
+		uuid.New(),
+		uuid.New(),
+		uuid.New(),
+		uuid.New(),
+		uuid.New(),
+		uuid.New(),
+	}
+	objects := []JobObject{
+		{JobName: "cron", UUID: (uid[0]), Cron: "*/1 * * * *"},
+		{JobName: "cronSeconds", UUID: (uid[1]), CronWithSeconds: true, Cron: "*/1 * * * * *"},
+		{JobName: "everyDayAt", UUID: (uid[2]), Every: 1, Unit: "Day", At: []interface{}{"10:00", time.Date(2022, 2, 16, 10, 30, 0, 0, time.UTC)}},
+		{JobName: "every", UUID: (uid[3]), Every: "5m"},
+		{JobName: "everyWeekdayAt", UUID: (uid[4]), Every: 1, WeekDay: &monday, At: []interface{}{"12:00;13:00"}},
+		{JobName: "everyMonthDay", UUID: (uid[5]), Every: 2, Months: []int{1, 2, 3}},
+	}
+
+	s1 := NewScheduler(time.UTC)
+	for _, jo := range objects {
+		_, err := s1.LoadFromJobObject(jo).Do(func() {})
+		assert.NoError(t, err, jo.JobName)
+	}
+	s2 := NewScheduler(time.UTC)
+	s2.Cron("*/1 * * * *").Name("cron").Do(func() {})
+	s2.CronWithSeconds("*/1 * * * * *").Name("cronSeconds").Do(func() {})
+	s2.Every(1).Day().At("10:00").At(time.Date(2022, 2, 16, 10, 30, 0, 0, time.UTC)).Name("everyDayAt").Do(func() {})
+	s2.Every("5m").Name("every").Do(func() {})
+	s2.Every(1).Monday().At("12:00").At("13:00").Name("everyWeekdayAt").Do(func() {})
+	s2.Every(2).Months(1, 2, 3).Name("everyMonthDay").Do(func() {})
+
+	findJob2 := func(name string) *Job {
+		for _, job := range s2.jobs {
+			if job.jobName == name {
+				return job
+			}
+		}
+		return nil
+	}
+	now := time.Now()
+	job1 := s1.jobs[uid[0]]
+	job2 := findJob2(job1.jobName)
+	assert.NotNil(t, job2)
+	assert.Equal(t, job1.jobName, job2.jobName)
+	assert.Equal(t, job1.cronSchedule.Next(now), job2.cronSchedule.Next(now))
+
+	job1 = s1.jobs[uid[1]]
+	job2 = findJob2(job1.jobName)
+	assert.NotNil(t, job2)
+	assert.Equal(t, job1.jobName, job2.jobName)
+	assert.Equal(t, job1.cronSchedule.Next(now), job2.cronSchedule.Next(now))
+
+	job1 = s1.jobs[uid[2]]
+	job2 = findJob2(job1.jobName)
+	assert.NotNil(t, job2)
+	assert.Equal(t, job1.jobName, job2.jobName)
+	assert.Equal(t, job1.interval, job2.interval)
+	assert.Equal(t, job1.unit, job2.unit)
+	assert.ElementsMatch(t, job1.atTimes, job2.atTimes)
+
+	job1 = s1.jobs[uid[3]]
+	job2 = findJob2(job1.jobName)
+	assert.NotNil(t, job2)
+	assert.Equal(t, job1.jobName, job2.jobName)
+	assert.Equal(t, job1.interval, job2.interval)
+	assert.Equal(t, job1.unit, job2.unit)
+	assert.ElementsMatch(t, job1.scheduledWeekdays, job2.scheduledWeekdays)
+
+	job1 = s1.jobs[uid[4]]
+	job2 = findJob2(job1.jobName)
+	assert.NotNil(t, job2)
+	assert.Equal(t, job1.jobName, job2.jobName)
+	assert.Equal(t, job1.interval, job2.interval)
+	assert.Equal(t, job1.unit, job2.unit)
+	assert.ElementsMatch(t, job1.daysOfTheMonth, job2.daysOfTheMonth)
 }

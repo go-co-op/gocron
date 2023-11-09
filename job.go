@@ -138,13 +138,18 @@ const (
 
 // newJob creates a new Job with the provided interval
 func newJob(interval int, startImmediately bool, singletonMode bool) *Job {
+	return newJobWithUUID(interval, startImmediately, singletonMode, uuid.New())
+}
+
+// newJobWithUUID creates a new Job with the provided interval and uuid
+func newJobWithUUID(interval int, startImmediately bool, singletonMode bool, id uuid.UUID) *Job {
 	ctx, cancel := context.WithCancel(context.Background())
 	job := &Job{
 		mu:       &jobMutex{},
 		interval: interval,
 		unit:     seconds,
 		jobFunction: jobFunction{
-			id: uuid.New(),
+			id: id,
 			jobRunTimes: &jobRunTimes{
 				jobRunTimesMu: &sync.Mutex{},
 				lastRun:       time.Time{},

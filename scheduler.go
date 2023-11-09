@@ -1427,6 +1427,62 @@ func (s *Scheduler) newJob(interval int) *Job {
 	return newJob(interval, !s.waitForInterval, s.singletonMode)
 }
 
+// LoadFromJobObject loads a job from a JobObject, loading the job's UUID,name,schedule, and last run time.
+// if cron is set, it will be used first.
+func (s *Scheduler) LoadFromJobObject(obj JobObject) *Scheduler {
+	j := newJobWithUUID(0, !s.waitForInterval, s.singletonMode, obj.UUID)
+	s.jobsMutex.Lock()
+	s.jobs[j.id] = j
+	s.jobsMutex.Unlock()
+	s.inScheduleChain = &j.id
+
+	s.Name(obj.JobName)
+
+	if obj.Cron != "" {
+		if obj.CronWithSeconds {
+			s.CronWithSeconds(obj.Cron)
+		} else {
+			s.Cron(obj.Cron)
+		}
+		return s
+	}
+
+	s.Every(obj.Every)
+	if obj.Unit != "" {
+		switch obj.Unit {
+		case "Millisecond", "Milliseconds":
+			s.Millisecond()
+		case "Second", "Seconds":
+			s.Second()
+		case "Minute", "Minutes":
+			s.Minute()
+		case "Hour", "Hours":
+			s.Hour()
+		case "Day", "Days":
+			s.Day()
+		case "Week", "Weeks":
+			s.Week()
+		}
+	}
+	if obj.WeekDay != nil {
+		s.Weekday(*obj.WeekDay)
+	}
+	if len(obj.Months) > 0 {
+		s.Months(obj.Months...)
+	}
+
+	if len(obj.At) > 0 {
+		for _, at := range obj.At {
+			s.At(at)
+		}
+	}
+
+	j.lastRun = obj.LastRun
+	j.nextRun = obj.LastRun
+
+	return s
+}
+
 // WaitForScheduleAll defaults the scheduler to create all
 // new jobs with the WaitForSchedule option as true.
 // The jobs will not start immediately but rather will
@@ -1500,6 +1556,11 @@ func (s *Scheduler) StopBlockingChan() {
 // to run the job.
 func (s *Scheduler) WithDistributedLocker(l Locker) {
 	s.executor.distributedLocker = l
+}
+
+// WithResultReporter allows the caller to receive the result of a job
+func (s *Scheduler) WithResultReporter(r JobResultReporter) {
+	s.executor.resultReporter = r
 }
 
 // WithDistributedElector prevents the same job from being run more than once

@@ -1,9 +1,12 @@
 package gocron
 
 import (
+	"errors"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 )
@@ -64,4 +67,73 @@ func Test_ExecutorPanicHandling(t *testing.T) {
 
 	state := <-panicHandled
 	assert.Equal(t, state, true)
+}
+
+type testReporter struct {
+	lock    sync.Mutex
+	results []JobResult
+}
+
+func (r *testReporter) ReportJobResult(result JobResult) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.results = append(r.results, result)
+}
+
+func Test_ExecutorJobReport(t *testing.T) {
+	reporter := &testReporter{lock: sync.Mutex{}, results: make([]JobResult, 0)}
+	e := newExecutor()
+	e.resultReporter = reporter
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	e.start()
+
+	uuids := []uuid.UUID{uuid.New(), uuid.New()}
+
+	e.jobFunctions <- jobFunction{
+		id:       uuids[0],
+		jobName:  "test_fn",
+		funcName: "test_fn",
+		function: func() {
+			wg.Done()
+		},
+		parameters:     nil,
+		isRunning:      atomic.NewBool(false),
+		runStartCount:  atomic.NewInt64(0),
+		runFinishCount: atomic.NewInt64(0),
+		jobRunTimes:    &jobRunTimes{nextRun: time.Now()},
+	}
+
+	mockedErr := errors.New("mocked error")
+	e.jobFunctions <- jobFunction{
+		id:       uuids[1],
+		jobName:  "test_fn",
+		funcName: "test_fn",
+		function: func() error {
+			wg.Done()
+			return mockedErr
+		},
+		parameters:     nil,
+		isRunning:      atomic.NewBool(false),
+		runStartCount:  atomic.NewInt64(0),
+		runFinishCount: atomic.NewInt64(0),
+		jobRunTimes:    &jobRunTimes{nextRun: time.Now()},
+	}
+
+	wg.Wait()
+	e.stop()
+
+	assert.Len(t, reporter.results, 2)
+	var result1 JobResult
+	var result2 JobResult
+	if reporter.results[0].UUID == uuids[0] {
+		result1 = reporter.results[0]
+		result2 = reporter.results[1]
+	} else {
+		result1 = reporter.results[1]
+		result2 = reporter.results[0]
+	}
+	assert.NoError(t, result1.Err)
+	assert.Error(t, result2.Err)
 }
