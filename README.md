@@ -110,6 +110,15 @@ func main() {
     Global job options can be set when creating a scheduler using `NewScheduler`.
   - [**Scheduler options**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#SchedulerOption):
     Scheduler options can be set when creating a scheduler using `NewScheduler`.
+- **Logging**: Logs can be enabled.
+  - [Logger](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Logger):
+    The Logger interface can be implemented with your desired logging library.
+    The provided NewLogger uses the standard library's log package.
+- **Mocking**: The gocron library is set up to enable testing.
+  - Mocks are provided in [the mock package](mocks) using [gomock](https://github.com/uber-go/mock).
+  - Time can be mocked by passing in a [FakeClock](https://pkg.go.dev/github.com/jonboulle/clockwork#FakeClock)
+    to [WithClock](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithClock) -
+    see the example on WithClock in the go-docs.
 
 ## Supporters
 

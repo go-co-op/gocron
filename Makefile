@@ -1,4 +1,4 @@
-.PHONY: fmt check-fmt lint vet test
+.PHONY: fmt lint test mocks test_coverage
 
 GO_PKGS   := $(shell go list -f {{.Dir}} ./...)
 
@@ -15,3 +15,6 @@ test:
 test_coverage:
 	@go test -race -v $(GO_FLAGS) -count=1 -coverprofile=coverage.out -covermode=atomic $(GO_PKGS)
 	@go tool cover -html coverage.out
+
+mocks:
+	@go generate ./...

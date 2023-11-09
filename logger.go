@@ -1,3 +1,4 @@
+//go:generate mockgen -source=logger.go -destination=mocks/logger.go -package=gocronmocks
 package gocron
 
 import (
