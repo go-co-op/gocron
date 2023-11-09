@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/robfig/cron/v3"
+	"golang.org/x/exp/slices"
 )
 
 // internalJob stores the information needed by the scheduler

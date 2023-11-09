@@ -3,7 +3,6 @@ package gocron
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -16,7 +15,7 @@ import (
 func newTestScheduler(options ...SchedulerOption) (Scheduler, error) {
 	// default test options
 	out := []SchedulerOption{
-		WithLogger(NewJSONSlogLogger(slog.LevelDebug)),
+		WithLogger(NewLogger(LogLevelDebug)),
 		WithStopTimeout(time.Second),
 	}
 
