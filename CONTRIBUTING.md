@@ -32,8 +32,6 @@ Please always make sure a pull request has been:
 
 - Unit tested with `make test`
 - Linted with `make lint`
-- Vetted with `make vet`
-- Formatted with `make fmt` or validated with `make check-fmt`
 
 ## Writing Tests
 

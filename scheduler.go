@@ -391,7 +391,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 
 	if taskFunc.Kind() != reflect.Func {
-		return nil, ErrNewJobTask
+		return nil, ErrNewJobTaskNotFunc
 	}
 
 	j.function = tsk.function
@@ -506,20 +506,6 @@ func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition, task Task,
 // options on the Scheduler.
 type SchedulerOption func(*scheduler) error
 
-// WithDistributedElector sets the elector to be used by multiple
-// Scheduler instances to determine who should be the leader.
-// Only the leader runs jobs, while non-leaders wait and continue
-// to check if a new leader has been elected.
-func WithDistributedElector(elector Elector) SchedulerOption {
-	return func(s *scheduler) error {
-		if elector == nil {
-			return ErrWithDistributedElector
-		}
-		s.exec.elector = elector
-		return nil
-	}
-}
-
 // WithClock sets the clock used by the Scheduler
 // to the clock provided. See https://github.com/jonboulle/clockwork
 func WithClock(clock clockwork.Clock) SchedulerOption {
@@ -528,6 +514,20 @@ func WithClock(clock clockwork.Clock) SchedulerOption {
 			return ErrWithClockNil
 		}
 		s.clock = clock
+		return nil
+	}
+}
+
+// WithDistributedElector sets the elector to be used by multiple
+// Scheduler instances to determine who should be the leader.
+// Only the leader runs jobs, while non-leaders wait and continue
+// to check if a new leader has been elected.
+func WithDistributedElector(elector Elector) SchedulerOption {
+	return func(s *scheduler) error {
+		if elector == nil {
+			return ErrWithDistributedElectorNil
+		}
+		s.exec.elector = elector
 		return nil
 	}
 }
@@ -585,6 +585,9 @@ const (
 // a given time.
 func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
+		if limit == 0 {
+			return ErrWithLimitConcurrentJobsZero
+		}
 		s.exec.limitMode = &limitModeConfig{
 			mode:  mode,
 			limit: limit,
@@ -627,6 +630,9 @@ func WithLogger(logger Logger) SchedulerOption {
 // Default: 10 * time.Second
 func WithStopTimeout(timeout time.Duration) SchedulerOption {
 	return func(s *scheduler) error {
+		if timeout <= 0 {
+			return ErrWithStopTimeoutZeroOrNegative
+		}
 		s.exec.stopTimeout = timeout
 		return nil
 	}

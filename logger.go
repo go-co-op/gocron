@@ -52,11 +52,19 @@ func (l *logger) Debug(msg string, args ...interface{}) {
 	if l.level < LogLevelDebug {
 		return
 	}
+	if len(args) == 0 {
+		log.Printf("DEBUG: %s\n", msg)
+		return
+	}
 	log.Printf("DEBUG: %s, %v\n", msg, args)
 }
 
 func (l *logger) Error(msg string, args ...interface{}) {
 	if l.level < LogLevelError {
+		return
+	}
+	if len(args) == 0 {
+		log.Printf("ERROR: %s\n", msg)
 		return
 	}
 	log.Printf("ERROR: %s, %v\n", msg, args)
@@ -66,11 +74,19 @@ func (l *logger) Info(msg string, args ...interface{}) {
 	if l.level < LogLevelInfo {
 		return
 	}
+	if len(args) == 0 {
+		log.Printf("INFO: %s\n", msg)
+		return
+	}
 	log.Printf("INFO: %s, %v\n", msg, args)
 }
 
 func (l *logger) Warn(msg string, args ...interface{}) {
 	if l.level < LogLevelWarn {
+		return
+	}
+	if len(args) == 0 {
+		log.Printf("WARN: %s\n", msg)
 		return
 	}
 	log.Printf("WARN: %s, %v\n", msg, args)
