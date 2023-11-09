@@ -1,3 +1,4 @@
+//go:generate mockgen -source=distributed.go -destination=mocks/distributed.go -package=gocronmocks
 package gocron
 
 import "context"
