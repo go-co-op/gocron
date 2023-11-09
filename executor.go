@@ -326,30 +326,36 @@ func (e *executor) limitModeRunner(name string, in chan uuid.UUID, wg *waitGroup
 }
 
 func (e *executor) runJob(j internalJob) {
+	if j.ctx == nil {
+		return
+	}
 	select {
 	case <-e.ctx.Done():
+		return
 	case <-j.ctx.Done():
+		return
 	default:
-		if e.elector != nil {
-			if err := e.elector.IsLeader(j.ctx); err != nil {
-				return
-			}
-		}
-		_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
+	}
 
-		select {
-		case <-e.ctx.Done():
+	if e.elector != nil {
+		if err := e.elector.IsLeader(j.ctx); err != nil {
 			return
-		case <-j.ctx.Done():
-			return
-		case e.jobIDsOut <- j.id:
 		}
+	}
+	_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
 
-		err := callJobFuncWithParams(j.function, j.parameters...)
-		if err != nil {
-			_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, err)
-		} else {
-			_ = callJobFuncWithParams(j.afterJobRuns, j.id)
-		}
+	select {
+	case <-e.ctx.Done():
+		return
+	case <-j.ctx.Done():
+		return
+	case e.jobIDsOut <- j.id:
+	}
+
+	err := callJobFuncWithParams(j.function, j.parameters...)
+	if err != nil {
+		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, err)
+	} else {
+		_ = callJobFuncWithParams(j.afterJobRuns, j.id)
 	}
 }

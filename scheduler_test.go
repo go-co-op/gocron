@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -78,8 +80,7 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 				<-tt.ch
 				runCount++
 			}
-			err = s.Shutdown()
-			require.NoError(t, err)
+			require.NoError(t, s.Shutdown())
 			stopTime := time.Now()
 
 			select {
@@ -154,8 +155,7 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 
 			s.Start()
 			time.Sleep(1600 * time.Millisecond)
-			err = s.Shutdown()
-			require.NoError(t, err)
+			require.NoError(t, s.Shutdown())
 
 			var runCount int
 			timeout := make(chan struct{})
@@ -238,8 +238,7 @@ func TestScheduler_Update(t *testing.T) {
 				default:
 				}
 			}
-			err = s.Shutdown()
-			require.NoError(t, err)
+			require.NoError(t, s.Shutdown())
 			stopTime := time.Now()
 
 			select {
@@ -735,8 +734,114 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 
 			_, err = s.NewJob(tt.jd, NewTask(func() {}), tt.opts...)
 			assert.ErrorIs(t, err, tt.err)
-			err = s.Shutdown()
+			require.NoError(t, s.Shutdown())
+		})
+		t.Run(tt.name+" global", func(t *testing.T) {
+			s, err := newTestScheduler(
+				WithStopTimeout(time.Millisecond*50),
+				WithGlobalJobOptions(tt.opts...),
+			)
 			require.NoError(t, err)
+
+			_, err = s.NewJob(tt.jd, NewTask(func() {}))
+			assert.ErrorIs(t, err, tt.err)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_NewJobTask(t *testing.T) {
+	goleak.VerifyNone(t)
+
+	testFuncPtr := func() {}
+
+	tests := []struct {
+		name string
+		tsk  Task
+		err  error
+	}{
+		{
+			"task nil",
+			nil,
+			ErrNewJobTaskNil,
+		},
+		{
+			"task not func - nil",
+			NewTask(nil),
+			ErrNewJobTaskNotFunc,
+		},
+		{
+			"task not func - string",
+			NewTask("not a func"),
+			ErrNewJobTaskNotFunc,
+		},
+		{
+			"task func is pointer",
+			NewTask(&testFuncPtr),
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := newTestScheduler()
+			require.NoError(t, err)
+
+			_, err = s.NewJob(DurationJob(time.Second), tt.tsk)
+			assert.ErrorIs(t, err, tt.err)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_WithOptionsErrors(t *testing.T) {
+	goleak.VerifyNone(t)
+	tests := []struct {
+		name string
+		opt  SchedulerOption
+		err  error
+	}{
+		{
+			"WithClock nil",
+			WithClock(nil),
+			ErrWithClockNil,
+		},
+		{
+			"WithDistributedElector nil",
+			WithDistributedElector(nil),
+			ErrWithDistributedElectorNil,
+		},
+		{
+			"WithLimitConcurrentJobs limit 0",
+			WithLimitConcurrentJobs(0, LimitModeWait),
+			ErrWithLimitConcurrentJobsZero,
+		},
+		{
+			"WithLocation nil",
+			WithLocation(nil),
+			ErrWithLocationNil,
+		},
+		{
+			"WithLogger nil",
+			WithLogger(nil),
+			ErrWithLoggerNil,
+		},
+		{
+			"WithStopTimeout 0",
+			WithStopTimeout(0),
+			ErrWithStopTimeoutZeroOrNegative,
+		},
+		{
+			"WithStopTimeout -1",
+			WithStopTimeout(-1),
+			ErrWithStopTimeoutZeroOrNegative,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := newTestScheduler(tt.opt)
+			assert.ErrorIs(t, err, tt.err)
 		})
 	}
 }
@@ -766,7 +871,8 @@ func TestScheduler_Singleton(t *testing.T) {
 			jobRanCh := make(chan struct{}, 10)
 
 			s, err := newTestScheduler(
-				WithStopTimeout(1 * time.Second),
+				WithStopTimeout(1*time.Second),
+				WithLocation(time.Local),
 			)
 			require.NoError(t, err)
 
@@ -869,8 +975,7 @@ func TestScheduler_LimitMode(t *testing.T) {
 				}
 			}
 			stop := time.Now()
-			err = s.Shutdown()
-			require.NoError(t, err)
+			require.NoError(t, s.Shutdown())
 
 			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
 			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
@@ -927,6 +1032,8 @@ func TestScheduler_WithDistributedElector(t *testing.T) {
 					)
 					require.NoError(t, err)
 
+					s.Start()
+
 					_, err = s.NewJob(
 						DurationJob(
 							time.Second,
@@ -941,8 +1048,6 @@ func TestScheduler_WithDistributedElector(t *testing.T) {
 						),
 					)
 					require.NoError(t, err)
-
-					s.Start()
 
 					<-ctx.Done()
 					err = s.Shutdown()
@@ -976,6 +1081,133 @@ func TestScheduler_WithDistributedElector(t *testing.T) {
 			}
 
 			assert.Equal(t, 1, runCount)
+		})
+	}
+}
+
+func TestScheduler_RemoveJob(t *testing.T) {
+	goleak.VerifyNone(t)
+	tests := []struct {
+		name   string
+		addJob bool
+		err    error
+	}{
+		{
+			"success",
+			true,
+			nil,
+		},
+		{
+			"job not found",
+			false,
+			ErrJobNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := newTestScheduler()
+			require.NoError(t, err)
+
+			var id uuid.UUID
+			if tt.addJob {
+				j, err := s.NewJob(DurationJob(time.Second), NewTask(func() {}))
+				require.NoError(t, err)
+				id = j.ID()
+			} else {
+				id = uuid.New()
+			}
+
+			time.Sleep(50 * time.Millisecond)
+			err = s.RemoveJob(id)
+			assert.ErrorIs(t, err, err)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_WithEventListeners(t *testing.T) {
+	goleak.VerifyNone(t)
+
+	listenerRunCh := make(chan error, 1)
+	testErr := fmt.Errorf("test error")
+	tests := []struct {
+		name      string
+		tsk       Task
+		el        EventListener
+		expectRun bool
+		expectErr error
+	}{
+		{
+			"AfterJobRuns",
+			NewTask(func() {}),
+			AfterJobRuns(func(_ uuid.UUID) {
+				listenerRunCh <- nil
+			}),
+			true,
+			nil,
+		},
+		{
+			"AfterJobRunsWithError - error",
+			NewTask(func() error { return testErr }),
+			AfterJobRunsWithError(func(_ uuid.UUID, err error) {
+				listenerRunCh <- err
+			}),
+			true,
+			testErr,
+		},
+		{
+			"AfterJobRunsWithError - no error",
+			NewTask(func() error { return nil }),
+			AfterJobRunsWithError(func(_ uuid.UUID, err error) {
+				listenerRunCh <- err
+			}),
+			false,
+			nil,
+		},
+		{
+			"BeforeJobRuns",
+			NewTask(func() {}),
+			BeforeJobRuns(func(_ uuid.UUID) {
+				listenerRunCh <- nil
+			}),
+			true,
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := newTestScheduler()
+			require.NoError(t, err)
+			_, err = s.NewJob(
+				DurationJob(time.Minute*10),
+				tt.tsk,
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithEventListeners(tt.el),
+				WithLimitedRuns(1),
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			if tt.expectRun {
+				select {
+				case err = <-listenerRunCh:
+					assert.ErrorIs(t, err, tt.expectErr)
+				case <-time.After(time.Second):
+					t.Fatal("timed out waiting for listener to run")
+				}
+			} else {
+				select {
+				case <-listenerRunCh:
+					t.Fatal("listener ran when it shouldn't have")
+				case <-time.After(time.Millisecond * 100):
+				}
+			}
+
+			require.NoError(t, s.Shutdown())
 		})
 	}
 }
