@@ -90,6 +90,10 @@ const (
 	crontab
 )
 
+func (s schedulingUnit) String() string {
+	return [...]string{"milliseconds", "seconds", "minutes", "hours", "days", "weeks", "months", "duration", "crontab"}[s]
+}
+
 func callJobFunc(jobFunc interface{}) {
 	if jobFunc == nil {
 		return
