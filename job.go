@@ -448,7 +448,7 @@ func (j *Job) ScheduledTime() time.Time {
 
 // ScheduledUnit returns the scheduled unit of the Job.
 func (j *Job) ScheduledUnit() string {
-        return j.unit.String()
+	return j.unit.String()
 }
 
 // Interval returns the scheduled interval of the Job.
