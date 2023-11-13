@@ -2,7 +2,6 @@ package gocron
 
 import (
 	"context"
-	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -291,7 +290,7 @@ func (e *executor) limitModeRunner(name string, in chan uuid.UUID, wg *waitGroup
 	for {
 		select {
 		case id := <-in:
-			log.Println("limitModeRunner got job", id)
+			e.logger.Info("limitModeRunner got job", id)
 			select {
 			case <-e.ctx.Done():
 				e.logger.Debug("limitModeRunner shutting down", "name", name)
@@ -303,11 +302,11 @@ func (e *executor) limitModeRunner(name string, in chan uuid.UUID, wg *waitGroup
 			ctx, cancel := context.WithCancel(e.ctx)
 			j := requestJobCtx(ctx, id, e.jobOutRequest)
 			if j != nil {
-				log.Println("limitModeRunner running job", id)
+				e.logger.Info("limitModeRunner running job", id)
 				e.runJob(*j)
 			}
 			cancel()
-			log.Println("limitModeRunner finished job", id)
+			e.logger.Info("limitModeRunner finished job", id)
 
 			// remove the limiter block to allow another job to be scheduled
 			if limitMode == LimitModeReschedule {
@@ -316,7 +315,7 @@ func (e *executor) limitModeRunner(name string, in chan uuid.UUID, wg *waitGroup
 				default:
 				}
 			}
-			log.Println("limitModeRunner job done", id)
+			e.logger.Info("limitModeRunner job done", id)
 		case <-e.ctx.Done():
 			e.logger.Debug("limitModeRunner shutting down", "name", name)
 			wg.Done()
