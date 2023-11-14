@@ -47,28 +47,28 @@ func TestNewLogger(t *testing.T) {
 
 			l.Debug("debug", "arg1", "arg2")
 			if tt.level >= LogLevelDebug {
-				assert.Contains(t, results.String(), "DEBUG: debug, [arg1 arg2]\n")
+				assert.Contains(t, results.String(), "DEBUG: debug, arg1=arg2\n")
 			} else {
 				assert.Empty(t, results.String())
 			}
 
 			l.Info("info", "arg1", "arg2")
 			if tt.level >= LogLevelInfo {
-				assert.Contains(t, results.String(), "INFO: info, [arg1 arg2]\n")
+				assert.Contains(t, results.String(), "INFO: info, arg1=arg2\n")
 			} else {
 				assert.Empty(t, results.String())
 			}
 
 			l.Warn("warn", "arg1", "arg2")
 			if tt.level >= LogLevelWarn {
-				assert.Contains(t, results.String(), "WARN: warn, [arg1 arg2]\n")
+				assert.Contains(t, results.String(), "WARN: warn, arg1=arg2\n")
 			} else {
 				assert.Empty(t, results.String())
 			}
 
 			l.Error("error", "arg1", "arg2")
 			if tt.level >= LogLevelError {
-				assert.Contains(t, results.String(), "ERROR: error, [arg1 arg2]\n")
+				assert.Contains(t, results.String(), "ERROR: error, arg1=arg2\n")
 			} else {
 				assert.Empty(t, results.String())
 			}
