@@ -28,8 +28,8 @@ jobs:
         with:
           version: v1.55.2
       - name: test
-        run: make test
+        run: make test_coverage
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
