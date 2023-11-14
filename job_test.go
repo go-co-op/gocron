@@ -355,30 +355,30 @@ func TestWithEventListeners(t *testing.T) {
 		{
 			"afterJobRuns",
 			[]EventListener{
-				AfterJobRuns(func(_ uuid.UUID) {}),
+				AfterJobRuns(func(_ uuid.UUID, _ string) {}),
 			},
 			nil,
 		},
 		{
 			"afterJobRunsWithError",
 			[]EventListener{
-				AfterJobRunsWithError(func(_ uuid.UUID, _ error) {}),
+				AfterJobRunsWithError(func(_ uuid.UUID, _ string, _ error) {}),
 			},
 			nil,
 		},
 		{
 			"beforeJobRuns",
 			[]EventListener{
-				BeforeJobRuns(func(_ uuid.UUID) {}),
+				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
 			},
 			nil,
 		},
 		{
 			"multiple event listeners",
 			[]EventListener{
-				AfterJobRuns(func(_ uuid.UUID) {}),
-				AfterJobRunsWithError(func(_ uuid.UUID, _ error) {}),
-				BeforeJobRuns(func(_ uuid.UUID) {}),
+				AfterJobRuns(func(_ uuid.UUID, _ string) {}),
+				AfterJobRunsWithError(func(_ uuid.UUID, _ string, _ error) {}),
+				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
 			},
 			nil,
 		},

@@ -344,7 +344,7 @@ func (e *executor) runJob(j internalJob) {
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
 	}
-	_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
+	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
 
 	select {
 	case <-e.ctx.Done():
@@ -356,8 +356,8 @@ func (e *executor) runJob(j internalJob) {
 
 	err := callJobFuncWithParams(j.function, j.parameters...)
 	if err != nil {
-		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, err)
+		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
 	} else {
-		_ = callJobFuncWithParams(j.afterJobRuns, j.id)
+		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
 	}
 }
