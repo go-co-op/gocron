@@ -14,20 +14,20 @@ import (
 // or implement your own Logger. The actual level of Log that is logged
 // is handled by the implementation.
 type Logger interface {
-	Debug(msg string, args ...interface{})
-	Error(msg string, args ...interface{})
-	Info(msg string, args ...interface{})
-	Warn(msg string, args ...interface{})
+	Debug(msg string, args ...any)
+	Error(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
 }
 
 var _ Logger = (*noOpLogger)(nil)
 
 type noOpLogger struct{}
 
-func (l noOpLogger) Debug(_ string, _ ...interface{}) {}
-func (l noOpLogger) Error(_ string, _ ...interface{}) {}
-func (l noOpLogger) Info(_ string, _ ...interface{})  {}
-func (l noOpLogger) Warn(_ string, _ ...interface{})  {}
+func (l noOpLogger) Debug(_ string, _ ...any) {}
+func (l noOpLogger) Error(_ string, _ ...any) {}
+func (l noOpLogger) Info(_ string, _ ...any)  {}
+func (l noOpLogger) Warn(_ string, _ ...any)  {}
 
 var _ Logger = (*logger)(nil)
 
@@ -51,35 +51,35 @@ func NewLogger(level LogLevel) Logger {
 	return &logger{level: level}
 }
 
-func (l *logger) Debug(msg string, args ...interface{}) {
+func (l *logger) Debug(msg string, args ...any) {
 	if l.level < LogLevelDebug {
 		return
 	}
 	log.Printf("DEBUG: %s%s\n", msg, logFormatArgs(args...))
 }
 
-func (l *logger) Error(msg string, args ...interface{}) {
+func (l *logger) Error(msg string, args ...any) {
 	if l.level < LogLevelError {
 		return
 	}
 	log.Printf("ERROR: %s%s\n", msg, logFormatArgs(args...))
 }
 
-func (l *logger) Info(msg string, args ...interface{}) {
+func (l *logger) Info(msg string, args ...any) {
 	if l.level < LogLevelInfo {
 		return
 	}
 	log.Printf("INFO: %s%s\n", msg, logFormatArgs(args...))
 }
 
-func (l *logger) Warn(msg string, args ...interface{}) {
+func (l *logger) Warn(msg string, args ...any) {
 	if l.level < LogLevelWarn {
 		return
 	}
 	log.Printf("WARN: %s%s\n", msg, logFormatArgs(args...))
 }
 
-func logFormatArgs(args ...interface{}) string {
+func logFormatArgs(args ...any) string {
 	if len(args) == 0 {
 		return ""
 	}
