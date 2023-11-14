@@ -1062,12 +1062,12 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			schedulersDone := make(chan struct{}, tt.count)
 
 			for i := tt.count; i > 0; i-- {
-				go func() {
-					s, err := newTestScheduler(
-						tt.opt,
-					)
-					require.NoError(t, err)
+				s, err := newTestScheduler(
+					tt.opt,
+				)
+				require.NoError(t, err)
 
+				go func() {
 					s.Start()
 
 					_, err = s.NewJob(
