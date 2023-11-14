@@ -1024,6 +1024,7 @@ func (t *testLocker) Lock(_ context.Context, _ string) (Lock, error) {
 	if t.jobLocked {
 		return nil, fmt.Errorf("job already locked")
 	}
+	t.jobLocked = true
 	return &testLock{}, nil
 }
 
@@ -1056,7 +1057,6 @@ func TestScheduler_WithDistributed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			elector := &testElector{}
 			jobsRan := make(chan struct{}, 20)
 			ctx, cancel := context.WithCancel(context.Background())
 			schedulersDone := make(chan struct{}, tt.count)
@@ -1064,7 +1064,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			for i := tt.count; i > 0; i-- {
 				go func() {
 					s, err := newTestScheduler(
-						WithDistributedElector(elector),
+						tt.opt,
 					)
 					require.NoError(t, err)
 

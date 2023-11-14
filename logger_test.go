@@ -38,6 +38,10 @@ func TestNewLogger(t *testing.T) {
 			"error",
 			LogLevelError,
 		},
+		{
+			"Less than error",
+			-1,
+		},
 	}
 
 	for _, tt := range tests {
