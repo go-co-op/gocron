@@ -1177,7 +1177,7 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 		{
 			"AfterJobRuns",
 			NewTask(func() {}),
-			AfterJobRuns(func(_ uuid.UUID) {
+			AfterJobRuns(func(_ uuid.UUID, _ string) {
 				listenerRunCh <- nil
 			}),
 			true,
@@ -1186,7 +1186,7 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 		{
 			"AfterJobRunsWithError - error",
 			NewTask(func() error { return testErr }),
-			AfterJobRunsWithError(func(_ uuid.UUID, err error) {
+			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
 				listenerRunCh <- err
 			}),
 			true,
@@ -1195,7 +1195,7 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 		{
 			"AfterJobRunsWithError - no error",
 			NewTask(func() error { return nil }),
-			AfterJobRunsWithError(func(_ uuid.UUID, err error) {
+			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
 				listenerRunCh <- err
 			}),
 			false,
@@ -1204,7 +1204,7 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 		{
 			"BeforeJobRuns",
 			NewTask(func() {}),
-			BeforeJobRuns(func(_ uuid.UUID) {
+			BeforeJobRuns(func(_ uuid.UUID, _ string) {
 				listenerRunCh <- nil
 			}),
 			true,

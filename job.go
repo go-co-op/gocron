@@ -34,9 +34,9 @@ type internalJob struct {
 	startTime          time.Time
 	startImmediately   bool
 	// event listeners
-	afterJobRuns          func(jobID uuid.UUID)
-	beforeJobRuns         func(jobID uuid.UUID)
-	afterJobRunsWithError func(jobID uuid.UUID, err error)
+	afterJobRuns          func(jobID uuid.UUID, jobName string)
+	beforeJobRuns         func(jobID uuid.UUID, jobName string)
+	afterJobRunsWithError func(jobID uuid.UUID, jobName string, err error)
 }
 
 // stop is used to stop the job's timer and cancel the context
@@ -507,7 +507,7 @@ func WithTags(tags ...string) JobOption {
 
 type EventListener func(*internalJob) error
 
-func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
+func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
@@ -517,7 +517,7 @@ func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
 	}
 }
 
-func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, err error)) EventListener {
+func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, jobName string, err error)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
@@ -527,7 +527,7 @@ func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, err error)) E
 	}
 }
 
-func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID)) EventListener {
+func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
