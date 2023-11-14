@@ -63,6 +63,9 @@ func (e *executor) start() {
 		mu: sync.Mutex{},
 	}
 
+	// create a fresh map for tracking singleton runners
+	e.singletonRunners = make(map[uuid.UUID]singletonRunner)
+
 	// start the for leap that is the executor
 	// selecting on channels for work to do
 	for {
@@ -267,10 +270,6 @@ func (e *executor) stop(standardJobsWg, singletonJobsWg, limitModeJobsWg *waitGr
 			count++
 		case <-waitForSingletons:
 			count++
-			// emptying the singleton runner map
-			// as we'll need to spin up new runners
-			// in the event that the scheduler is started again
-			e.singletonRunners = make(map[uuid.UUID]singletonRunner)
 		case <-waitForLimitMode:
 			count++
 		default:
