@@ -22,6 +22,7 @@ type executor struct {
 	singletonRunners map[uuid.UUID]singletonRunner
 	limitMode        *limitModeConfig
 	elector          Elector
+	locker           Locker
 }
 
 type singletonRunner struct {
@@ -340,6 +341,12 @@ func (e *executor) runJob(j internalJob) {
 		if err := e.elector.IsLeader(j.ctx); err != nil {
 			return
 		}
+	} else if e.locker != nil {
+		lock, err := e.locker.Lock(j.ctx, j.id.String())
+		if err != nil {
+			return
+		}
+		defer func() { _ = lock.Unlock(j.ctx) }()
 	}
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id)
 

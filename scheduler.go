@@ -4,6 +4,7 @@ package gocron
 import (
 	"context"
 	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/google/uuid"
@@ -395,6 +396,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		return nil, ErrNewJobTaskNotFunc
 	}
 
+	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()
 	j.function = tsk.function
 	j.parameters = tsk.parameters
 
@@ -529,6 +531,19 @@ func WithDistributedElector(elector Elector) SchedulerOption {
 			return ErrWithDistributedElectorNil
 		}
 		s.exec.elector = elector
+		return nil
+	}
+}
+
+// WithDistributedLocker sets the locker to be used by multiple
+// Scheduler instances to ensure that only one instance of each
+// job is run.
+func WithDistributedLocker(locker Locker) SchedulerOption {
+	return func(s *scheduler) error {
+		if locker == nil {
+			return ErrWithDistributedLockerNil
+		}
+		s.exec.locker = locker
 		return nil
 	}
 }
