@@ -4,6 +4,7 @@ package gocron
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 )
 
@@ -43,40 +44,45 @@ const (
 )
 
 type logger struct {
+	log   *log.Logger
 	level LogLevel
 }
 
 // NewLogger returns a new Logger that logs at the given level.
 func NewLogger(level LogLevel) Logger {
-	return &logger{level: level}
+	l := log.New(os.Stdout, "", log.LstdFlags)
+	return &logger{
+		log:   l,
+		level: level,
+	}
 }
 
 func (l *logger) Debug(msg string, args ...any) {
 	if l.level < LogLevelDebug {
 		return
 	}
-	log.Printf("DEBUG: %s%s\n", msg, logFormatArgs(args...))
+	l.log.Printf("DEBUG: %s%s\n", msg, logFormatArgs(args...))
 }
 
 func (l *logger) Error(msg string, args ...any) {
 	if l.level < LogLevelError {
 		return
 	}
-	log.Printf("ERROR: %s%s\n", msg, logFormatArgs(args...))
+	l.log.Printf("ERROR: %s%s\n", msg, logFormatArgs(args...))
 }
 
 func (l *logger) Info(msg string, args ...any) {
 	if l.level < LogLevelInfo {
 		return
 	}
-	log.Printf("INFO: %s%s\n", msg, logFormatArgs(args...))
+	l.log.Printf("INFO: %s%s\n", msg, logFormatArgs(args...))
 }
 
 func (l *logger) Warn(msg string, args ...any) {
 	if l.level < LogLevelWarn {
 		return
 	}
-	log.Printf("WARN: %s%s\n", msg, logFormatArgs(args...))
+	l.log.Printf("WARN: %s%s\n", msg, logFormatArgs(args...))
 }
 
 func logFormatArgs(args ...any) string {

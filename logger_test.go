@@ -47,8 +47,10 @@ func TestNewLogger(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var results bytes.Buffer
-			log.SetOutput(&results)
-			l := NewLogger(tt.level)
+			l := &logger{
+				level: tt.level,
+				log:   log.New(&results, "", log.LstdFlags),
+			}
 
 			var noArgs []any
 			oneArg := []any{"arg1"}
