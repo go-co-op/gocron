@@ -3,6 +3,7 @@ package gocron
 import (
 	"bytes"
 	"log"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,32 +46,60 @@ func TestNewLogger(t *testing.T) {
 			log.SetOutput(&results)
 			l := NewLogger(tt.level)
 
-			l.Debug("debug", "arg1", "arg2")
-			if tt.level >= LogLevelDebug {
-				assert.Contains(t, results.String(), "DEBUG: debug, [arg1 arg2]\n")
-			} else {
-				assert.Empty(t, results.String())
-			}
+			var noArgs []any
+			oneArg := []any{"arg1"}
+			twoArgs := []any{"arg1", "arg2"}
+			var noArgsStr []string
+			oneArgStr := []string{"arg1"}
+			twoArgsStr := []string{"arg1", "arg2"}
 
-			l.Info("info", "arg1", "arg2")
-			if tt.level >= LogLevelInfo {
-				assert.Contains(t, results.String(), "INFO: info, [arg1 arg2]\n")
-			} else {
-				assert.Empty(t, results.String())
-			}
+			for _, args := range []struct {
+				argsAny []any
+				argsStr []string
+			}{
+				{noArgs, noArgsStr},
+				{oneArg, oneArgStr},
+				{twoArgs, twoArgsStr},
+			} {
+				l.Debug("debug", args.argsAny...)
+				if tt.level >= LogLevelDebug {
+					r := results.String()
+					assert.Contains(t, r, "DEBUG: debug")
+					assert.Contains(t, r, strings.Join(args.argsStr, "="))
+				} else {
+					assert.Empty(t, results.String())
+				}
+				results.Reset()
 
-			l.Warn("warn", "arg1", "arg2")
-			if tt.level >= LogLevelWarn {
-				assert.Contains(t, results.String(), "WARN: warn, [arg1 arg2]\n")
-			} else {
-				assert.Empty(t, results.String())
-			}
+				l.Info("info", args.argsAny...)
+				if tt.level >= LogLevelInfo {
+					r := results.String()
+					assert.Contains(t, r, "INFO: info")
+					assert.Contains(t, r, strings.Join(args.argsStr, "="))
+				} else {
+					assert.Empty(t, results.String())
+				}
+				results.Reset()
 
-			l.Error("error", "arg1", "arg2")
-			if tt.level >= LogLevelError {
-				assert.Contains(t, results.String(), "ERROR: error, [arg1 arg2]\n")
-			} else {
-				assert.Empty(t, results.String())
+				l.Warn("warn", args.argsAny...)
+				if tt.level >= LogLevelWarn {
+					r := results.String()
+					assert.Contains(t, r, "WARN: warn")
+					assert.Contains(t, r, strings.Join(args.argsStr, "="))
+				} else {
+					assert.Empty(t, results.String())
+				}
+				results.Reset()
+
+				l.Error("error", args.argsAny...)
+				if tt.level >= LogLevelError {
+					r := results.String()
+					assert.Contains(t, r, "ERROR: error")
+					assert.Contains(t, r, strings.Join(args.argsStr, "="))
+				} else {
+					assert.Empty(t, results.String())
+				}
+				results.Reset()
 			}
 		})
 	}

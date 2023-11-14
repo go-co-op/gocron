@@ -812,6 +812,11 @@ func TestScheduler_WithOptionsErrors(t *testing.T) {
 			ErrWithDistributedElectorNil,
 		},
 		{
+			"WithDistributedLocker nil",
+			WithDistributedLocker(nil),
+			ErrWithDistributedLockerNil,
+		},
+		{
 			"WithLimitConcurrentJobs limit 0",
 			WithLimitConcurrentJobs(0, LimitModeWait),
 			ErrWithLimitConcurrentJobsZero,
@@ -1006,15 +1011,46 @@ func (t *testElector) IsLeader(ctx context.Context) error {
 	return nil
 }
 
-func TestScheduler_WithDistributedElector(t *testing.T) {
+var _ Locker = (*testLocker)(nil)
+
+type testLocker struct {
+	mu        sync.Mutex
+	jobLocked bool
+}
+
+func (t *testLocker) Lock(_ context.Context, _ string) (Lock, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.jobLocked {
+		return nil, fmt.Errorf("job already locked")
+	}
+	return &testLock{}, nil
+}
+
+var _ Lock = (*testLock)(nil)
+
+type testLock struct{}
+
+func (t testLock) Unlock(_ context.Context) error {
+	return nil
+}
+
+func TestScheduler_WithDistributed(t *testing.T) {
 	goleak.VerifyNone(t)
 	tests := []struct {
 		name  string
 		count int
+		opt   SchedulerOption
 	}{
 		{
-			"3 schedulers",
+			"3 schedulers with elector",
 			3,
+			WithDistributedElector(&testElector{}),
+		},
+		{
+			"3 schedulers with locker",
+			3,
+			WithDistributedLocker(&testLocker{}),
 		},
 	}
 

@@ -426,6 +426,31 @@ func ExampleWithDistributedElector() {
 	//)
 }
 
+func ExampleWithDistributedLocker() {
+	//var _ Locker = (*myLocker)(nil)
+	//
+	//type myLocker struct{}
+	//
+	//func (m myLocker) Lock(ctx context.Context, key string) (Lock, error) {
+	//	return &testLock, nil
+	//}
+	//
+	//var _ Lock = (*testLock)(nil)
+	//
+	//type testLock struct {
+	//}
+	//
+	//func (t testLock) Unlock(_ context.Context) error {
+	//	return nil
+	//}
+	//
+	//locker := myLocker{}
+	//
+	//_, _ = NewScheduler(
+	//	WithDistributedLocker(locker),
+	//)
+}
+
 func ExampleWithEventListeners() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()

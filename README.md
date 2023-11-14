@@ -97,6 +97,10 @@ func main() {
   - [**Elector**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithDistributedElector):
     An elector can be used to elect a single instance of gocron to run as the primary with the
     other instances checking to see if a new leader needs to be elected.
+    - Implementations: [go-co-op electors](https://github.com/go-co-op?q=-elector&type=all&language=&sort=)
+  - [**Locker**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithDistributedLocker):
+    A locker can be used to lock each run of a job to a single instance of gocron.
+    - Implementations: [go-co-op lockers](https://github.com/go-co-op?q=-lock&type=all&language=&sort=)
 - **Events**: Job events can trigger actions.
   - [**Listeners**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithEventListeners):
     [Event listeners](https://pkg.go.dev/github.com/go-co-op/gocron/v2#EventListener)
