@@ -1,4 +1,4 @@
-# gocron: A Golang Job Scheduling Package.
+# gocron: A Golang Job Scheduling Package
 
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge-flat.svg)](https://github.com/avelino/awesome-go#job-scheduler)
 [![CI State](https://github.com/go-co-op/gocron/actions/workflows/go_test.yml/badge.svg?branch=main&event=push)](https://github.com/go-co-op/gocron/actions)
