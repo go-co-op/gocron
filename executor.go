@@ -337,7 +337,7 @@ func (e *executor) runJob(j internalJob) {
 			return
 		}
 	} else if e.locker != nil {
-		lock, err := e.locker.Lock(j.ctx, j.id.String())
+		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			return
 		}
