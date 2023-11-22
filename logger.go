@@ -36,6 +36,7 @@ var _ Logger = (*logger)(nil)
 // when using the basic NewLogger.
 type LogLevel int
 
+// The different log levels that can be used.
 const (
 	LogLevelError LogLevel = iota
 	LogLevelWarn

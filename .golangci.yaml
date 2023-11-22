@@ -7,12 +7,9 @@ run:
 
 issues:
   max-same-issues: 100
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - bodyclose
-        - errcheck
-        - gosec
+  include:
+    - EXC0012
+    - EXC0014
 
 linters:
   enable:

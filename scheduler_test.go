@@ -1193,6 +1193,15 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 			testErr,
 		},
 		{
+			"AfterJobRunsWithError - multiple return values, including error",
+			NewTask(func() (bool, error) { return false, testErr }),
+			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
+				listenerRunCh <- err
+			}),
+			true,
+			testErr,
+		},
+		{
 			"AfterJobRunsWithError - no error",
 			NewTask(func() error { return nil }),
 			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {

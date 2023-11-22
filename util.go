@@ -26,8 +26,8 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 	for k, param := range params {
 		in[k] = reflect.ValueOf(param)
 	}
-	vals := f.Call(in)
-	for _, val := range vals {
+	returnValues := f.Call(in)
+	for _, val := range returnValues {
 		i := val.Interface()
 		if err, ok := i.(error); ok {
 			return err

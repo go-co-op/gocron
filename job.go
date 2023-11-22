@@ -196,6 +196,12 @@ func DurationRandomJob(minDuration, maxDuration time.Duration) JobDefinition {
 	}
 }
 
+// DailyJob runs the job on the interval of days, and at the set times.
+// By default, the job will start the next available day, considering the last run to be now,
+// and the time and day based on the interval and times you input. This means, if you
+// select an interval greater than 1, your job by default will run X (interval) days from now
+// if there are no atTimes left in the current day. You can use WithStartAt to tell the
+// scheduler to start the job sooner.
 func DailyJob(interval uint, atTimes AtTimes) JobDefinition {
 	return dailyJobDefinition{
 		interval: interval,
@@ -268,14 +274,24 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) erro
 	return nil
 }
 
+// Weekdays defines a function that returns a list of week days.
 type Weekdays func() []time.Weekday
 
+// NewWeekdays provide the days of the week the job should run.
 func NewWeekdays(weekday time.Weekday, weekdays ...time.Weekday) Weekdays {
 	return func() []time.Weekday {
 		return append(weekdays, weekday)
 	}
 }
 
+// WeeklyJob runs the job on the interval of weeks, on the specific days of the week
+// specified, and at the set times.
+//
+// By default, the job will start the next available day, considering the last run to be now,
+// and the time and day based on the interval, days and times you input. This means, if you
+// select an interval greater than 1, your job by default will run X (interval) weeks from now
+// if there are no daysOfTheWeek left in the current week. You can use WithStartAt to tell the
+// scheduler to start the job sooner.
 func WeeklyJob(interval uint, daysOfTheWeek Weekdays, atTimes AtTimes) JobDefinition {
 	return weeklyJobDefinition{
 		interval:      interval,
@@ -395,7 +411,7 @@ func NewAtTimes(atTime AtTime, atTimes ...AtTime) AtTimes {
 // By default, the job will start the next available day, considering the last run to be now,
 // and the time and month based on the interval, days and times you input.
 // This means, if you select an interval greater than 1, your job by default will run
-// X (interval) months from now.
+// X (interval) months from now if there are no daysOfTheMonth left in the current month.
 // You can use WithStartAt to tell the scheduler to start the job sooner.
 //
 // Carefully consider your configuration!
@@ -415,8 +431,11 @@ func MonthlyJob(interval uint, daysOfTheMonth DaysOfTheMonth, atTimes AtTimes) J
 // -----------------------------------------------
 // -----------------------------------------------
 
+// JobOption defines the constructor for job options.
 type JobOption func(*internalJob) error
 
+// WithEventListeners sets the event listeners that should be
+// run for the job.
 func WithEventListeners(eventListeners ...EventListener) JobOption {
 	return func(j *internalJob) error {
 		for _, eventListener := range eventListeners {
@@ -453,6 +472,13 @@ func WithName(name string) JobOption {
 	}
 }
 
+// WithSingletonMode keeps the job from running again if it is already running.
+// This is useful for jobs that should not overlap, and that occasionally
+// (but not consistently) run longer than the interval between job runs.
+//
+// Note - this is mutually exclusive with WithLimitConcurrentJobs. If both
+// are set, WithLimitConcurrentJobs will take precedence.
+// WithSingletonMode effectively sets a per-job limit of 1 concurrent job.
 func WithSingletonMode(mode LimitMode) JobOption {
 	return func(j *internalJob) error {
 		j.singletonMode = true
@@ -461,7 +487,8 @@ func WithSingletonMode(mode LimitMode) JobOption {
 	}
 }
 
-// WithStartAt sets the option for starting the job
+// WithStartAt sets the option for starting the job at
+// a specific datetime.
 func WithStartAt(option StartAtOption) JobOption {
 	return func(j *internalJob) error {
 		return option(j)
@@ -482,6 +509,7 @@ func WithStartImmediately() StartAtOption {
 }
 
 // WithStartDateTime sets the first date & time at which the job should run.
+// This datetime must be in the future.
 func WithStartDateTime(start time.Time) StartAtOption {
 	return func(j *internalJob) error {
 		if start.IsZero() || start.Before(time.Now()) {
@@ -492,6 +520,9 @@ func WithStartDateTime(start time.Time) StartAtOption {
 	}
 }
 
+// WithTags sets the tags for the job. Tags provide
+// a way to identify jobs by a set of tags and remove
+// multiple jobs by tag.
 func WithTags(tags ...string) JobOption {
 	return func(j *internalJob) error {
 		j.tags = tags
@@ -505,8 +536,12 @@ func WithTags(tags ...string) JobOption {
 // -----------------------------------------------
 // -----------------------------------------------
 
+// EventListener defines the constructor for event
+// listeners that can be used to listen for job events.
 type EventListener func(*internalJob) error
 
+// AfterJobRuns is used to listen for when a job has run regardless
+// of any returned error value, and run the provided function.
 func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
@@ -517,6 +552,8 @@ func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) Event
 	}
 }
 
+// AfterJobRunsWithError is used to listen for when a job has run and
+// returned an error, and then run the provided function.
 func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, jobName string, err error)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
@@ -527,6 +564,8 @@ func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, jobName strin
 	}
 }
 
+// BeforeJobRuns is used to listen for when a job is about to run and
+// then run the provided function.
 func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {

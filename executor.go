@@ -48,17 +48,17 @@ func (e *executor) start() {
 	e.ctx, e.cancel = context.WithCancel(context.Background())
 
 	// the standardJobsWg tracks
-	standardJobsWg := waitGroupWithMutex{
+	standardJobsWg := &waitGroupWithMutex{
 		wg: sync.WaitGroup{},
 		mu: sync.Mutex{},
 	}
 
-	singletonJobsWg := waitGroupWithMutex{
+	singletonJobsWg := &waitGroupWithMutex{
 		wg: sync.WaitGroup{},
 		mu: sync.Mutex{},
 	}
 
-	limitModeJobsWg := waitGroupWithMutex{
+	limitModeJobsWg := &waitGroupWithMutex{
 		wg: sync.WaitGroup{},
 		mu: sync.Mutex{},
 	}
@@ -78,7 +78,7 @@ func (e *executor) start() {
 		case id := <-e.jobsIDsIn:
 			select {
 			case <-e.stopCh:
-				e.stop(&standardJobsWg, &singletonJobsWg, &limitModeJobsWg)
+				e.stop(standardJobsWg, singletonJobsWg, limitModeJobsWg)
 				return
 			default:
 			}
@@ -92,7 +92,7 @@ func (e *executor) start() {
 				e.limitMode.started = true
 				for i := e.limitMode.limit; i > 0; i-- {
 					limitModeJobsWg.Add(1)
-					go e.limitModeRunner("limitMode-"+strconv.Itoa(int(i)), e.limitMode.in, &limitModeJobsWg, e.limitMode.mode, e.limitMode.rescheduleLimiter)
+					go e.limitModeRunner("limitMode-"+strconv.Itoa(int(i)), e.limitMode.in, limitModeJobsWg, e.limitMode.mode, e.limitMode.rescheduleLimiter)
 				}
 			}
 
@@ -155,7 +155,7 @@ func (e *executor) start() {
 							}
 							e.singletonRunners[id] = runner
 							singletonJobsWg.Add(1)
-							go e.limitModeRunner("singleton-"+id.String(), runner.in, &singletonJobsWg, j.singletonLimitMode, runner.rescheduleLimiter)
+							go e.limitModeRunner("singleton-"+id.String(), runner.in, singletonJobsWg, j.singletonLimitMode, runner.rescheduleLimiter)
 						}
 
 						if j.singletonLimitMode == LimitModeReschedule {
@@ -180,7 +180,7 @@ func (e *executor) start() {
 					} else {
 						select {
 						case <-e.stopCh:
-							e.stop(&standardJobsWg, &singletonJobsWg, &limitModeJobsWg)
+							e.stop(standardJobsWg, singletonJobsWg, limitModeJobsWg)
 							return
 						default:
 						}
@@ -198,7 +198,7 @@ func (e *executor) start() {
 				}
 			}()
 		case <-e.stopCh:
-			e.stop(&standardJobsWg, &singletonJobsWg, &limitModeJobsWg)
+			e.stop(standardJobsWg, singletonJobsWg, limitModeJobsWg)
 			return
 		}
 	}

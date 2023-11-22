@@ -14,6 +14,7 @@ import (
 
 var _ Scheduler = (*scheduler)(nil)
 
+// Scheduler defines the interface for the Scheduler.
 type Scheduler interface {
 	Jobs() []Job
 	NewJob(JobDefinition, Task, ...JobOption) (Job, error)
@@ -62,6 +63,11 @@ type allJobsOutRequest struct {
 	outChan chan []Job
 }
 
+// NewScheduler creates a new Scheduler instance.
+// The Scheduler is not started until Start() is called.
+//
+// NewJob will add jobs to the Scheduler, but they will not
+// be scheduled until Start() is called.
 func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	schCtx, cancel := context.WithCancel(context.Background())
 
@@ -599,6 +605,10 @@ const (
 // WithLimitConcurrentJobs sets the limit and mode to be used by the
 // Scheduler for limiting the number of jobs that may be running at
 // a given time.
+//
+// Note - this is mutually exclusive with WithSingletonMode. If both
+// are set, WithLimitConcurrentJobs will take precedence.
+// WithSingletonMode effectively sets a per-job limit of 1 concurrent job.
 func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
 		if limit == 0 {
@@ -629,6 +639,7 @@ func WithLocation(location *time.Location) SchedulerOption {
 	}
 }
 
+// WithLogger sets the logger to be used by the Scheduler.
 func WithLogger(logger Logger) SchedulerOption {
 	return func(s *scheduler) error {
 		if logger == nil {
