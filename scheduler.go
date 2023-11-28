@@ -111,7 +111,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	}
 
 	go func() {
-		s.logger.Info("new scheduler created")
+		s.logger.Info("gocron: new scheduler created")
 		for {
 			select {
 			case id := <-s.exec.jobIDsOut:
@@ -164,7 +164,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 // about jobs.
 
 func (s *scheduler) stopScheduler() {
-	s.logger.Debug("stopping scheduler")
+	s.logger.Debug("gocron: stopping scheduler")
 	if s.started {
 		s.exec.stopCh <- struct{}{}
 	}
@@ -188,7 +188,7 @@ func (s *scheduler) stopScheduler() {
 	}
 	s.stopErrCh <- err
 	s.started = false
-	s.logger.Debug("scheduler stopped")
+	s.logger.Debug("gocron: scheduler stopped")
 }
 
 func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
@@ -294,7 +294,7 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 }
 
 func (s *scheduler) selectStart() {
-	s.logger.Debug("scheduler starting")
+	s.logger.Debug("gocron: scheduler starting")
 	go s.exec.start()
 
 	s.started = true
@@ -325,7 +325,7 @@ func (s *scheduler) selectStart() {
 	select {
 	case <-s.shutdownCtx.Done():
 	case s.startedCh <- struct{}{}:
-		s.logger.Info("scheduler started")
+		s.logger.Info("gocron: scheduler started")
 	}
 }
 
@@ -605,19 +605,16 @@ const (
 // WithLimitConcurrentJobs sets the limit and mode to be used by the
 // Scheduler for limiting the number of jobs that may be running at
 // a given time.
-//
-// Note - this is mutually exclusive with WithSingletonMode. If both
-// are set, WithLimitConcurrentJobs will take precedence.
-// WithSingletonMode effectively sets a per-job limit of 1 concurrent job.
 func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 	return func(s *scheduler) error {
 		if limit == 0 {
 			return ErrWithLimitConcurrentJobsZero
 		}
 		s.exec.limitMode = &limitModeConfig{
-			mode:  mode,
-			limit: limit,
-			in:    make(chan uuid.UUID, 1000),
+			mode:          mode,
+			limit:         limit,
+			in:            make(chan uuid.UUID, 1000),
+			singletonJobs: make(map[uuid.UUID]struct{}),
 		}
 		if mode == LimitModeReschedule {
 			s.exec.limitMode.rescheduleLimiter = make(chan struct{}, limit)

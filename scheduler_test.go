@@ -988,6 +988,93 @@ func TestScheduler_LimitMode(t *testing.T) {
 	}
 }
 
+func TestScheduler_LimitModeAndSingleton(t *testing.T) {
+	goleak.VerifyNone(t)
+	tests := []struct {
+		name          string
+		numJobs       int
+		limit         uint
+		limitMode     LimitMode
+		singletonMode LimitMode
+		duration      time.Duration
+		expectedMin   time.Duration
+		expectedMax   time.Duration
+	}{
+		{
+			"limit mode reschedule",
+			10,
+			2,
+			LimitModeReschedule,
+			LimitModeReschedule,
+			time.Millisecond * 100,
+			time.Millisecond * 400,
+			time.Millisecond * 700,
+		},
+		{
+			"limit mode wait",
+			10,
+			2,
+			LimitModeWait,
+			LimitModeWait,
+			time.Millisecond * 100,
+			time.Millisecond * 200,
+			time.Millisecond * 500,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := newTestScheduler(
+				WithLimitConcurrentJobs(tt.limit, tt.limitMode),
+				WithStopTimeout(2*time.Second),
+			)
+			require.NoError(t, err)
+
+			jobRanCh := make(chan int, 20)
+
+			for i := 0; i < tt.numJobs; i++ {
+				jobNum := i
+				_, err = s.NewJob(
+					DurationJob(tt.duration),
+					NewTask(func() {
+						time.Sleep(tt.duration / 2)
+						jobRanCh <- jobNum
+					}),
+					WithSingletonMode(tt.singletonMode),
+				)
+				require.NoError(t, err)
+			}
+
+			start := time.Now()
+			s.Start()
+
+			jobsRan := make(map[int]int)
+			var runCount int
+			for runCount < tt.numJobs {
+				select {
+				case jobNum := <-jobRanCh:
+					runCount++
+					jobsRan[jobNum]++
+				case <-time.After(time.Second):
+					t.Fatalf("timed out waiting for jobs to run")
+				}
+			}
+			stop := time.Now()
+			require.NoError(t, s.Shutdown())
+
+			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
+			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
+			for _, count := range jobsRan {
+				if tt.singletonMode == LimitModeWait {
+					assert.Equal(t, 1, count)
+				} else {
+					assert.LessOrEqual(t, count, 5)
+				}
+			}
+		})
+	}
+}
+
 var _ Elector = (*testElector)(nil)
 
 type testElector struct {
