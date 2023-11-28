@@ -475,10 +475,6 @@ func WithName(name string) JobOption {
 // WithSingletonMode keeps the job from running again if it is already running.
 // This is useful for jobs that should not overlap, and that occasionally
 // (but not consistently) run longer than the interval between job runs.
-//
-// Note - this is mutually exclusive with WithLimitConcurrentJobs. If both
-// are set, WithLimitConcurrentJobs will take precedence.
-// WithSingletonMode effectively sets a per-job limit of 1 concurrent job.
 func WithSingletonMode(mode LimitMode) JobOption {
 	return func(j *internalJob) error {
 		j.singletonMode = true
