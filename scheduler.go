@@ -828,7 +828,7 @@ func (s *Scheduler) MonthFirstWeekday(weekday time.Weekday) *Scheduler {
 		return s.Cron(fmt.Sprintf("0 0 %d %d %d", day, month, weekday))
 	}
 
-	return s.Cron(fmt.Sprintf("0 0 %d %d %d", day, month+1, weekday))
+	return s.Cron(fmt.Sprintf("0 0 %d %d %d", day, (month+1)%12, weekday))
 }
 
 // LimitRunsTo limits the number of executions of this job to n.
