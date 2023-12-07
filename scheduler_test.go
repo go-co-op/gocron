@@ -2263,6 +2263,11 @@ func TestScheduler_EveryMonthFirstWeekday(t *testing.T) {
 			expected: time.Date(2022, time.March, 7, 0, 0, 0, 0, time.UTC),
 			weekday:  time.Monday,
 		},
+		{
+			current:  time.Date(2022, time.December, 7, 0, 0, 0, 0, time.UTC),
+			expected: time.Date(2023, time.January, 2, 0, 0, 0, 0, time.UTC),
+			weekday:  time.Monday,
+		},
 	}
 
 	for _, tc := range testCases {
