@@ -8,15 +8,6 @@ gocron is a job scheduling package which lets you run Go functions at pre-determ
 If you want to chat, you can find us on Slack at
 [<img src="https://img.shields.io/badge/gophers-gocron-brightgreen?logo=slack">](https://gophers.slack.com/archives/CQ7T0T1FW)
 
-## Concepts
-
-- **Job**: The encapsulates a "task", which is made up of a go func and any function parameters, and then
-  provides the scheduler with the time the job should be scheduled to run.
-- **Executor**: The executor, calls the "task" function and manages the complexities of different job
-  execution timing (e.g. singletons that shouldn't overrun each other, limiting the max number of jobs running)
-- **Scheduler**: The scheduler keeps track of all the jobs and sends each job to the executor when
-  it is ready to be run.
-
 ## Quick Start
 
 ```
@@ -70,6 +61,16 @@ func main() {
 }
 ```
 
+## Concepts
+
+- **Job**: The job encapsulates a "task", which is made up of a go function and any function parameters. The Job then
+  provides the scheduler with the time the job should next be scheduled to run.
+- **Scheduler**: The scheduler keeps track of all the jobs and sends each job to the executor when
+  it is ready to be run.
+- **Executor**: The executor calls the job's task and manages the complexities of different job
+  execution timing requirements (e.g. singletons that shouldn't overrun each other, limiting the max number of jobs running)
+
+
 ## Features
 
 - **Job types**: Jobs can be run at various intervals.
@@ -85,7 +86,7 @@ func main() {
     Jobs can be run every x weeks on specific days of the week and at specific times.
   - [**Monthly**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonthlyJob):
     Jobs can be run every x months on specific days of the month and at specific times.
-- **Limited Concurrency**: Jobs can be limited individually or across the entire scheduler.
+- **Concurrency Limits**: Jobs can be limited individually or across the entire scheduler.
   - [**Per job limiting with singleton mode**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithSingletonMode):
     Jobs can be limited to a single concurrent execution that either reschedules (skips overlapping executions)
     or queues (waits for the previous execution to finish).
@@ -93,6 +94,7 @@ func main() {
     Jobs can be limited to a certain number of concurrent executions across the entire scheduler
     using either reschedule (skip when the limit is met) or queue (jobs are added to a queue to
     wait for the limit to be available).
+  - **Note:** A scheduler limit and a job limit can both be enabled.
 - **Distributed instances of gocron**: Multiple instances of gocron can be run.
   - [**Elector**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithDistributedElector):
     An elector can be used to elect a single instance of gocron to run as the primary with the
@@ -103,31 +105,33 @@ func main() {
     - Implementations: [go-co-op lockers](https://github.com/go-co-op?q=-lock&type=all&language=&sort=)
 - **Events**: Job events can trigger actions.
   - [**Listeners**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithEventListeners):
-    [Event listeners](https://pkg.go.dev/github.com/go-co-op/gocron/v2#EventListener)
-    can be added to a job or all jobs in the
+    Can be added to a job, with [event listeners](https://pkg.go.dev/github.com/go-co-op/gocron/v2#EventListener),
+    or all jobs across the
     [scheduler](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithGlobalJobOptions)
     to listen for job events and trigger actions.
-- **Options**: Many job and scheduler options are available
+- **Options**: Many job and scheduler options are available.
   - [**Job options**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#JobOption):
     Job options can be set when creating a job using `NewJob`.
   - [**Global job options**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithGlobalJobOptions):
-    Global job options can be set when creating a scheduler using `NewScheduler`.
+    Global job options can be set when creating a scheduler using `NewScheduler`
+    and the `WithGlobalJobOptions` option.
   - [**Scheduler options**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#SchedulerOption):
     Scheduler options can be set when creating a scheduler using `NewScheduler`.
 - **Logging**: Logs can be enabled.
   - [Logger](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Logger):
     The Logger interface can be implemented with your desired logging library.
     The provided NewLogger uses the standard library's log package.
-- **Mocking**: The gocron library is set up to enable testing.
+- **Testing**: The gocron library is set up to enable testing.
   - Mocks are provided in [the mock package](mocks) using [gomock](https://github.com/uber-go/mock).
   - Time can be mocked by passing in a [FakeClock](https://pkg.go.dev/github.com/jonboulle/clockwork#FakeClock)
     to [WithClock](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithClock) -
-    see the example on WithClock in the go-docs.
+    see the [example on WithClock](https://pkg.go.dev/github.com/go-co-op/gocron/v2#example-WithClock).
 
 ## Supporters
 
-[Jetbrains](https://www.jetbrains.com/?from=gocron) supports this project with Intellij licenses.
-We appreciate their support for free and open source software!
+We appreciate the support for free and open source software!
+
+- [Jetbrains](https://www.jetbrains.com/?from=gocron) supports this project with Intellij licenses.
 
 ## Star History
 

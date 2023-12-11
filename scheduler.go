@@ -1,4 +1,4 @@
-//go:generate mockgen -source=scheduler.go -destination=mocks/scheduler.go -package=gocronmocks
+//go:generate mockgen -destination=mocks/scheduler.go -package=gocronmocks . Scheduler
 package gocron
 
 import (

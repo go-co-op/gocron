@@ -1,4 +1,4 @@
-//go:generate mockgen -source=job.go -destination=mocks/job.go -package=gocronmocks
+//go:generate mockgen -destination=mocks/job.go -package=gocronmocks . Job
 package gocron
 
 import (

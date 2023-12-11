@@ -1,4 +1,4 @@
-//go:generate mockgen -source=distributed.go -destination=mocks/distributed.go -package=gocronmocks
+//go:generate mockgen -destination=mocks/distributed.go -package=gocronmocks . Elector,Locker,Lock
 package gocron
 
 import (
