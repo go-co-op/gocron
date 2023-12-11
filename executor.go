@@ -231,6 +231,13 @@ func (e *executor) limitModeRunner(name string, in chan uuid.UUID, wg *waitGroup
 							return
 						case e.jobIDsOut <- j.id:
 						}
+						// remove the limiter block to allow another job to be scheduled
+						if limitMode == LimitModeReschedule {
+							select {
+							case <-rescheduleLimiter:
+							default:
+							}
+						}
 						continue
 					}
 					e.limitMode.singletonJobs[id] = struct{}{}
