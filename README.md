@@ -131,7 +131,10 @@ func main() {
 
 We appreciate the support for free and open source software!
 
-- [Jetbrains](https://www.jetbrains.com/?from=gocron) supports this project with Intellij licenses.
+This project is supported by:
+
+- [Jetbrains](https://www.jetbrains.com/?from=gocron)
+- [Sentry](https://sentry.io/welcome/)
 
 ## Star History
 
