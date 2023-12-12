@@ -1527,6 +1527,46 @@ func (s *Scheduler) RegisterEventListeners(eventListeners ...EventListener) {
 	}
 }
 
+// BeforeJobRuns registers an event listener that is called before a job runs.
+func (s *Scheduler) BeforeJobRuns(eventListenerFunc func(jobName string)) *Scheduler {
+	job := s.getCurrentJob()
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	job.eventListeners.beforeJobRuns = eventListenerFunc
+
+	return s
+}
+
+// AfterJobRuns registers an event listener that is called after a job runs.
+func (s *Scheduler) AfterJobRuns(eventListenerFunc func(jobName string)) *Scheduler {
+	job := s.getCurrentJob()
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	job.eventListeners.afterJobRuns = eventListenerFunc
+
+	return s
+}
+
+// WhenJobStarts registers an event listener that is called when a job starts.
+func (s *Scheduler) WhenJobReturnsError(eventListenerFunc func(jobName string, err error)) *Scheduler {
+	job := s.getCurrentJob()
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	job.eventListeners.onError = eventListenerFunc
+
+	return s
+}
+
+// WhenJobStarts registers an event listener that is called when a job starts.
+func (s *Scheduler) WhenJobReturnsNoError(eventListenerFunc func(jobName string)) *Scheduler {
+	job := s.getCurrentJob()
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	job.eventListeners.noError = eventListenerFunc
+
+	return s
+}
+
 func (s *Scheduler) PauseJobExecution(shouldPause bool) {
 	s.executor.skipExecution.Store(shouldPause)
 }

@@ -2659,6 +2659,63 @@ func TestScheduler_ChainOrder(t *testing.T) {
 	require.Len(t, s.jobs, 2)
 }
 
+func TestScheduler_Register_Event(t *testing.T) {
+	userDefinedError := errors.New("user defined error")
+	testCases := []struct {
+		description   string
+		jobFunc       func() error
+		expected      []uint8
+		expectedError error
+	}{
+		{"event order: no error", func() error { return nil }, []uint8{1, 2, 3, 4}, nil},
+		{"event order: on error", func() error { return userDefinedError }, []uint8{1, 2, 3, 4}, userDefinedError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			s := NewScheduler(time.UTC)
+			order := make(chan uint8, 10)
+			done := make(chan struct{})
+			var expectedErr error
+			s = s.BeforeJobRuns(func(jobName string) {
+				order <- 1
+			})
+			s = s.WhenJobReturnsError(func(jobName string, err error) {
+				order <- 3
+				expectedErr = err
+			})
+			s = s.WhenJobReturnsNoError(func(jobName string) {
+				order <- 3
+			})
+			s = s.AfterJobRuns(func(jobName string) {
+				order <- 4
+				done <- struct{}{}
+			})
+
+			_, err := s.Day().Every(1).StartImmediately().Do(func() error {
+				order <- 2
+				return tc.jobFunc()
+			})
+
+			require.NoError(t, err)
+			s.StartAsync()
+			select {
+			case <-done:
+				assert.Equal(t, tc.expectedError, expectedErr)
+				assert.Equal(t, len(tc.expected), len(order))
+				if len(tc.expected) == len(order) {
+					for i := 0; i < len(tc.expected); i++ {
+						assert.Equal(t, tc.expected[i], <-order)
+					}
+				}
+				s.Clear()
+			case <-time.After(1 * time.Second):
+				t.Fatal("timeout")
+			}
+		})
+	}
+}
+
 var _ Locker = (*locker)(nil)
 
 type locker struct {
