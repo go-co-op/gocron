@@ -2676,7 +2676,7 @@ func TestScheduler_Register_Event(t *testing.T) {
 			s := NewScheduler(time.UTC)
 			order := make(chan uint8, 10)
 			done := make(chan struct{})
-			var expectedErr error = nil
+			var expectedErr error
 			s = s.BeforeJobRuns(func(jobName string) {
 				order <- 1
 			})
@@ -2712,7 +2712,6 @@ func TestScheduler_Register_Event(t *testing.T) {
 			case <-time.After(1 * time.Second):
 				t.Fatal("timeout")
 			}
-
 		})
 	}
 }
