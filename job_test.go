@@ -51,6 +51,16 @@ func TestDailyJob_next(t *testing.T) {
 		expectedDurationToNextRun time.Duration
 	}{
 		{
+			"daily at midnight",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
+			},
+			time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2000, 1, 2, 0, 0, 0, 0, time.UTC),
+			24 * time.Hour,
+		},
+		{
 			"daily multiple at times",
 			1,
 			[]time.Time{

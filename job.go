@@ -622,12 +622,7 @@ type dailyJob struct {
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
-	next := d.nextDay(lastRun)
-	if !next.IsZero() {
-		return next
-	}
-	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
-	return d.nextDay(startNextDay)
+	return d.nextDay(lastRun)
 }
 
 func (d dailyJob) nextDay(lastRun time.Time) time.Time {
@@ -640,6 +635,18 @@ func (d dailyJob) nextDay(lastRun time.Time) time.Time {
 			// checking to see if it is after i.e. greater than,
 			// and not greater or equal as our lastRun day/time
 			// will be in the loop, and we don't want to select it again
+			return atDate
+		}
+	}
+	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
+	for _, at := range d.atTimes {
+		// sub the at time hour/min/sec onto the lastRun's values
+		// to use in checks to see if we've got our next run time
+		atDate := time.Date(startNextDay.Year(), startNextDay.Month(), startNextDay.Day(), at.Hour(), at.Minute(), at.Second(), startNextDay.Nanosecond(), startNextDay.Location())
+
+		if !atDate.Before(startNextDay) {
+			// now that we're looking at the next day, it's ok to consider
+			// the same at time that was last run
 			return atDate
 		}
 	}
