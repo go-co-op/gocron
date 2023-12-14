@@ -748,6 +748,8 @@ func TestScheduler_NewJobTask(t *testing.T) {
 	goleak.VerifyNone(t)
 
 	testFuncPtr := func() {}
+	testFuncWithParams := func(one, two string) {}
+	testStruct := struct{}{}
 
 	tests := []struct {
 		name string
@@ -772,6 +774,66 @@ func TestScheduler_NewJobTask(t *testing.T) {
 		{
 			"task func is pointer",
 			NewTask(&testFuncPtr),
+			nil,
+		},
+		{
+			"parameter number does not match",
+			NewTask(testFuncWithParams, "one"),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter type does not match",
+			NewTask(testFuncWithParams, "one", 2),
+			ErrNewJobWrongTypeOfParameters,
+		},
+		{
+			"parameter number does not match - ptr",
+			NewTask(&testFuncWithParams, "one"),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter type does not match - ptr",
+			NewTask(&testFuncWithParams, "one", 2),
+			ErrNewJobWrongTypeOfParameters,
+		},
+		{
+			"all good struct",
+			NewTask(func(one struct{}) {}, struct{}{}),
+			nil,
+		},
+		{
+			"all good interface",
+			NewTask(func(one interface{}) {}, struct{}{}),
+			nil,
+		},
+		{
+			"all good any",
+			NewTask(func(one any) {}, struct{}{}),
+			nil,
+		},
+		{
+			"all good slice",
+			NewTask(func(one []struct{}) {}, []struct{}{}),
+			nil,
+		},
+		{
+			"all good chan",
+			NewTask(func(one chan struct{}) {}, make(chan struct{})),
+			nil,
+		},
+		{
+			"all good pointer",
+			NewTask(func(one *struct{}) {}, &testStruct),
+			nil,
+		},
+		{
+			"all good map",
+			NewTask(func(one map[string]struct{}) {}, make(map[string]struct{})),
+			nil,
+		},
+		{
+			"all good",
+			NewTask(&testFuncWithParams, "one", "two"),
 			nil,
 		},
 	}

@@ -20,6 +20,8 @@ var (
 	ErrMonthlyJobMinutesSeconds      = fmt.Errorf("gocron: MonthlyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
 	ErrNewJobTaskNil                 = fmt.Errorf("gocron: NewJob: Task must not be nil")
 	ErrNewJobTaskNotFunc             = fmt.Errorf("gocron: NewJob: Task.Function must be of kind reflect.Func")
+	ErrNewJobWrongNumberOfParameters = fmt.Errorf("gocron: NewJob: Number of provided parameters does not match expected")
+	ErrNewJobWrongTypeOfParameters   = fmt.Errorf("gocron: NewJob: Type of provided parameters does not match expected")
 	ErrStopExecutorTimedOut          = fmt.Errorf("gocron: timed out waiting for executor to stop")
 	ErrStopJobsTimedOut              = fmt.Errorf("gocron: timed out waiting for jobs to finish")
 	ErrStopSchedulerTimedOut         = fmt.Errorf("gocron: timed out waiting for scheduler to stop")

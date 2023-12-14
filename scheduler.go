@@ -402,6 +402,25 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		return nil, ErrNewJobTaskNotFunc
 	}
 
+	expectedParameterLength := taskFunc.Type().NumIn()
+	if len(tsk.parameters) != expectedParameterLength {
+		return nil, ErrNewJobWrongNumberOfParameters
+	}
+
+	for i := 0; i < expectedParameterLength; i++ {
+		t1 := reflect.TypeOf(tsk.parameters[i]).Kind()
+		if t1 == reflect.Interface || t1 == reflect.Pointer {
+			t1 = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
+		}
+		t2 := reflect.New(taskFunc.Type().In(i)).Elem().Kind()
+		if t2 == reflect.Interface || t2 == reflect.Pointer {
+			t2 = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(i))).Kind()
+		}
+		if t1 != t2 {
+			return nil, ErrNewJobWrongTypeOfParameters
+		}
+	}
+
 	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()
 	j.function = tsk.function
 	j.parameters = tsk.parameters
