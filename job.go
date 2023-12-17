@@ -256,6 +256,7 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) erro
 	daysOfTheWeek := w.daysOfTheWeek()
 
 	slices.Sort(daysOfTheWeek)
+	ws.daysOfWeek = daysOfTheWeek
 
 	atTimesDate, err := convertAtTimesToDateTime(w.atTimes, location)
 	switch {
@@ -622,31 +623,31 @@ type dailyJob struct {
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
-	return d.nextDay(lastRun)
+	firstPass := true
+	next := d.nextDay(lastRun, firstPass)
+	if !next.IsZero() {
+		return next
+	}
+	firstPass = false
+
+	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
+	return d.nextDay(startNextDay, firstPass)
 }
 
-func (d dailyJob) nextDay(lastRun time.Time) time.Time {
+func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 	for _, at := range d.atTimes {
 		// sub the at time hour/min/sec onto the lastRun's values
 		// to use in checks to see if we've got our next run time
 		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
 
-		if atDate.After(lastRun) {
+		if firstPass && atDate.After(lastRun) {
 			// checking to see if it is after i.e. greater than,
 			// and not greater or equal as our lastRun day/time
 			// will be in the loop, and we don't want to select it again
 			return atDate
-		}
-	}
-	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
-	for _, at := range d.atTimes {
-		// sub the at time hour/min/sec onto the lastRun's values
-		// to use in checks to see if we've got our next run time
-		atDate := time.Date(startNextDay.Year(), startNextDay.Month(), startNextDay.Day(), at.Hour(), at.Minute(), at.Second(), startNextDay.Nanosecond(), startNextDay.Location())
-
-		if !atDate.Before(startNextDay) {
+		} else if !firstPass && !atDate.Before(lastRun) {
 			// now that we're looking at the next day, it's ok to consider
-			// the same at time that was last run
+			// the same at time that was last run (as lastRun has been incremented)
 			return atDate
 		}
 	}
@@ -662,17 +663,19 @@ type weeklyJob struct {
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
-	next := w.nextWeekDayAtTime(lastRun)
+	firstPass := true
+	next := w.nextWeekDayAtTime(lastRun, firstPass)
 	if !next.IsZero() {
 		return next
 	}
+	firstPass = false
 
 	startOfTheNextIntervalWeek := (lastRun.Day() - int(lastRun.Weekday())) + int(w.interval*7)
 	from := time.Date(lastRun.Year(), lastRun.Month(), startOfTheNextIntervalWeek, 0, 0, 0, 0, lastRun.Location())
-	return w.nextWeekDayAtTime(from)
+	return w.nextWeekDayAtTime(from, firstPass)
 }
 
-func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time) time.Time {
+func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Time {
 	for _, wd := range w.daysOfWeek {
 		// checking if we're on the same day or later in the same week
 		if wd >= lastRun.Weekday() {
@@ -683,10 +686,14 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time) time.Time {
 				// to use in checks to see if we've got our next run time
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
 
-				if atDate.After(lastRun) {
+				if firstPass && atDate.After(lastRun) {
 					// checking to see if it is after i.e. greater than,
 					// and not greater or equal as our lastRun day/time
 					// will be in the loop, and we don't want to select it again
+					return atDate
+				} else if !firstPass && !atDate.Before(lastRun) {
+					// now that we're looking at the next week, it's ok to consider
+					// the same at time that was last run (as lastRun has been incremented)
 					return atDate
 				}
 			}
@@ -717,21 +724,23 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	}
 	slices.Sort(daysList)
 
-	next := m.nextMonthDayAtTime(lastRun, daysList)
+	firstPass := true
+	next := m.nextMonthDayAtTime(lastRun, daysList, firstPass)
 	if !next.IsZero() {
 		return next
 	}
+	firstPass = false
 
 	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
 	for next.IsZero() {
-		next = m.nextMonthDayAtTime(from, daysList)
+		next = m.nextMonthDayAtTime(from, daysList, firstPass)
 		from = from.AddDate(0, int(m.interval), 0)
 	}
 
 	return next
 }
 
-func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time {
+func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass bool) time.Time {
 	// find the next day in the month that should run and then check for an at time
 	for _, day := range days {
 		if day >= lastRun.Day() {
@@ -746,10 +755,14 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int) time.Time 
 					continue
 				}
 
-				if atDate.After(lastRun) {
+				if firstPass && atDate.After(lastRun) {
 					// checking to see if it is after i.e. greater than,
 					// and not greater or equal as our lastRun day/time
 					// will be in the loop, and we don't want to select it again
+					return atDate
+				} else if !firstPass && !atDate.Before(lastRun) {
+					// now that we're looking at the next month, it's ok to consider
+					// the same at time that was  lastRun (as lastRun has been incremented)
 					return atDate
 				}
 			}
