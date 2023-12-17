@@ -113,10 +113,10 @@ func TestWeeklyJob_next(t *testing.T) {
 			1,
 			[]time.Weekday{time.Monday, time.Thursday},
 			[]time.Time{
-				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+				time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 			},
-			time.Date(2000, 1, 3, 5, 30, 0, 0, time.UTC),
-			time.Date(2000, 1, 6, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2000, 1, 6, 0, 0, 0, 0, time.UTC),
 			3 * 24 * time.Hour,
 		},
 		{
@@ -179,10 +179,10 @@ func TestMonthlyJob_next(t *testing.T) {
 			[]int{1, 10},
 			nil,
 			[]time.Time{
-				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+				time.Date(0, 0, 0, 0, 0, 0, 0, time.UTC),
 			},
-			time.Date(2000, 1, 1, 5, 30, 0, 0, time.UTC),
-			time.Date(2000, 1, 10, 5, 30, 0, 0, time.UTC),
+			time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2000, 1, 10, 0, 0, 0, 0, time.UTC),
 			9 * 24 * time.Hour,
 		},
 		{
