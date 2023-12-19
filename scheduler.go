@@ -49,6 +49,7 @@ type scheduler struct {
 	stopErrCh          chan error
 	allJobsOutRequest  chan allJobsOutRequest
 	jobOutRequestCh    chan jobOutRequest
+	runJobRequestCh    chan runJobRequest
 	newJobCh           chan internalJob
 	removeJobCh        chan uuid.UUID
 	removeJobsByTagsCh chan []string
@@ -57,6 +58,11 @@ type scheduler struct {
 type jobOutRequest struct {
 	id      uuid.UUID
 	outChan chan internalJob
+}
+
+type runJobRequest struct {
+	id      uuid.UUID
+	outChan chan error
 }
 
 type allJobsOutRequest struct {
@@ -77,7 +83,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		singletonRunners: make(map[uuid.UUID]singletonRunner),
 		logger:           &noOpLogger{},
 
-		jobsIDsIn:     make(chan uuid.UUID),
+		jobsIn:        make(chan jobIn),
 		jobIDsOut:     make(chan uuid.UUID),
 		jobOutRequest: make(chan jobOutRequest, 1000),
 		done:          make(chan error),
@@ -100,6 +106,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		stopCh:             make(chan struct{}),
 		stopErrCh:          make(chan error, 1),
 		jobOutRequestCh:    make(chan jobOutRequest),
+		runJobRequestCh:    make(chan runJobRequest),
 		allJobsOutRequest:  make(chan allJobsOutRequest),
 	}
 
@@ -134,6 +141,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 			case out := <-s.allJobsOutRequest:
 				s.selectAllJobsOutRequest(out)
+
+			case run := <-s.runJobRequestCh:
+				s.selectRunJobRequest(run)
 
 			case <-s.startCh:
 				s.selectStart()
@@ -204,6 +214,31 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 	}
 }
 
+func (s *scheduler) selectRunJobRequest(run runJobRequest) {
+	j, ok := s.jobs[run.id]
+	if !ok {
+		select {
+		case run.outChan <- ErrJobNotFound:
+		default:
+		}
+	}
+	select {
+	case <-s.shutdownCtx.Done():
+		select {
+		case run.outChan <- ErrJobRunNowFailed:
+		default:
+		}
+	case s.exec.jobsIn <- jobIn{
+		id:            j.id,
+		shouldSendOut: false,
+	}:
+		select {
+		case run.outChan <- nil:
+		default:
+		}
+	}
+}
+
 func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 	j, ok := s.jobs[id]
 	if !ok {
@@ -232,12 +267,18 @@ func (s *scheduler) selectExecJobIDsOut(id uuid.UUID) {
 	}
 
 	next := j.next(j.lastRun)
+	if next.IsZero() {
+		return
+	}
 	j.nextRun = next
 	j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 		select {
 		case <-s.shutdownCtx.Done():
 			return
-		case s.exec.jobsIDsIn <- id:
+		case s.exec.jobsIn <- jobIn{
+			id:            j.id,
+			shouldSendOut: true,
+		}:
 		}
 	})
 	s.jobs[id] = j
@@ -260,7 +301,10 @@ func (s *scheduler) selectNewJob(j internalJob) {
 			next = s.now()
 			select {
 			case <-s.shutdownCtx.Done():
-			case s.exec.jobsIDsIn <- j.id:
+			case s.exec.jobsIn <- jobIn{
+				id:            j.id,
+				shouldSendOut: true,
+			}:
 			}
 		} else {
 			if next.IsZero() {
@@ -271,7 +315,10 @@ func (s *scheduler) selectNewJob(j internalJob) {
 			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
 				case <-s.shutdownCtx.Done():
-				case s.exec.jobsIDsIn <- id:
+				case s.exec.jobsIn <- jobIn{
+					id:            id,
+					shouldSendOut: true,
+				}:
 				}
 			})
 		}
@@ -304,7 +351,10 @@ func (s *scheduler) selectStart() {
 			next = s.now()
 			select {
 			case <-s.shutdownCtx.Done():
-			case s.exec.jobsIDsIn <- id:
+			case s.exec.jobsIn <- jobIn{
+				id:            id,
+				shouldSendOut: true,
+			}:
 			}
 		} else {
 			if next.IsZero() {
@@ -315,7 +365,10 @@ func (s *scheduler) selectStart() {
 			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
 				case <-s.shutdownCtx.Done():
-				case s.exec.jobsIDsIn <- jobID:
+				case s.exec.jobsIn <- jobIn{
+					id:            jobID,
+					shouldSendOut: true,
+				}:
 				}
 			})
 		}
@@ -453,6 +506,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		name:          j.name,
 		tags:          slices.Clone(j.tags),
 		jobOutRequest: s.jobOutRequestCh,
+		runJobRequest: s.runJobRequestCh,
 	}, nil
 }
 
@@ -632,7 +686,7 @@ func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 		s.exec.limitMode = &limitModeConfig{
 			mode:          mode,
 			limit:         limit,
-			in:            make(chan uuid.UUID, 1000),
+			in:            make(chan jobIn, 1000),
 			singletonJobs: make(map[uuid.UUID]struct{}),
 		}
 		if mode == LimitModeReschedule {

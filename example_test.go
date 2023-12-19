@@ -196,6 +196,28 @@ func ExampleJob_NextRun() {
 	fmt.Println(j.NextRun())
 }
 
+func ExampleJob_RunNow() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		MonthlyJob(
+			1,
+			NewDaysOfTheMonth(3, -5, -1),
+			NewAtTimes(
+				NewAtTime(10, 30, 0),
+				NewAtTime(11, 15, 0),
+			),
+		),
+		NewTask(
+			func() {},
+		),
+	)
+	s.Start()
+	// Runs the job one time now, without impacting the schedule
+	_ = j.RunNow()
+}
+
 func ExampleMonthlyJob() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
@@ -220,6 +242,32 @@ func ExampleNewScheduler() {
 	defer func() { _ = s.Shutdown() }()
 
 	fmt.Println(s.Jobs())
+}
+
+func ExampleOneTimeJob() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	// run a job once, immediately
+	_, _ = s.NewJob(
+		OneTimeJob(
+			OneTimeJobStartImmediately(),
+		),
+		NewTask(
+			func() {},
+		),
+	)
+	// run a job once in 10 seconds
+	_, _ = s.NewJob(
+		OneTimeJob(
+			OneTimeJobStartDateTime(time.Now().Add(10*time.Second)),
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	s.Start()
 }
 
 func ExampleScheduler_NewJob() {

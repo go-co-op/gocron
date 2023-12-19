@@ -87,6 +87,8 @@ Jobs can be run every x days at specific times.
 Jobs can be run every x weeks on specific days of the week and at specific times.
 - [**Monthly**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonthlyJob):
 Jobs can be run every x months on specific days of the month and at specific times.
+- [**One time**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#OneTimeJob):
+Jobs can be run once at a specific time. These are non-recurring jobs.
 
 ### Concurrency Limits
 Jobs can be limited individually or across the entire scheduler.

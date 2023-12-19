@@ -719,6 +719,18 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			[]JobOption{WithStartAt(WithStartDateTime(time.Now().Add(-time.Second)))},
 			ErrWithStartDateTimePast,
 		},
+		{
+			"oneTimeJob start at is zero",
+			OneTimeJob(OneTimeJobStartDateTime(time.Time{})),
+			nil,
+			ErrOneTimeJobStartDateTimePast,
+		},
+		{
+			"oneTimeJob start at is in past",
+			OneTimeJob(OneTimeJobStartDateTime(time.Now().Add(-time.Second))),
+			nil,
+			ErrOneTimeJobStartDateTimePast,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1424,4 +1436,202 @@ func TestScheduler_ManyJobs(t *testing.T) {
 
 	assert.GreaterOrEqual(t, count, 9900)
 	assert.LessOrEqual(t, count, 11000)
+}
+
+func TestScheduler_RunJobNow(t *testing.T) {
+	chDuration := make(chan struct{}, 10)
+	chMonthly := make(chan struct{}, 10)
+	chDurationImmediate := make(chan struct{}, 10)
+	chDurationSingleton := make(chan struct{}, 10)
+	chOneTime := make(chan struct{}, 10)
+
+	tests := []struct {
+		name         string
+		ch           chan struct{}
+		j            JobDefinition
+		fun          any
+		opts         []JobOption
+		expectedDiff func() time.Duration
+		expectedRuns int
+	}{
+		{
+			"duration job",
+			chDuration,
+			DurationJob(time.Second * 10),
+			func() {
+				chDuration <- struct{}{}
+			},
+			nil,
+			func() time.Duration {
+				return 0
+			},
+			1,
+		},
+		{
+			"monthly job",
+			chMonthly,
+			MonthlyJob(1, NewDaysOfTheMonth(1), NewAtTimes(NewAtTime(0, 0, 0))),
+			func() {
+				chMonthly <- struct{}{}
+			},
+			nil,
+			func() time.Duration {
+				return 0
+			},
+			1,
+		},
+		{
+			"duration job - start immediately",
+			chDurationImmediate,
+			DurationJob(time.Second * 10),
+			func() {
+				chDurationImmediate <- struct{}{}
+			},
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+			},
+			func() time.Duration {
+				return 10 * time.Second
+			},
+			2,
+		},
+		{
+			"duration job - singleton",
+			chDurationSingleton,
+			DurationJob(time.Second * 10),
+			func() {
+				chDurationSingleton <- struct{}{}
+				time.Sleep(200 * time.Millisecond)
+			},
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithSingletonMode(LimitModeReschedule),
+			},
+			func() time.Duration {
+				return 10 * time.Second
+			},
+			1,
+		},
+		{
+			"one time job",
+			chOneTime,
+			OneTimeJob(OneTimeJobStartImmediately()),
+			func() {
+				chOneTime <- struct{}{}
+			},
+			nil,
+			nil,
+			2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			j, err := s.NewJob(tt.j, NewTask(tt.fun), tt.opts...)
+			require.NoError(t, err)
+
+			s.Start()
+
+			var nextRunBefore time.Time
+			if tt.expectedDiff != nil {
+				for ; nextRunBefore.IsZero() || err != nil; nextRunBefore, err = j.NextRun() { //nolint:revive
+				}
+			}
+
+			assert.NoError(t, err)
+
+			time.Sleep(100 * time.Millisecond)
+			require.NoError(t, j.RunNow())
+			var runCount int
+
+			select {
+			case <-tt.ch:
+				runCount++
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for job to run")
+			}
+
+			timeout := time.Now().Add(time.Second)
+			for time.Now().Before(timeout) {
+				select {
+				case <-tt.ch:
+					runCount++
+				default:
+				}
+			}
+
+			assert.Equal(t, tt.expectedRuns, runCount)
+
+			nextRunAfter, err := j.NextRun()
+			if tt.expectedDiff != nil && tt.expectedDiff() > 0 {
+				for ; nextRunBefore.IsZero() || nextRunAfter.Equal(nextRunBefore); nextRunAfter, err = j.NextRun() { //nolint:revive
+				}
+			}
+
+			assert.NoError(t, err)
+			assert.NoError(t, s.Shutdown())
+
+			if tt.expectedDiff != nil {
+				assert.Equal(t, tt.expectedDiff(), nextRunAfter.Sub(nextRunBefore))
+			}
+		})
+	}
+}
+
+func TestScheduler_OneTimeJob(t *testing.T) {
+	tests := []struct {
+		name    string
+		startAt func() OneTimeJobStartAtOption
+	}{
+		{
+			"start now",
+			func() OneTimeJobStartAtOption {
+				return OneTimeJobStartImmediately()
+			},
+		},
+		{
+			"start in 100 ms",
+			func() OneTimeJobStartAtOption {
+				return OneTimeJobStartDateTime(time.Now().Add(100 * time.Millisecond))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jobRan := make(chan struct{}, 2)
+
+			s := newTestScheduler(t)
+
+			j, err := s.NewJob(
+				OneTimeJob(tt.startAt()),
+				NewTask(func() {
+					jobRan <- struct{}{}
+				}),
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			select {
+			case <-jobRan:
+			case <-time.After(500 * time.Millisecond):
+				t.Fatal("timed out waiting for job to run")
+			}
+
+			var nextRun time.Time
+			for ; nextRun.IsZero(); nextRun, err = j.NextRun() { //nolint:revive
+			}
+			assert.NoError(t, err)
+			assert.True(t, nextRun.Before(time.Now()))
+
+			assert.NoError(t, s.Shutdown())
+		})
+	}
 }

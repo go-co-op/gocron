@@ -426,6 +426,48 @@ func MonthlyJob(interval uint, daysOfTheMonth DaysOfTheMonth, atTimes AtTimes) J
 	}
 }
 
+var _ JobDefinition = (*oneTimeJobDefinition)(nil)
+
+type oneTimeJobDefinition struct {
+	startAt OneTimeJobStartAtOption
+}
+
+func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location) error {
+	j.jobSchedule = oneTimeJob{}
+	return o.startAt(j)
+}
+
+// OneTimeJobStartAtOption defines when the one time job is run
+type OneTimeJobStartAtOption func(*internalJob) error
+
+// OneTimeJobStartImmediately tells the scheduler to run the one time job immediately.
+func OneTimeJobStartImmediately() OneTimeJobStartAtOption {
+	return func(j *internalJob) error {
+		j.startImmediately = true
+		return nil
+	}
+}
+
+// OneTimeJobStartDateTime sets the date & time at which the job should run.
+// This datetime must be in the future.
+func OneTimeJobStartDateTime(start time.Time) OneTimeJobStartAtOption {
+	return func(j *internalJob) error {
+		if start.IsZero() || start.Before(time.Now()) {
+			return ErrOneTimeJobStartDateTimePast
+		}
+		j.startTime = start
+		return nil
+	}
+}
+
+// OneTimeJob is to run a job once at a specified time and not on
+// any regular schedule.
+func OneTimeJob(startAt OneTimeJobStartAtOption) JobDefinition {
+	return oneTimeJobDefinition{
+		startAt: startAt,
+	}
+}
+
 // -----------------------------------------------
 // -----------------------------------------------
 // ----------------- Job Options -----------------
@@ -772,6 +814,14 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 	return time.Time{}
 }
 
+var _ jobSchedule = (*oneTimeJob)(nil)
+
+type oneTimeJob struct{}
+
+func (o oneTimeJob) next(_ time.Time) time.Time {
+	return time.Time{}
+}
+
 // -----------------------------------------------
 // -----------------------------------------------
 // ---------------- Job Interface ----------------
@@ -786,6 +836,7 @@ type Job interface {
 	Name() string
 	NextRun() (time.Time, error)
 	Tags() []string
+	RunNow() error
 }
 
 var _ Job = (*job)(nil)
@@ -799,6 +850,7 @@ type job struct {
 	name          string
 	tags          []string
 	jobOutRequest chan jobOutRequest
+	runJobRequest chan runJobRequest
 }
 
 // ID returns the job's unique identifier.
@@ -832,4 +884,30 @@ func (j job) NextRun() (time.Time, error) {
 // Tags returns the job's string tags.
 func (j job) Tags() []string {
 	return j.tags
+}
+
+// RunNow runs the job once, now. This does not alter
+// the existing run schedule, and will respect all job
+// and scheduler limits.
+func (j job) RunNow() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	resp := make(chan error, 1)
+
+	select {
+	case j.runJobRequest <- runJobRequest{
+		id:      j.id,
+		outChan: resp,
+	}:
+	case <-time.After(100 * time.Millisecond):
+		return ErrJobRunNowFailed
+	}
+	var err error
+	select {
+	case <-ctx.Done():
+		return ErrJobRunNowFailed
+	case errReceived := <-resp:
+		err = errReceived
+	}
+	return err
 }

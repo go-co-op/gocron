@@ -319,6 +319,25 @@ func TestDurationRandomJob_next(t *testing.T) {
 	}
 }
 
+func TestOneTimeJob_next(t *testing.T) {
+	otj := oneTimeJob{}
+	assert.Zero(t, otj.next(time.Time{}))
+}
+
+func TestJob_RunNow_Error(t *testing.T) {
+	s := newTestScheduler(t)
+
+	j, err := s.NewJob(
+		DurationJob(time.Second),
+		NewTask(func() {}),
+	)
+	require.NoError(t, err)
+
+	require.NoError(t, s.Shutdown())
+
+	assert.EqualError(t, j.RunNow(), ErrJobRunNowFailed.Error())
+}
+
 func TestJob_LastRun(t *testing.T) {
 	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
 	fakeClock := clockwork.NewFakeClockAt(testTime)
