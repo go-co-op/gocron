@@ -16,13 +16,31 @@ var _ Scheduler = (*scheduler)(nil)
 
 // Scheduler defines the interface for the Scheduler.
 type Scheduler interface {
+	// Jobs returns a list of all jobs in the scheduler.
 	Jobs() []Job
+	// NewJob creates a new Job and adds it to the Scheduler.
 	NewJob(JobDefinition, Task, ...JobOption) (Job, error)
+	// RemoveByTags removes all jobs matching the provided tags.
 	RemoveByTags(...string)
+	// RemoveJob removes the job with the provided id.
 	RemoveJob(uuid.UUID) error
+	// Start begins scheduling jobs for execution based
+	// on each job's definition. Job's added to an already
+	// running scheduler will be scheduled immediately based
+	// on definition. Start is non-blocking.
 	Start()
+	// StopJobs stops the execution of all jobs in the scheduler.
+	// This can be useful in situations where jobs need to be
+	// paused globally and then restarted with Start().
 	StopJobs() error
+	// Shutdown should be called when you no longer need
+	// the Scheduler or Job's as the Scheduler cannot
+	// be restarted after calling Shutdown. This is similar
+	// to a Close or Cleanup method and is often deferred after
+	// starting the scheduler.
 	Shutdown() error
+	// Update replaces the existing Job's JobDefinition with the provided
+	// JobDefinition. The Job's Job.ID() remains the same.
 	Update(uuid.UUID, JobDefinition, Task, ...JobOption) (Job, error)
 }
 
@@ -530,10 +548,6 @@ func (s *scheduler) RemoveJob(id uuid.UUID) error {
 	return nil
 }
 
-// Start begins scheduling jobs for execution based
-// on each job's definition. Job's added to an already
-// running scheduler will be scheduled immediately based
-// on definition.
 func (s *scheduler) Start() {
 	select {
 	case <-s.shutdownCtx.Done():
@@ -542,9 +556,6 @@ func (s *scheduler) Start() {
 	}
 }
 
-// StopJobs stops the execution of all jobs in the scheduler.
-// This can be useful in situations where jobs need to be
-// paused globally and then restarted with Start().
 func (s *scheduler) StopJobs() error {
 	select {
 	case <-s.shutdownCtx.Done():
@@ -559,9 +570,6 @@ func (s *scheduler) StopJobs() error {
 	}
 }
 
-// Shutdown should be called when you no longer need
-// the Scheduler or Job's as the Scheduler cannot
-// be restarted after calling Shutdown.
 func (s *scheduler) Shutdown() error {
 	s.shutdownCancel()
 	select {
@@ -572,8 +580,6 @@ func (s *scheduler) Shutdown() error {
 	}
 }
 
-// Update replaces the existing Job's JobDefinition with the provided
-// JobDefinition. The Job's Job.ID() remains the same.
 func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition, task Task, options ...JobOption) (Job, error) {
 	return s.addOrUpdateJob(id, jobDefinition, task, options)
 }
