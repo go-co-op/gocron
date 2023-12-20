@@ -148,7 +148,7 @@ func ExampleDurationRandomJob() {
 	)
 }
 
-func ExampleJob_ID() {
+func ExampleJob_id() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -164,7 +164,7 @@ func ExampleJob_ID() {
 	fmt.Println(j.ID())
 }
 
-func ExampleJob_LastRun() {
+func ExampleJob_lastRun() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -180,7 +180,26 @@ func ExampleJob_LastRun() {
 	fmt.Println(j.LastRun())
 }
 
-func ExampleJob_NextRun() {
+func ExampleJob_name() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+		WithName("foobar"),
+	)
+
+	fmt.Println(j.Name())
+	// Output:
+	// foobar
+}
+
+func ExampleJob_nextRun() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -196,7 +215,7 @@ func ExampleJob_NextRun() {
 	fmt.Println(j.NextRun())
 }
 
-func ExampleJob_RunNow() {
+func ExampleJob_runNow() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -216,6 +235,25 @@ func ExampleJob_RunNow() {
 	s.Start()
 	// Runs the job one time now, without impacting the schedule
 	_ = j.RunNow()
+}
+
+func ExampleJob_tags() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+		WithTags("foo", "bar"),
+	)
+
+	fmt.Println(j.Tags())
+	// Output:
+	// [foo bar]
 }
 
 func ExampleMonthlyJob() {
@@ -270,7 +308,24 @@ func ExampleOneTimeJob() {
 	s.Start()
 }
 
-func ExampleScheduler_NewJob() {
+func ExampleScheduler_jobs() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		DurationJob(
+			10*time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+	fmt.Println(len(s.Jobs()))
+	// Output:
+	// 1
+}
+
+func ExampleScheduler_newJob() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -288,7 +343,7 @@ func ExampleScheduler_NewJob() {
 	fmt.Println(j.ID())
 }
 
-func ExampleScheduler_RemoveByTags() {
+func ExampleScheduler_removeByTags() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -322,7 +377,7 @@ func ExampleScheduler_RemoveByTags() {
 	// 0
 }
 
-func ExampleScheduler_RemoveJob() {
+func ExampleScheduler_removeJob() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -346,7 +401,7 @@ func ExampleScheduler_RemoveJob() {
 	// 0
 }
 
-func ExampleScheduler_Start() {
+func ExampleScheduler_start() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -363,7 +418,7 @@ func ExampleScheduler_Start() {
 	s.Start()
 }
 
-func ExampleScheduler_StopJobs() {
+func ExampleScheduler_stopJobs() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
@@ -382,7 +437,12 @@ func ExampleScheduler_StopJobs() {
 	_ = s.StopJobs()
 }
 
-func ExampleScheduler_Update() {
+func ExampleScheduler_shutdown() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+}
+
+func ExampleScheduler_update() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 

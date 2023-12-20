@@ -831,12 +831,20 @@ func (o oneTimeJob) next(_ time.Time) time.Time {
 // Job provides the available methods on the job
 // available to the caller.
 type Job interface {
+	// ID returns the job's unique identifier.
 	ID() uuid.UUID
+	// LastRun returns the time of the job's last run
 	LastRun() (time.Time, error)
+	// Name returns the name defined on the job.
 	Name() string
+	// NextRun returns the time of the job's next scheduled run.
 	NextRun() (time.Time, error)
-	Tags() []string
+	// RunNow runs the job once, now. This does not alter
+	// the existing run schedule, and will respect all job
+	// and scheduler limits.
 	RunNow() error
+	// Tags returns the job's string tags.
+	Tags() []string
 }
 
 var _ Job = (*job)(nil)
@@ -853,12 +861,10 @@ type job struct {
 	runJobRequest chan runJobRequest
 }
 
-// ID returns the job's unique identifier.
 func (j job) ID() uuid.UUID {
 	return j.id
 }
 
-// LastRun returns the time of the job's last run
 func (j job) LastRun() (time.Time, error) {
 	ij := requestJob(j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
@@ -867,12 +873,10 @@ func (j job) LastRun() (time.Time, error) {
 	return ij.lastRun, nil
 }
 
-// Name returns the name defined on the job.
 func (j job) Name() string {
 	return j.name
 }
 
-// NextRun returns the time of the job's next scheduled run.
 func (j job) NextRun() (time.Time, error) {
 	ij := requestJob(j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
@@ -881,14 +885,10 @@ func (j job) NextRun() (time.Time, error) {
 	return ij.nextRun, nil
 }
 
-// Tags returns the job's string tags.
 func (j job) Tags() []string {
 	return j.tags
 }
 
-// RunNow runs the job once, now. This does not alter
-// the existing run schedule, and will respect all job
-// and scheduler limits.
 func (j job) RunNow() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

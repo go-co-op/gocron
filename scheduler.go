@@ -16,14 +16,22 @@ var _ Scheduler = (*scheduler)(nil)
 
 // Scheduler defines the interface for the Scheduler.
 type Scheduler interface {
-	// Jobs returns a list of all jobs in the scheduler.
+	// Jobs returns all the jobs currently in the scheduler.
 	Jobs() []Job
-	// NewJob creates a new Job and adds it to the Scheduler.
+	// NewJob creates a new job in the Scheduler. The job is scheduled per the provided
+	// definition when the Scheduler is started. If the Scheduler is already running
+	// the job will be scheduled when the Scheduler is started.
 	NewJob(JobDefinition, Task, ...JobOption) (Job, error)
-	// RemoveByTags removes all jobs matching the provided tags.
+	// RemoveByTags removes all jobs that have at least one of the provided tags.
 	RemoveByTags(...string)
 	// RemoveJob removes the job with the provided id.
 	RemoveJob(uuid.UUID) error
+	// Shutdown should be called when you no longer need
+	// the Scheduler or Job's as the Scheduler cannot
+	// be restarted after calling Shutdown. This is similar
+	// to a Close or Cleanup method and is often deferred after
+	// starting the scheduler.
+	Shutdown() error
 	// Start begins scheduling jobs for execution based
 	// on each job's definition. Job's added to an already
 	// running scheduler will be scheduled immediately based
@@ -33,12 +41,6 @@ type Scheduler interface {
 	// This can be useful in situations where jobs need to be
 	// paused globally and then restarted with Start().
 	StopJobs() error
-	// Shutdown should be called when you no longer need
-	// the Scheduler or Job's as the Scheduler cannot
-	// be restarted after calling Shutdown. This is similar
-	// to a Close or Cleanup method and is often deferred after
-	// starting the scheduler.
-	Shutdown() error
 	// Update replaces the existing Job's JobDefinition with the provided
 	// JobDefinition. The Job's Job.ID() remains the same.
 	Update(uuid.UUID, JobDefinition, Task, ...JobOption) (Job, error)
