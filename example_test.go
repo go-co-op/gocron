@@ -401,6 +401,11 @@ func ExampleScheduler_removeJob() {
 	// 0
 }
 
+func ExampleScheduler_shutdown() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+}
+
 func ExampleScheduler_start() {
 	s, _ := NewScheduler()
 	defer func() { _ = s.Shutdown() }()
@@ -435,11 +440,6 @@ func ExampleScheduler_stopJobs() {
 	s.Start()
 
 	_ = s.StopJobs()
-}
-
-func ExampleScheduler_shutdown() {
-	s, _ := NewScheduler()
-	defer func() { _ = s.Shutdown() }()
 }
 
 func ExampleScheduler_update() {
