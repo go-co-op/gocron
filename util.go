@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"reflect"
+	"runtime"
 	"sync"
 	"time"
 
@@ -119,4 +120,51 @@ func (w *waitGroupWithMutex) Wait() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.wg.Wait()
+}
+
+func execJob(shutdownCtx context.Context, id uuid.UUID, exec *executor) {
+	select {
+	case <-shutdownCtx.Done():
+	case exec.jobsIn <- jobIn{
+		id:            id,
+		shouldSendOut: true,
+	}:
+	}
+}
+
+func prepareJobFunc(taskWrapper Task) (*internalJob, error) {
+	if taskWrapper == nil {
+		return nil, ErrNewJobTaskNil
+	}
+	tsk := taskWrapper()
+	taskFunc := reflect.ValueOf(tsk.function)
+	for taskFunc.Kind() == reflect.Ptr {
+		taskFunc = taskFunc.Elem()
+	}
+	if taskFunc.Kind() != reflect.Func {
+		return nil, ErrNewJobTaskNotFunc
+	}
+	expectedParameterLength := taskFunc.Type().NumIn()
+	if len(tsk.parameters) != expectedParameterLength {
+		return nil, ErrNewJobWrongNumberOfParameters
+	}
+	for i := 0; i < expectedParameterLength; i++ {
+		t1 := reflect.TypeOf(tsk.parameters[i]).Kind()
+		if t1 == reflect.Interface || t1 == reflect.Pointer {
+			t1 = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
+		}
+		t2 := reflect.New(taskFunc.Type().In(i)).Elem().Kind()
+		if t2 == reflect.Interface || t2 == reflect.Pointer {
+			t2 = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(i))).Kind()
+		}
+		if t1 != t2 {
+			return nil, ErrNewJobWrongTypeOfParameters
+		}
+	}
+
+	return &internalJob{
+		name:       runtime.FuncForPC(taskFunc.Pointer()).Name(),
+		function:   tsk.function,
+		parameters: tsk.parameters,
+	}, nil
 }

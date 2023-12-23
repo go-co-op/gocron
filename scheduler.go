@@ -3,8 +3,6 @@ package gocron
 
 import (
 	"context"
-	"reflect"
-	"runtime"
 	"time"
 
 	"github.com/google/uuid"
@@ -366,30 +364,17 @@ func (s *scheduler) selectStart() {
 
 	s.started = true
 	for id, j := range s.jobs {
+		jobID := id
 		next := j.startTime
 		if j.startImmediately {
 			next = s.now()
-			select {
-			case <-s.shutdownCtx.Done():
-			case s.exec.jobsIn <- jobIn{
-				id:            id,
-				shouldSendOut: true,
-			}:
-			}
+			execJob(s.shutdownCtx, jobID, &s.exec)
 		} else {
 			if next.IsZero() {
 				next = j.next(s.now())
 			}
-
-			jobID := id
 			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
-				select {
-				case <-s.shutdownCtx.Done():
-				case s.exec.jobsIn <- jobIn{
-					id:            jobID,
-					shouldSendOut: true,
-				}:
-				}
+				execJob(s.shutdownCtx, jobID, &s.exec)
 			})
 		}
 		j.nextRun = next
@@ -442,7 +427,10 @@ func (s *scheduler) NewJob(jobDefinition JobDefinition, task Task, options ...Jo
 }
 
 func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskWrapper Task, options []JobOption) (Job, error) {
-	j := internalJob{}
+	j, err := prepareJobFunc(taskWrapper)
+	if err != nil {
+		return nil, err
+	}
 	if id == uuid.Nil {
 		j.id = uuid.New()
 	} else {
@@ -460,65 +448,27 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 
 	j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
-
-	if taskWrapper == nil {
-		return nil, ErrNewJobTaskNil
-	}
-
-	tsk := taskWrapper()
-	taskFunc := reflect.ValueOf(tsk.function)
-	for taskFunc.Kind() == reflect.Ptr {
-		taskFunc = taskFunc.Elem()
-	}
-
-	if taskFunc.Kind() != reflect.Func {
-		return nil, ErrNewJobTaskNotFunc
-	}
-
-	expectedParameterLength := taskFunc.Type().NumIn()
-	if len(tsk.parameters) != expectedParameterLength {
-		return nil, ErrNewJobWrongNumberOfParameters
-	}
-
-	for i := 0; i < expectedParameterLength; i++ {
-		t1 := reflect.TypeOf(tsk.parameters[i]).Kind()
-		if t1 == reflect.Interface || t1 == reflect.Pointer {
-			t1 = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
-		}
-		t2 := reflect.New(taskFunc.Type().In(i)).Elem().Kind()
-		if t2 == reflect.Interface || t2 == reflect.Pointer {
-			t2 = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(i))).Kind()
-		}
-		if t1 != t2 {
-			return nil, ErrNewJobWrongTypeOfParameters
-		}
-	}
-
-	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()
-	j.function = tsk.function
-	j.parameters = tsk.parameters
-
 	// apply global job options
 	for _, option := range s.globalJobOptions {
-		if err := option(&j); err != nil {
+		if err := option(j); err != nil {
 			return nil, err
 		}
 	}
 
 	// apply job specific options, which take precedence
 	for _, option := range options {
-		if err := option(&j); err != nil {
+		if err := option(j); err != nil {
 			return nil, err
 		}
 	}
 
-	if err := definition.setup(&j, s.location); err != nil {
+	if err := definition.setup(j, s.location); err != nil {
 		return nil, err
 	}
 
 	select {
 	case <-s.shutdownCtx.Done():
-	case s.newJobCh <- j:
+	case s.newJobCh <- *j:
 	}
 
 	return &job{
