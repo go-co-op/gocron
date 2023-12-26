@@ -39,7 +39,7 @@ func main() {
 		gocron.NewTask(
 			func(a string, b int) {
 				// do things
-            },
+			},
 			"hello",
 			1,
 		),
