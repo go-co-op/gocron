@@ -290,6 +290,11 @@ func (s *scheduler) selectExecJobIDsOut(id uuid.UUID) {
 	if next.IsZero() {
 		return
 	}
+	if next.Before(s.now()) {
+		for next.Before(s.now()) {
+			next = j.next(next)
+		}
+	}
 	j.nextRun = next
 	j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 		select {
