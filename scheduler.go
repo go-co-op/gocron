@@ -228,6 +228,17 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 		outJobs[counter] = s.jobFromInternalJob(j)
 		counter++
 	}
+	slices.SortFunc(outJobs, func(a, b Job) int {
+		aID, bID := a.ID().String(), b.ID().String()
+		switch {
+		case aID < bID:
+			return -1
+		case aID > bID:
+			return 1
+		default:
+			return 0
+		}
+	})
 	select {
 	case <-s.shutdownCtx.Done():
 	case out.outChan <- outJobs:
