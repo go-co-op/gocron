@@ -1635,3 +1635,32 @@ func TestScheduler_OneTimeJob(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_Jobs(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			"order is equal",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			for i := 0; i <= 20; i++ {
+				_, err := s.NewJob(
+					DurationJob(time.Second),
+					NewTask(func() {}),
+				)
+				require.NoError(t, err)
+			}
+
+			jobsFirst := s.Jobs()
+			jobsSecond := s.Jobs()
+
+			assert.Equal(t, jobsFirst, jobsSecond)
+		})
+	}
+}
