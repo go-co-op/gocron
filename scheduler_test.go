@@ -1683,7 +1683,7 @@ func newTestMonitorer() *testMonitorer {
 	}
 }
 
-func (t *testMonitorer) Inc(id uuid.UUID, name string, status JobStatus) {
+func (t *testMonitorer) Inc(_ uuid.UUID, name string, status JobStatus) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.counter[name]
@@ -1693,7 +1693,7 @@ func (t *testMonitorer) Inc(id uuid.UUID, name string, status JobStatus) {
 	t.counter[name]++
 }
 
-func (t *testMonitorer) WriteTiming(startTime, endTime time.Time, id uuid.UUID, name string) {
+func (t *testMonitorer) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, name string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.time[name]
@@ -1705,27 +1705,21 @@ func (t *testMonitorer) WriteTiming(startTime, endTime time.Time, id uuid.UUID, 
 
 func TestScheduler_WithMonitorer(t *testing.T) {
 	goleak.VerifyNone(t)
-	jobCh := make(chan struct{})
 	tests := []struct {
 		name    string
 		jd      JobDefinition
-		tsk     Task
 		jobName string
-		ch      chan struct{}
 	}{
 		{
 			"scheduler with monitorer",
 			DurationJob(time.Millisecond * 50),
-			NewTask(func() {
-				jobCh <- struct{}{}
-			}),
 			"job",
-			jobCh,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ch := make(chan struct{}, 20)
 			testMonitorer := newTestMonitorer()
 			s, err := NewScheduler(WithMonitorer(testMonitorer))
 			require.NoError(t, err)
@@ -1738,22 +1732,20 @@ func TestScheduler_WithMonitorer(t *testing.T) {
 			}
 			_, err = s.NewJob(
 				tt.jd,
-				tt.tsk,
+				NewTask(func() {
+					ch <- struct{}{}
+				}),
 				opt...,
 			)
 			require.NoError(t, err)
-
 			s.Start()
-
-			expectedCount := 0
-			go func() {
-				for range tt.ch {
-					expectedCount++
-				}
-			}()
-
 			time.Sleep(150 * time.Millisecond)
 			require.NoError(t, s.Shutdown())
+			close(ch)
+			expectedCount := 0
+			for range ch {
+				expectedCount++
+			}
 
 			got := testMonitorer.counter[tt.jobName]
 			if got != expectedCount {

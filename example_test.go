@@ -798,7 +798,7 @@ func newExampleMonitorer() *exampleMonitorer {
 	}
 }
 
-func (t *exampleMonitorer) Inc(id uuid.UUID, name string, status JobStatus) {
+func (t *exampleMonitorer) Inc(_ uuid.UUID, name string, _ JobStatus) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.counter[name]
@@ -808,7 +808,7 @@ func (t *exampleMonitorer) Inc(id uuid.UUID, name string, status JobStatus) {
 	t.counter[name]++
 }
 
-func (t *exampleMonitorer) WriteTiming(startTime, endTime time.Time, id uuid.UUID, name string) {
+func (t *exampleMonitorer) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, name string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.time[name]
