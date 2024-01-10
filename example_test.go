@@ -786,20 +786,20 @@ func ExampleWithTags() {
 }
 
 /*
-type exampleMonitorer struct {
+type exampleMonitor struct {
 	mu      sync.Mutex
 	counter map[string]int
 	time    map[string][]time.Duration
 }
 
-func newExampleMonitorer() *exampleMonitorer {
-	return &exampleMonitorer{
+func newExampleMonitor() *exampleMonitor {
+	return &exampleMonitor{
 		counter: make(map[string]int),
 		time:    make(map[string][]time.Duration),
 	}
 }
 
-func (t *exampleMonitorer) Inc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
+func (t *exampleMonitor) Inc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.counter[name]
@@ -809,7 +809,7 @@ func (t *exampleMonitorer) Inc(_ uuid.UUID, name string, _ []string, _ JobStatus
 	t.counter[name]++
 }
 
-func (t *exampleMonitorer) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
+func (t *exampleMonitor) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.time[name]
@@ -819,10 +819,11 @@ func (t *exampleMonitorer) WriteTiming(startTime, endTime time.Time, _ uuid.UUID
 	t.time[name] = append(t.time[name], endTime.Sub(startTime))
 }
 
+
 func ExampleWithMonitorer() {
-	monitorer := newExampleMonitorer()
+	monitor := newExampleMonitor()
 	s, _ := NewScheduler(
-		WithMonitorer(monitorer),
+		WithMonitor(monitor),
 	)
 	name := "example"
 	_, _ = s.NewJob(
@@ -843,8 +844,8 @@ func ExampleWithMonitorer() {
 	time.Sleep(5 * time.Second)
 	_ = s.Shutdown()
 
-	fmt.Printf("Job %q total execute count: %d\n", name, monitorer.counter[name])
-	for i, val := range monitorer.time[name] {
+	fmt.Printf("Job %q total execute count: %d\n", name, monitor.counter[name])
+	for i, val := range monitor.time[name] {
 		fmt.Printf("Job %q execute #%d elapsed %.4f seconds\n", name, i+1, val.Seconds())
 	}
 }

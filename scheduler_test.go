@@ -1670,20 +1670,20 @@ func TestScheduler_Jobs(t *testing.T) {
 	}
 }
 
-type testMonitorer struct {
+type testMonitor struct {
 	mu      sync.Mutex
 	counter map[string]int
 	time    map[string][]time.Duration
 }
 
-func newTestMonitorer() *testMonitorer {
-	return &testMonitorer{
+func newTestMonitor() *testMonitor {
+	return &testMonitor{
 		counter: make(map[string]int),
 		time:    make(map[string][]time.Duration),
 	}
 }
 
-func (t *testMonitorer) Inc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
+func (t *testMonitor) Inc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.counter[name]
@@ -1693,7 +1693,7 @@ func (t *testMonitorer) Inc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
 	t.counter[name]++
 }
 
-func (t *testMonitorer) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
+func (t *testMonitor) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.time[name]
@@ -1703,7 +1703,7 @@ func (t *testMonitorer) WriteTiming(startTime, endTime time.Time, _ uuid.UUID, n
 	t.time[name] = append(t.time[name], endTime.Sub(startTime))
 }
 
-func TestScheduler_WithMonitorer(t *testing.T) {
+func TestScheduler_WithMonitor(t *testing.T) {
 	goleak.VerifyNone(t)
 	tests := []struct {
 		name    string
@@ -1720,8 +1720,8 @@ func TestScheduler_WithMonitorer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan struct{}, 20)
-			testMonitorer := newTestMonitorer()
-			s, err := NewScheduler(WithMonitor(testMonitorer))
+			testMonitor := newTestMonitor()
+			s, err := NewScheduler(WithMonitor(testMonitor))
 			require.NoError(t, err)
 
 			opt := []JobOption{
@@ -1747,7 +1747,7 @@ func TestScheduler_WithMonitorer(t *testing.T) {
 				expectedCount++
 			}
 
-			got := testMonitorer.counter[tt.jobName]
+			got := testMonitor.counter[tt.jobName]
 			if got != expectedCount {
 				t.Fatalf("job %q counter expected %d, got %d", tt.jobName, expectedCount, got)
 			}
