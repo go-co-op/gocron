@@ -775,13 +775,13 @@ func WithStopTimeout(timeout time.Duration) SchedulerOption {
 	}
 }
 
-// WithMonitorer sets the metrics provider to be used by the Scheduler.
-func WithMonitorer(monitorer Monitorer) SchedulerOption {
+// WithMonitor sets the metrics provider to be used by the Scheduler.
+func WithMonitor(monitor Monitor) SchedulerOption {
 	return func(s *scheduler) error {
-		if monitorer == nil {
-			return ErrWithMonitorerNil
+		if monitor == nil {
+			return ErrWithMonitorNil
 		}
-		s.exec.monitorer = monitorer
+		s.exec.monitor = monitor
 		return nil
 	}
 }

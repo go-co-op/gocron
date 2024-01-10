@@ -23,7 +23,7 @@ type executor struct {
 	limitMode        *limitModeConfig
 	elector          Elector
 	locker           Locker
-	monitorer        Monitorer
+	monitor          Monitor
 }
 
 type jobIn struct {
@@ -353,18 +353,18 @@ func (e *executor) runJob(j internalJob, shouldSendOut bool) {
 
 	startTime := time.Now()
 	err := callJobFuncWithParams(j.function, j.parameters...)
-	if e.monitorer != nil {
-		e.monitorer.WriteTiming(startTime, time.Now(), j.id, j.name, j.tags)
+	if e.monitor != nil {
+		e.monitor.WriteTiming(startTime, time.Now(), j.id, j.name, j.tags)
 	}
 	if err != nil {
 		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
-		if e.monitorer != nil {
-			e.monitorer.Inc(j.id, j.name, j.tags, Fail)
+		if e.monitor != nil {
+			e.monitor.Inc(j.id, j.name, j.tags, Fail)
 		}
 	} else {
 		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
-		if e.monitorer != nil {
-			e.monitorer.Inc(j.id, j.name, j.tags, Success)
+		if e.monitor != nil {
+			e.monitor.Inc(j.id, j.name, j.tags, Success)
 		}
 	}
 }
