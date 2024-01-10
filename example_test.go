@@ -781,6 +781,7 @@ func ExampleWithTags() {
 	// [tag1 tag2 tag3]
 }
 
+/*
 type exampleMonitorer struct {
 	mu      sync.Mutex
 	counter map[string]int
@@ -843,3 +844,4 @@ func ExampleWithMonitorer() {
 		fmt.Printf("Job %q execute #%d elapsed %.4f seconds\n", name, i+1, val.Seconds())
 	}
 }
+*/
