@@ -135,6 +135,11 @@ Logs can be enabled.
 The Logger interface can be implemented with your desired logging library.
 The provided NewLogger uses the standard library's log package.
 
+### Metrics
+Execution jobs metrics can be collect.
+- [**Monitorer**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitorer):
+A monitorer can be used to collect metrics a instance of gocron each run of job.
+
 ### Testing
 The gocron library is set up to enable testing.
 - Mocks are provided in [the mock package](mocks) using [gomock](https://github.com/uber-go/mock).

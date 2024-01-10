@@ -784,3 +784,66 @@ func ExampleWithTags() {
 	// Output:
 	// [tag1 tag2 tag3]
 }
+
+type exampleMonitorer struct {
+	mu      sync.Mutex
+	counter map[string]int
+	time    map[string][]time.Duration
+}
+
+func newExampleMonitorer() *exampleMonitorer {
+	return &exampleMonitorer{
+		counter: make(map[string]int),
+		time:    make(map[string][]time.Duration),
+	}
+}
+
+func (t *exampleMonitorer) Inc(id uuid.UUID, name string, status JobStatus) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.counter[name]
+	if !ok {
+		t.counter[name] = 0
+	}
+	t.counter[name]++
+}
+
+func (t *exampleMonitorer) WriteTiming(startTime, endTime time.Time, id uuid.UUID, name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.time[name]
+	if !ok {
+		t.time[name] = make([]time.Duration, 0)
+	}
+	t.time[name] = append(t.time[name], endTime.Sub(startTime))
+}
+
+func ExampleWithMonitorer() {
+	monitorer := newExampleMonitorer()
+	s, _ := NewScheduler(
+		WithMonitorer(monitorer),
+	)
+	name := "example"
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {
+				time.Sleep(1 * time.Second)
+			},
+		),
+		WithName(name),
+		WithStartAt(
+			WithStartImmediately(),
+		),
+	)
+	s.Start()
+	time.Sleep(5 * time.Second)
+	_ = s.Shutdown()
+
+	fmt.Printf("Job %q total execute count: %d\n", name, monitorer.counter[name])
+	for i, val := range monitorer.time[name] {
+		fmt.Printf("Job %q execute #%d elapsed %.4f seconds\n", name, i+1, val.Seconds())
+	}
+}
