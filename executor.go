@@ -354,17 +354,17 @@ func (e *executor) runJob(j internalJob, shouldSendOut bool) {
 	startTime := time.Now()
 	err := callJobFuncWithParams(j.function, j.parameters...)
 	if e.monitorer != nil {
-		e.monitorer.WriteTiming(startTime, time.Now(), j.id, j.name)
+		e.monitorer.WriteTiming(startTime, time.Now(), j.id, j.name, j.tags)
 	}
 	if err != nil {
 		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
 		if e.monitorer != nil {
-			e.monitorer.Inc(j.id, j.name, Fail)
+			e.monitorer.Inc(j.id, j.name, j.tags, Fail)
 		}
 	} else {
 		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
 		if e.monitorer != nil {
-			e.monitorer.Inc(j.id, j.name, Success)
+			e.monitorer.Inc(j.id, j.name, j.tags, Success)
 		}
 	}
 }
