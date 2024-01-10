@@ -900,6 +900,11 @@ func TestScheduler_WithOptionsErrors(t *testing.T) {
 			WithStopTimeout(-1),
 			ErrWithStopTimeoutZeroOrNegative,
 		},
+		{
+			"WithMonitorer nil",
+			WithMonitorer(nil),
+			ErrWithMonitorerNil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1652,6 +1657,99 @@ func TestScheduler_Jobs(t *testing.T) {
 			jobsSecond := s.Jobs()
 
 			assert.Equal(t, jobsFirst, jobsSecond)
+		})
+	}
+}
+
+type testMonitorer struct {
+	mu      sync.Mutex
+	counter map[string]int
+	time    map[string][]time.Duration
+}
+
+func newTestMonitorer() *testMonitorer {
+	return &testMonitorer{
+		counter: make(map[string]int),
+		time:    make(map[string][]time.Duration),
+	}
+}
+
+func (t *testMonitorer) Inc(id uuid.UUID, name string, status JobStatus) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.counter[name]
+	if !ok {
+		t.counter[name] = 0
+	}
+	t.counter[name]++
+}
+
+func (t *testMonitorer) WriteTiming(startTime, endTime time.Time, id uuid.UUID, name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.time[name]
+	if !ok {
+		t.time[name] = make([]time.Duration, 0)
+	}
+	t.time[name] = append(t.time[name], endTime.Sub(startTime))
+}
+
+func TestScheduler_WithMonitorer(t *testing.T) {
+	goleak.VerifyNone(t)
+	jobCh := make(chan struct{})
+	tests := []struct {
+		name    string
+		jd      JobDefinition
+		tsk     Task
+		jobName string
+		ch      chan struct{}
+	}{
+		{
+			"scheduler with monitorer",
+			DurationJob(time.Millisecond * 50),
+			NewTask(func() {
+				jobCh <- struct{}{}
+			}),
+			"job",
+			jobCh,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testMonitorer := newTestMonitorer()
+			s, err := NewScheduler(WithMonitorer(testMonitorer))
+			require.NoError(t, err)
+
+			opt := []JobOption{
+				WithName(tt.jobName),
+				WithStartAt(
+					WithStartImmediately(),
+				),
+			}
+			_, err = s.NewJob(
+				tt.jd,
+				tt.tsk,
+				opt...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			expectedCount := 0
+			go func() {
+				for range tt.ch {
+					expectedCount++
+				}
+			}()
+
+			time.Sleep(150 * time.Millisecond)
+			require.NoError(t, s.Shutdown())
+
+			got := testMonitorer.counter[tt.jobName]
+			if got != expectedCount {
+				t.Fatalf("job %q counter expected %d, got %d", tt.jobName, expectedCount, got)
+			}
 		})
 	}
 }
