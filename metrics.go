@@ -6,8 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// JobStatus is the status of job run that should be collect
+// with metric.
 type JobStatus string
 
+// The different statuses of job that can be used.
 const (
 	Fail    JobStatus = "fail"
 	Success JobStatus = "success"
