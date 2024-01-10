@@ -1683,7 +1683,7 @@ func newTestMonitorer() *testMonitorer {
 	}
 }
 
-func (t *testMonitorer) Inc(_ uuid.UUID, name string, status JobStatus) {
+func (t *testMonitorer) Inc(_ uuid.UUID, name string, _ JobStatus) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.counter[name]
