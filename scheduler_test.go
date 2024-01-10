@@ -902,8 +902,8 @@ func TestScheduler_WithOptionsErrors(t *testing.T) {
 		},
 		{
 			"WithMonitorer nil",
-			WithMonitorer(nil),
-			ErrWithMonitorerNil,
+			WithMonitor(nil),
+			ErrWithMonitorNil,
 		},
 	}
 
@@ -1712,7 +1712,7 @@ func TestScheduler_WithMonitorer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan struct{}, 20)
 			testMonitorer := newTestMonitorer()
-			s, err := NewScheduler(WithMonitorer(testMonitorer))
+			s, err := NewScheduler(WithMonitor(testMonitorer))
 			require.NoError(t, err)
 
 			opt := []JobOption{

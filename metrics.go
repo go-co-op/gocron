@@ -16,8 +16,8 @@ const (
 	Success JobStatus = "success"
 )
 
-// Monitorer represents the interface to collect jobs metrics.
-type Monitorer interface {
+// Monitor represents the interface to collect jobs metrics.
+type Monitor interface {
 	Inc(id uuid.UUID, name string, tags []string, status JobStatus)
 	WriteTiming(startTime, endTime time.Time, id uuid.UUID, name string, tags []string)
 }
