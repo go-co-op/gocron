@@ -142,7 +142,7 @@ The provided NewLogger uses the standard library's log package.
 
 ### Metrics
 Execution jobs metrics can be collect.
-- [**Monitorer**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitorer):
+- [**Monitorer**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor):
 A monitorer can be used to collect metrics a instance of gocron each run of job.
 
 ### Testing
