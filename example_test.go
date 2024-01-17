@@ -367,8 +367,6 @@ func ExampleScheduler_removeByTags() {
 	)
 	fmt.Println(len(s.Jobs()))
 
-	time.Sleep(20 * time.Millisecond)
-
 	s.RemoveByTags("tag1", "tag2")
 
 	fmt.Println(len(s.Jobs()))
@@ -391,7 +389,6 @@ func ExampleScheduler_removeJob() {
 	)
 
 	fmt.Println(len(s.Jobs()))
-	time.Sleep(20 * time.Millisecond)
 
 	_ = s.RemoveJob(j.ID())
 
@@ -664,8 +661,8 @@ func ExampleWithLimitedRuns() {
 	s.Start()
 
 	time.Sleep(100 * time.Millisecond)
-	fmt.Printf("no jobs in scheduler: %v\n", s.Jobs())
 	_ = s.StopJobs()
+	fmt.Printf("no jobs in scheduler: %v\n", s.Jobs())
 	// Output:
 	// one, 2
 	// no jobs in scheduler: []
@@ -748,7 +745,6 @@ func ExampleWithStartAt() {
 		),
 	)
 	s.Start()
-	time.Sleep(20 * time.Millisecond)
 
 	next, _ := j.NextRun()
 	fmt.Println(next)

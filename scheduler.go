@@ -70,9 +70,15 @@ type scheduler struct {
 	allJobsOutRequest  chan allJobsOutRequest
 	jobOutRequestCh    chan jobOutRequest
 	runJobRequestCh    chan runJobRequest
-	newJobCh           chan internalJob
+	newJobCh           chan newJobIn
 	removeJobCh        chan uuid.UUID
 	removeJobsByTagsCh chan []string
+}
+
+type newJobIn struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+	job    internalJob
 }
 
 type jobOutRequest struct {
@@ -118,7 +124,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		clock:          clockwork.NewRealClock(),
 		logger:         &noOpLogger{},
 
-		newJobCh:           make(chan internalJob),
+		newJobCh:           make(chan newJobIn),
 		removeJobCh:        make(chan uuid.UUID),
 		removeJobsByTagsCh: make(chan []string),
 		startCh:            make(chan struct{}),
@@ -144,8 +150,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 			case id := <-s.exec.jobIDsOut:
 				s.selectExecJobIDsOut(id)
 
-			case j := <-s.newJobCh:
-				s.selectNewJob(j)
+			case in := <-s.newJobCh:
+				s.selectNewJob(in)
 
 			case id := <-s.removeJobCh:
 				s.selectRemoveJob(id)
@@ -346,7 +352,8 @@ func (s *scheduler) selectJobOutRequest(out jobOutRequest) {
 	close(out.outChan)
 }
 
-func (s *scheduler) selectNewJob(j internalJob) {
+func (s *scheduler) selectNewJob(in newJobIn) {
+	j := in.job
 	if s.started {
 		next := j.startTime
 		if j.startImmediately {
@@ -378,6 +385,7 @@ func (s *scheduler) selectNewJob(j internalJob) {
 	}
 
 	s.jobs[j.id] = j
+	in.cancel()
 }
 
 func (s *scheduler) selectRemoveJobsByTags(tags []string) {
@@ -548,9 +556,19 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		return nil, err
 	}
 
+	newJobCtx, newJobCancel := context.WithCancel(context.Background())
 	select {
 	case <-s.shutdownCtx.Done():
-	case s.newJobCh <- j:
+	case s.newJobCh <- newJobIn{
+		ctx:    newJobCtx,
+		cancel: newJobCancel,
+		job:    j,
+	}:
+	}
+
+	select {
+	case <-newJobCtx.Done():
+	case <-s.shutdownCtx.Done():
 	}
 
 	return &job{
