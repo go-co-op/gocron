@@ -111,10 +111,12 @@ Multiple instances of gocron can be run.
 - [**Elector**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithDistributedElector):
 An elector can be used to elect a single instance of gocron to run as the primary with the
 other instances checking to see if a new leader needs to be elected.
-- Implementations: [go-co-op electors](https://github.com/go-co-op?q=-elector&type=all&language=&sort=)
+  - Implementations: [go-co-op electors](https://github.com/go-co-op?q=-elector&type=all&language=&sort=)
+    (don't see what you need? request on slack to get a repo created to contribute it!)
 - [**Locker**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithDistributedLocker):
 A locker can be used to lock each run of a job to a single instance of gocron.
-- Implementations: [go-co-op lockers](https://github.com/go-co-op?q=-lock&type=all&language=&sort=)
+  - Implementations: [go-co-op lockers](https://github.com/go-co-op?q=-lock&type=all&language=&sort=)
+    (don't see what you need? request on slack to get a repo created to contribute it!)
 
 ### Events
 Job events can trigger actions.
@@ -141,9 +143,11 @@ The Logger interface can be implemented with your desired logging library.
 The provided NewLogger uses the standard library's log package.
 
 ### Metrics
-Execution jobs metrics can be collect.
+Metrics may be collected from the execution of each job.
 - [**Monitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor):
-A monitor can be used to collect metrics a instance of gocron each run of job.
+A monitor can be used to collect metrics for each job from a scheduler.
+  - Implementations: [go-co-op monitors](https://github.com/go-co-op?q=-monitor&type=all&language=&sort=)
+    (don't see what you need? request on slack to get a repo created to contribute it!)
 
 ### Testing
 The gocron library is set up to enable testing.

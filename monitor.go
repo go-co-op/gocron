@@ -6,8 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// JobStatus is the status of job run that should be collect
-// with metric.
+// JobStatus is the status of job run that should be collected with the metric.
 type JobStatus string
 
 // The different statuses of job that can be used.
@@ -18,6 +17,6 @@ const (
 
 // Monitor represents the interface to collect jobs metrics.
 type Monitor interface {
-	Inc(id uuid.UUID, name string, tags []string, status JobStatus)
-	WriteTiming(startTime, endTime time.Time, id uuid.UUID, name string, tags []string)
+	JobRunInc(id uuid.UUID, name string, tags []string, status JobStatus)
+	JobRunTiming(startTime, endTime time.Time, id uuid.UUID, name string, tags []string)
 }
