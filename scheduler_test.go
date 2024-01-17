@@ -900,6 +900,11 @@ func TestScheduler_WithOptionsErrors(t *testing.T) {
 			WithStopTimeout(-1),
 			ErrWithStopTimeoutZeroOrNegative,
 		},
+		{
+			"WithMonitorer nil",
+			WithMonitor(nil),
+			ErrWithMonitorNil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1652,6 +1657,91 @@ func TestScheduler_Jobs(t *testing.T) {
 			jobsSecond := s.Jobs()
 
 			assert.Equal(t, jobsFirst, jobsSecond)
+			assert.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+type testMonitor struct {
+	mu      sync.Mutex
+	counter map[string]int
+	time    map[string][]time.Duration
+}
+
+func newTestMonitor() *testMonitor {
+	return &testMonitor{
+		counter: make(map[string]int),
+		time:    make(map[string][]time.Duration),
+	}
+}
+
+func (t *testMonitor) IncrementJob(_ uuid.UUID, name string, _ []string, _ JobStatus) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.counter[name]
+	if !ok {
+		t.counter[name] = 0
+	}
+	t.counter[name]++
+}
+
+func (t *testMonitor) RecordJobTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	_, ok := t.time[name]
+	if !ok {
+		t.time[name] = make([]time.Duration, 0)
+	}
+	t.time[name] = append(t.time[name], endTime.Sub(startTime))
+}
+
+func TestScheduler_WithMonitor(t *testing.T) {
+	goleak.VerifyNone(t)
+	tests := []struct {
+		name    string
+		jd      JobDefinition
+		jobName string
+	}{
+		{
+			"scheduler with monitorer",
+			DurationJob(time.Millisecond * 50),
+			"job",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ch := make(chan struct{}, 20)
+			monitor := newTestMonitor()
+			s := newTestScheduler(t, WithMonitor(monitor))
+
+			opt := []JobOption{
+				WithName(tt.jobName),
+				WithStartAt(
+					WithStartImmediately(),
+				),
+			}
+			_, err := s.NewJob(
+				tt.jd,
+				NewTask(func() {
+					ch <- struct{}{}
+				}),
+				opt...,
+			)
+			require.NoError(t, err)
+			s.Start()
+			time.Sleep(150 * time.Millisecond)
+			require.NoError(t, s.Shutdown())
+			close(ch)
+			expectedCount := 0
+			for range ch {
+				expectedCount++
+			}
+
+			got := monitor.counter[tt.jobName]
+			if got != expectedCount {
+				t.Fatalf("job %q counter expected %d, got %d", tt.jobName, expectedCount, got)
+			}
 		})
 	}
 }
