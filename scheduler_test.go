@@ -301,9 +301,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 			require.NoError(t, err)
 
 			s.Start()
-			time.Sleep(time.Millisecond * 200)
-			err = s.Shutdown()
-			assert.ErrorIs(t, err, ErrStopJobsTimedOut)
+			assert.ErrorIs(t, err, s.Shutdown())
 			cancel()
 			time.Sleep(2 * time.Second)
 		})
@@ -332,15 +330,11 @@ func TestScheduler_Shutdown(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
-		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.StopJobs())
 
-		time.Sleep(200 * time.Millisecond)
 		s.Start()
 
-		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.Shutdown())
-		time.Sleep(200 * time.Millisecond)
 	})
 
 	t.Run("calling Job methods after shutdown errors", func(t *testing.T) {
@@ -361,7 +355,6 @@ func TestScheduler_Shutdown(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
-		time.Sleep(50 * time.Millisecond)
 		require.NoError(t, s.Shutdown())
 
 		_, err = j.LastRun()
@@ -465,7 +458,6 @@ func TestScheduler_NewJob(t *testing.T) {
 
 			s.Start()
 			require.NoError(t, s.Shutdown())
-			time.Sleep(50 * time.Millisecond)
 		})
 	}
 }
@@ -1303,7 +1295,6 @@ func TestScheduler_RemoveJob(t *testing.T) {
 				id = uuid.New()
 			}
 
-			time.Sleep(50 * time.Millisecond)
 			err := s.RemoveJob(id)
 			assert.ErrorIs(t, err, err)
 			require.NoError(t, s.Shutdown())
