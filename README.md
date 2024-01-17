@@ -53,6 +53,11 @@ func main() {
 	// start the scheduler
 	s.Start()
 
+	// block until you are ready to shut down
+	select {
+	case <-time.After(time.Minute):
+	}
+
 	// when you're done, shut it down
 	err = s.Shutdown()
 	if err != nil {
