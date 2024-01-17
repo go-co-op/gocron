@@ -1675,7 +1675,7 @@ func newTestMonitor() *testMonitor {
 	}
 }
 
-func (t *testMonitor) JobRunInc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
+func (t *testMonitor) IncrementJob(_ uuid.UUID, name string, _ []string, _ JobStatus) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.counter[name]
@@ -1685,7 +1685,7 @@ func (t *testMonitor) JobRunInc(_ uuid.UUID, name string, _ []string, _ JobStatu
 	t.counter[name]++
 }
 
-func (t *testMonitor) JobRunTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
+func (t *testMonitor) RecordJobTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	_, ok := t.time[name]

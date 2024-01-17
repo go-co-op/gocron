@@ -698,7 +698,7 @@ func ExampleWithMonitor() {
 	//}
 	//}
 	//
-	//func (t *exampleMonitor) JobRunInc(_ uuid.UUID, name string, _ []string, _ JobStatus) {
+	//func (t *exampleMonitor) IncrementJob(_ uuid.UUID, name string, _ []string, _ JobStatus) {
 	//	t.mu.Lock()
 	//	defer t.mu.Unlock()
 	//	_, ok := t.counter[name]
@@ -708,7 +708,7 @@ func ExampleWithMonitor() {
 	//	t.counter[name]++
 	//}
 	//
-	//func (t *exampleMonitor) JobRunTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
+	//func (t *exampleMonitor) RecordJobTiming(startTime, endTime time.Time, _ uuid.UUID, name string, _ []string) {
 	//	t.mu.Lock()
 	//	defer t.mu.Unlock()
 	//	_, ok := t.time[name]

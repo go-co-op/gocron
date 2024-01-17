@@ -17,6 +17,10 @@ const (
 
 // Monitor represents the interface to collect jobs metrics.
 type Monitor interface {
-	JobRunInc(id uuid.UUID, name string, tags []string, status JobStatus)
-	JobRunTiming(startTime, endTime time.Time, id uuid.UUID, name string, tags []string)
+	// IncrementJob will provide details about the job and expects the underlying implementation
+	// to handle instantiating and incrementing a value
+	IncrementJob(id uuid.UUID, name string, tags []string, status JobStatus)
+	// RecordJobTiming will provide details about the job and the timing and expects the underlying implementation
+	// to handle instantiating and recording the value
+	RecordJobTiming(startTime, endTime time.Time, id uuid.UUID, name string, tags []string)
 }
