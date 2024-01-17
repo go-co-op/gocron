@@ -1633,6 +1633,7 @@ func TestScheduler_OneTimeJob(t *testing.T) {
 }
 
 func TestScheduler_Jobs(t *testing.T) {
+	goleak.VerifyNone(t)
 	tests := []struct {
 		name string
 	}{
@@ -1657,6 +1658,7 @@ func TestScheduler_Jobs(t *testing.T) {
 			jobsSecond := s.Jobs()
 
 			assert.Equal(t, jobsFirst, jobsSecond)
+			assert.NoError(t, s.Shutdown())
 		})
 	}
 }
@@ -1711,9 +1713,8 @@ func TestScheduler_WithMonitor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ch := make(chan struct{}, 20)
-			testMonitor := newTestMonitor()
-			s, err := NewScheduler(WithMonitor(testMonitor))
-			require.NoError(t, err)
+			monitor := newTestMonitor()
+			s := newTestScheduler(t, WithMonitor(monitor))
 
 			opt := []JobOption{
 				WithName(tt.jobName),
@@ -1721,7 +1722,7 @@ func TestScheduler_WithMonitor(t *testing.T) {
 					WithStartImmediately(),
 				),
 			}
-			_, err = s.NewJob(
+			_, err := s.NewJob(
 				tt.jd,
 				NewTask(func() {
 					ch <- struct{}{}
@@ -1738,7 +1739,7 @@ func TestScheduler_WithMonitor(t *testing.T) {
 				expectedCount++
 			}
 
-			got := testMonitor.counter[tt.jobName]
+			got := monitor.counter[tt.jobName]
 			if got != expectedCount {
 				t.Fatalf("job %q counter expected %d, got %d", tt.jobName, expectedCount, got)
 			}
