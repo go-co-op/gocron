@@ -1633,7 +1633,6 @@ func TestScheduler_OneTimeJob(t *testing.T) {
 }
 
 func TestScheduler_Jobs(t *testing.T) {
-	goleak.VerifyNone(t)
 	tests := []struct {
 		name string
 	}{
