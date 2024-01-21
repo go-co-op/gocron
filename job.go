@@ -756,30 +756,35 @@ type monthlyJob struct {
 func (m monthlyJob) next(lastRun time.Time) time.Time {
 	daysList := make([]int, len(m.days))
 	copy(daysList, m.days)
-	firstDayNextMonth := time.Date(lastRun.Year(), lastRun.Month()+1, 1, 0, 0, 0, 0, lastRun.Location())
-	for _, daySub := range m.daysFromEnd {
-		// getting a combined list of all the daysList and the negative daysList
-		// which count backwards from the first day of the next month
-		// -1 == the last day of the month
-		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
-		daysList = append(daysList, day)
-	}
-	slices.Sort(daysList)
 
-	firstPass := true
-	next := m.nextMonthDayAtTime(lastRun, daysList, firstPass)
+	daysFromEnd := m.handleNegativeDays(lastRun, daysList, m.daysFromEnd)
+	next := m.nextMonthDayAtTime(lastRun, daysFromEnd, true)
 	if !next.IsZero() {
 		return next
 	}
-	firstPass = false
 
 	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
 	for next.IsZero() {
-		next = m.nextMonthDayAtTime(from, daysList, firstPass)
+		daysFromEnd = m.handleNegativeDays(from, daysList, m.daysFromEnd)
+		next = m.nextMonthDayAtTime(from, daysFromEnd, false)
 		from = from.AddDate(0, int(m.interval), 0)
 	}
 
 	return next
+}
+
+func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays []int) []int {
+	var out []int
+	// getting a list of the days from the end of the following month
+	// -1 == the last day of the month
+	firstDayNextMonth := time.Date(from.Year(), from.Month()+1, 1, 0, 0, 0, 0, from.Location())
+	for _, daySub := range negativeDays {
+		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
+		out = append(out, day)
+	}
+	out = append(out, days...)
+	slices.Sort(out)
+	return out
 }
 
 func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass bool) time.Time {

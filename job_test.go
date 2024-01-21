@@ -257,6 +257,42 @@ func TestMonthlyJob_next(t *testing.T) {
 			time.Date(2000, 8, 31, 5, 30, 0, 0, time.UTC),
 			244 * 24 * time.Hour,
 		},
+		{
+			"handle -1 with differing month's day count",
+			1,
+			nil,
+			[]int{-1},
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2024, 1, 31, 5, 30, 0, 0, time.UTC),
+			time.Date(2024, 2, 29, 5, 30, 0, 0, time.UTC),
+			29 * 24 * time.Hour,
+		},
+		{
+			"handle -1 with another differing month's day count",
+			1,
+			nil,
+			[]int{-1},
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2024, 2, 29, 5, 30, 0, 0, time.UTC),
+			time.Date(2024, 3, 31, 5, 30, 0, 0, time.UTC),
+			31 * 24 * time.Hour,
+		},
+		{
+			"handle -1 every 3 months next run in February",
+			3,
+			nil,
+			[]int{-1},
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2023, 11, 30, 5, 30, 0, 0, time.UTC),
+			time.Date(2024, 2, 29, 5, 30, 0, 0, time.UTC),
+			91 * 24 * time.Hour,
+		},
 	}
 
 	for _, tt := range tests {
