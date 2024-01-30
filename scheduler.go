@@ -106,7 +106,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	exec := executor{
 		stopCh:           make(chan struct{}),
 		stopTimeout:      time.Second * 10,
-		singletonRunners: make(map[uuid.UUID]singletonRunner),
+		singletonRunners: nil,
 		logger:           &noOpLogger{},
 
 		jobsIn:        make(chan jobIn),
