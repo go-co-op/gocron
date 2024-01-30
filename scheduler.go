@@ -5,7 +5,6 @@ import (
 	"context"
 	"reflect"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -107,7 +106,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	exec := executor{
 		stopCh:           make(chan struct{}),
 		stopTimeout:      time.Second * 10,
-		singletonRunners: sync.Map{},
+		singletonRunners: nil,
 		logger:           &noOpLogger{},
 
 		jobsIn:        make(chan jobIn),

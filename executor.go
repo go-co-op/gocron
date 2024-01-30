@@ -19,7 +19,7 @@ type executor struct {
 	jobOutRequest    chan jobOutRequest
 	stopTimeout      time.Duration
 	done             chan error
-	singletonRunners sync.Map //map[uuid.UUID]singletonRunner
+	singletonRunners *sync.Map // map[uuid.UUID]singletonRunner
 	limitMode        *limitModeConfig
 	elector          Elector
 	locker           Locker
@@ -67,7 +67,7 @@ func (e *executor) start() {
 	limitModeJobsWg := &waitGroupWithMutex{}
 
 	// create a fresh map for tracking singleton runners
-	e.singletonRunners = sync.Map{}
+	e.singletonRunners = &sync.Map{}
 
 	// start the for leap that is the executor
 	// selecting on channels for work to do
