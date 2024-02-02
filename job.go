@@ -579,8 +579,8 @@ func WithTags(tags ...string) JobOption {
 // listeners that can be used to listen for job events.
 type EventListener func(*internalJob) error
 
-// AfterJobRuns is used to listen for when a job has run regardless
-// of any returned error value, and run the provided function.
+// AfterJobRuns is used to listen for when a job has run
+// without an error, and then run the provided function.
 func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
