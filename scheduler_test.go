@@ -1479,7 +1479,7 @@ func TestScheduler_RunJobNow(t *testing.T) {
 		{
 			"duration job - start immediately",
 			chDurationImmediate,
-			DurationJob(time.Second * 10),
+			DurationJob(time.Second * 5),
 			func() {
 				chDurationImmediate <- struct{}{}
 			},
@@ -1489,7 +1489,7 @@ func TestScheduler_RunJobNow(t *testing.T) {
 				),
 			},
 			func() time.Duration {
-				return 10 * time.Second
+				return 5 * time.Second
 			},
 			2,
 		},
@@ -1529,9 +1529,10 @@ func TestScheduler_RunJobNow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(t)
 
-			j, err := s.NewJob(tt.j, NewTask(tt.fun), tt.opts...)
+			_, err := s.NewJob(tt.j, NewTask(tt.fun), tt.opts...)
 			require.NoError(t, err)
 
+			j := s.Jobs()[0]
 			s.Start()
 
 			var nextRunBefore time.Time
@@ -1567,6 +1568,7 @@ func TestScheduler_RunJobNow(t *testing.T) {
 			nextRunAfter, err := j.NextRun()
 			if tt.expectedDiff != nil && tt.expectedDiff() > 0 {
 				for ; nextRunBefore.IsZero() || nextRunAfter.Equal(nextRunBefore); nextRunAfter, err = j.NextRun() { //nolint:revive
+					time.Sleep(100 * time.Millisecond)
 				}
 			}
 

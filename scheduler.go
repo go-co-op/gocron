@@ -454,10 +454,11 @@ func (s *scheduler) now() time.Time {
 
 func (s *scheduler) jobFromInternalJob(in internalJob) job {
 	return job{
-		id:            in.id,
-		name:          in.name,
-		tags:          slices.Clone(in.tags),
-		jobOutRequest: s.jobOutRequestCh,
+		in.id,
+		in.name,
+		slices.Clone(in.tags),
+		s.jobOutRequestCh,
+		s.runJobRequestCh,
 	}
 }
 
