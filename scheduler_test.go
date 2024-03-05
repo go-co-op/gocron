@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -1508,7 +1507,7 @@ func TestScheduler_RunJobNow(t *testing.T) {
 				WithSingletonMode(LimitModeReschedule),
 			},
 			func() time.Duration {
-				return 10 * time.Second
+				return 20 * time.Second
 			},
 			1,
 		},
