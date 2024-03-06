@@ -846,7 +846,9 @@ type Job interface {
 	NextRun() (time.Time, error)
 	// RunNow runs the job once, now. This does not alter
 	// the existing run schedule, and will respect all job
-	// and scheduler limits.
+	// and scheduler limits. This means that running a job now may
+	// cause the job's regular interval to be rescheduled due to
+	// the instance being run by RunNow blocking your run limit.
 	RunNow() error
 	// Tags returns the job's string tags.
 	Tags() []string

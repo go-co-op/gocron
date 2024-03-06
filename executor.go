@@ -122,12 +122,7 @@ func (e *executor) start() {
 							// all runners are busy, reschedule the work for later
 							// which means we just skip it here and do nothing
 							// TODO when metrics are added, this should increment a rescheduled metric
-							if jIn.shouldSendOut {
-								select {
-								case e.jobIDsOut <- jIn.id:
-								default:
-								}
-							}
+							e.sendOutToScheduler(&jIn)
 						}
 					} else {
 						// since we're not using LimitModeReschedule, but instead using LimitModeWait
@@ -136,6 +131,7 @@ func (e *executor) start() {
 						// at which point this call would block.
 						// TODO when metrics are added, this should increment a wait metric
 						e.limitMode.in <- jIn
+						e.sendOutToScheduler(&jIn)
 					}
 				} else {
 					// no limit mode, so we're either running a regular job or
@@ -171,20 +167,17 @@ func (e *executor) start() {
 							select {
 							case runner.rescheduleLimiter <- struct{}{}:
 								runner.in <- jIn
+								e.sendOutToScheduler(&jIn)
 							default:
 								// runner is busy, reschedule the work for later
 								// which means we just skip it here and do nothing
 								// TODO when metrics are added, this should increment a rescheduled metric
-								if jIn.shouldSendOut {
-									select {
-									case e.jobIDsOut <- jIn.id:
-									default:
-									}
-								}
+								e.sendOutToScheduler(&jIn)
 							}
 						} else {
 							// wait mode, fill up that queue (buffered channel, so it's ok)
 							runner.in <- jIn
+							e.sendOutToScheduler(&jIn)
 						}
 					} else {
 						select {
@@ -211,6 +204,20 @@ func (e *executor) start() {
 			return
 		}
 	}
+}
+
+func (e *executor) sendOutToScheduler(jIn *jobIn) {
+	if jIn.shouldSendOut {
+		select {
+		case e.jobIDsOut <- jIn.id:
+		case <-e.ctx.Done():
+			return
+		}
+	}
+	// we need to set this to false now, because to handle
+	// non-limit jobs, we send out from the e.runJob function
+	// and in this case we don't want to send out twice.
+	jIn.shouldSendOut = false
 }
 
 func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
@@ -250,10 +257,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 						// was a singleton already running, and we want to
 						// allow another job to be scheduled
 						if limitMode == LimitModeReschedule {
-							select {
-							case <-rescheduleLimiter:
-							default:
-							}
+							<-rescheduleLimiter
 						}
 						continue
 					}
@@ -271,10 +275,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 
 			// remove the limiter block to allow another job to be scheduled
 			if limitMode == LimitModeReschedule {
-				select {
-				case <-rescheduleLimiter:
-				default:
-				}
+				<-rescheduleLimiter
 			}
 		case <-e.ctx.Done():
 			e.logger.Debug("limitModeRunner shutting down", "name", name)
@@ -306,10 +307,7 @@ func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroup
 
 			// remove the limiter block to allow another job to be scheduled
 			if limitMode == LimitModeReschedule {
-				select {
-				case <-rescheduleLimiter:
-				default:
-				}
+				<-rescheduleLimiter
 			}
 		case <-e.ctx.Done():
 			e.logger.Debug("singletonModeRunner shutting down", "name", name)
