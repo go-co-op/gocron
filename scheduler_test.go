@@ -1263,6 +1263,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 						),
 						NewTask(
 							func() {
+								time.Sleep(100 * time.Millisecond)
 								jobsRan <- struct{}{}
 							},
 						),
