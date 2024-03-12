@@ -516,7 +516,7 @@ func ExampleWithClock() {
 }
 
 func ExampleWithDistributedElector() {
-	//var _ Elector = (*myElector)(nil)
+	//var _ gocron.Elector = (*myElector)(nil)
 	//
 	//type myElector struct{}
 	//
@@ -524,15 +524,15 @@ func ExampleWithDistributedElector() {
 	//	return nil
 	//}
 	//
-	//elector := myElector{}
+	//elector := &myElector{}
 	//
-	//_, _ = NewScheduler(
-	//	WithDistributedElector(elector),
+	//_, _ = gocron.NewScheduler(
+	//	gocron.WithDistributedElector(elector),
 	//)
 }
 
 func ExampleWithDistributedLocker() {
-	//var _ Locker = (*myLocker)(nil)
+	//var _ gocron.Locker = (*myLocker)(nil)
 	//
 	//type myLocker struct{}
 	//
@@ -549,10 +549,10 @@ func ExampleWithDistributedLocker() {
 	//	return nil
 	//}
 	//
-	//locker := myLocker{}
+	//locker := &myLocker{}
 	//
-	//_, _ = NewScheduler(
-	//	WithDistributedLocker(locker),
+	//_, _ = gocron.NewScheduler(
+	//	gocron.WithDistributedLocker(locker),
 	//)
 }
 

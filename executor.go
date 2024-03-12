@@ -193,7 +193,7 @@ func (e *executor) start() {
 						// complete.
 						standardJobsWg.Add(1)
 						go func(j internalJob) {
-							e.runJob(j, jIn.shouldSendOut)
+							e.runJob(j, jIn)
 							standardJobsWg.Done()
 						}(*j)
 					}
@@ -264,7 +264,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 					e.limitMode.singletonJobs[jIn.id] = struct{}{}
 					e.limitMode.singletonJobsMu.Unlock()
 				}
-				e.runJob(*j, jIn.shouldSendOut)
+				e.runJob(*j, jIn)
 
 				if j.singletonMode {
 					e.limitMode.singletonJobsMu.Lock()
@@ -302,7 +302,7 @@ func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroup
 			j := requestJobCtx(ctx, jIn.id, e.jobOutRequest)
 			cancel()
 			if j != nil {
-				e.runJob(*j, jIn.shouldSendOut)
+				e.runJob(*j, jIn)
 			}
 
 			// remove the limiter block to allow another job to be scheduled
@@ -317,7 +317,7 @@ func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroup
 	}
 }
 
-func (e *executor) runJob(j internalJob, shouldSendOut bool) {
+func (e *executor) runJob(j internalJob, jIn jobIn) {
 	if j.ctx == nil {
 		return
 	}
@@ -331,26 +331,20 @@ func (e *executor) runJob(j internalJob, shouldSendOut bool) {
 
 	if e.elector != nil {
 		if err := e.elector.IsLeader(j.ctx); err != nil {
+			e.sendOutToScheduler(&jIn)
 			return
 		}
 	} else if e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
+			e.sendOutToScheduler(&jIn)
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
 	}
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
 
-	if shouldSendOut {
-		select {
-		case <-e.ctx.Done():
-			return
-		case <-j.ctx.Done():
-			return
-		case e.jobIDsOut <- j.id:
-		}
-	}
+	e.sendOutToScheduler(&jIn)
 
 	startTime := time.Now()
 	err := callJobFuncWithParams(j.function, j.parameters...)

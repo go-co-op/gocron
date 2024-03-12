@@ -66,6 +66,11 @@ func main() {
 }
 ```
 
+## Examples
+
+- [Go doc examples](https://pkg.go.dev/github.com/go-co-op/gocron/v2#pkg-examples)
+- [Examples directory](examples)
+
 ## Concepts
 
 - **Job**: The job encapsulates a "task", which is made up of a go function and any function parameters. The Job then

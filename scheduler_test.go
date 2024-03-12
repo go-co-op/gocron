@@ -1140,6 +1140,7 @@ var _ Elector = (*testElector)(nil)
 type testElector struct {
 	mu            sync.Mutex
 	leaderElected bool
+	notLeader     chan struct{}
 }
 
 func (t *testElector) IsLeader(ctx context.Context) error {
@@ -1152,6 +1153,7 @@ func (t *testElector) IsLeader(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.leaderElected {
+		t.notLeader <- struct{}{}
 		return fmt.Errorf("already elected leader")
 	}
 	t.leaderElected = true
@@ -1163,12 +1165,14 @@ var _ Locker = (*testLocker)(nil)
 type testLocker struct {
 	mu        sync.Mutex
 	jobLocked bool
+	notLocked chan struct{}
 }
 
 func (t *testLocker) Lock(_ context.Context, _ string) (Lock, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.jobLocked {
+		t.notLocked <- struct{}{}
 		return nil, fmt.Errorf("job already locked")
 	}
 	t.jobLocked = true
@@ -1184,21 +1188,58 @@ func (t testLock) Unlock(_ context.Context) error {
 }
 
 func TestScheduler_WithDistributed(t *testing.T) {
+	notLocked := make(chan struct{}, 10)
+	notLeader := make(chan struct{}, 10)
+
 	goleak.VerifyNone(t)
 	tests := []struct {
-		name  string
-		count int
-		opt   SchedulerOption
+		name       string
+		count      int
+		opt        SchedulerOption
+		assertions func(*testing.T)
 	}{
 		{
 			"3 schedulers with elector",
 			3,
-			WithDistributedElector(&testElector{}),
+			WithDistributedElector(&testElector{
+				notLeader: notLeader,
+			}),
+			func(t *testing.T) {
+				timeout := time.Now().Add(1 * time.Second)
+				var notLeaderCount int
+				for {
+					if time.Now().After(timeout) {
+						break
+					}
+					select {
+					case <-notLeader:
+						notLeaderCount++
+					default:
+					}
+				}
+				assert.Equal(t, 2, notLeaderCount)
+			},
 		},
 		{
 			"3 schedulers with locker",
 			3,
-			WithDistributedLocker(&testLocker{}),
+			WithDistributedLocker(&testLocker{
+				notLocked: notLocked,
+			}),
+			func(t *testing.T) {
+				timeout := time.Now().Add(1 * time.Second)
+				var notLockedCount int
+				for {
+					if time.Now().After(timeout) {
+						break
+					}
+					select {
+					case <-notLocked:
+						notLockedCount++
+					default:
+					}
+				}
+			},
 		},
 	}
 
@@ -1222,6 +1263,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 						),
 						NewTask(
 							func() {
+								time.Sleep(100 * time.Millisecond)
 								jobsRan <- struct{}{}
 							},
 						),
@@ -1263,6 +1305,8 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			}
 
 			assert.Equal(t, 1, runCount)
+			time.Sleep(time.Second)
+			tt.assertions(t)
 		})
 	}
 }
