@@ -120,3 +120,53 @@ func (w *waitGroupWithMutex) Wait() {
 	defer w.mu.Unlock()
 	w.wg.Wait()
 }
+
+// rather than using an existing sync map that involves type casting
+// we'll just implement a simple sync map here.
+type jobsSyncMap struct {
+	sync.Mutex
+	jobs map[uuid.UUID]internalJob
+}
+
+func newJobsSyncMap() *jobsSyncMap {
+	return &jobsSyncMap{
+		Mutex: sync.Mutex{},
+		jobs:  make(map[uuid.UUID]internalJob),
+	}
+}
+
+func (m *jobsSyncMap) get(id uuid.UUID) (internalJob, bool) {
+	m.Lock()
+	defer m.Unlock()
+	ij, ok := m.jobs[id]
+	return ij, ok
+}
+
+func (m *jobsSyncMap) set(id uuid.UUID, ij internalJob) {
+	m.Lock()
+	defer m.Unlock()
+	m.jobs[id] = ij
+}
+
+func (m *jobsSyncMap) delete(id uuid.UUID) {
+	m.Lock()
+	defer m.Unlock()
+	delete(m.jobs, id)
+}
+
+func (m *jobsSyncMap) len() int {
+	m.Lock()
+	defer m.Unlock()
+	return len(m.jobs)
+}
+
+// rangeOver locks the jobsSyncMap - don't call anything inside here that would lock
+func (m *jobsSyncMap) rangeOver(f func(id uuid.UUID, j internalJob)) {
+	m.Lock()
+	defer m.Unlock()
+	for i := range m.jobs {
+		id := i
+		ij := m.jobs[id]
+		f(id, ij)
+	}
+}

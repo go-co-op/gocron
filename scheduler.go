@@ -56,7 +56,7 @@ type scheduler struct {
 	shutdownCtx      context.Context
 	shutdownCancel   context.CancelFunc
 	exec             executor
-	jobs             map[uuid.UUID]internalJob
+	jobs             *jobsSyncMap
 	location         *time.Location
 	clock            clockwork.Clock
 	started          bool
@@ -119,7 +119,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		shutdownCtx:    schCtx,
 		shutdownCancel: cancel,
 		exec:           exec,
-		jobs:           make(map[uuid.UUID]internalJob),
+		jobs:           newJobsSyncMap(),
 		location:       time.Local,
 		clock:          clockwork.NewRealClock(),
 		logger:         &noOpLogger{},
@@ -205,15 +205,15 @@ func (s *scheduler) stopScheduler() {
 		s.exec.stopCh <- struct{}{}
 	}
 
-	for _, j := range s.jobs {
-		j.stop()
-	}
-	for id, j := range s.jobs {
-		<-j.ctx.Done()
+	s.jobs.rangeOver(func(id uuid.UUID, ij internalJob) {
+		ij.stop()
+	})
+	s.jobs.rangeOver(func(id uuid.UUID, ij internalJob) {
+		<-ij.ctx.Done()
+		ij.ctx, ij.cancel = context.WithCancel(s.shutdownCtx)
+		s.jobs.jobs[id] = ij
+	})
 
-		j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
-		s.jobs[id] = j
-	}
 	var err error
 	if s.started {
 		select {
@@ -228,12 +228,13 @@ func (s *scheduler) stopScheduler() {
 }
 
 func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
-	outJobs := make([]Job, len(s.jobs))
+	outJobs := make([]Job, s.jobs.len())
 	var counter int
-	for _, j := range s.jobs {
-		outJobs[counter] = s.jobFromInternalJob(j)
+
+	s.jobs.rangeOver(func(id uuid.UUID, ij internalJob) {
+		outJobs[counter] = s.jobFromInternalJob(ij)
 		counter++
-	}
+	})
 	slices.SortFunc(outJobs, func(a, b Job) int {
 		aID, bID := a.ID().String(), b.ID().String()
 		switch {
@@ -252,7 +253,7 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 }
 
 func (s *scheduler) selectRunJobRequest(run runJobRequest) {
-	j, ok := s.jobs[run.id]
+	j, ok := s.jobs.get(run.id)
 	if !ok {
 		select {
 		case run.outChan <- ErrJobNotFound:
@@ -277,18 +278,21 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 }
 
 func (s *scheduler) selectRemoveJob(id uuid.UUID) {
-	j, ok := s.jobs[id]
+	j, ok := s.jobs.get(id)
 	if !ok {
 		return
 	}
 	j.stop()
-	delete(s.jobs, id)
+	s.jobs.delete(id)
 }
 
 // Jobs coming back from the executor to the scheduler that
 // need to evaluated for rescheduling.
 func (s *scheduler) selectExecJobIDsOut(id uuid.UUID) {
-	j := s.jobs[id]
+	j, ok := s.jobs.get(id)
+	if !ok {
+		return
+	}
 	j.lastRun = j.nextRun
 
 	// if the job has a limited number of runs set, we need to
@@ -339,11 +343,11 @@ func (s *scheduler) selectExecJobIDsOut(id uuid.UUID) {
 		}
 	})
 	// update the job with its new next and last run times and timer.
-	s.jobs[id] = j
+	s.jobs.set(id, j)
 }
 
 func (s *scheduler) selectJobOutRequest(out jobOutRequest) {
-	if j, ok := s.jobs[out.id]; ok {
+	if j, ok := s.jobs.get(out.id); ok {
 		select {
 		case out.outChan <- j:
 		case <-s.shutdownCtx.Done():
@@ -384,20 +388,20 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 		j.nextRun = next
 	}
 
-	s.jobs[j.id] = j
+	s.jobs.set(j.id, j)
 	in.cancel()
 }
 
 func (s *scheduler) selectRemoveJobsByTags(tags []string) {
-	for _, j := range s.jobs {
+	s.jobs.rangeOver(func(id uuid.UUID, ij internalJob) {
 		for _, tag := range tags {
-			if slices.Contains(j.tags, tag) {
-				j.stop()
-				delete(s.jobs, j.id)
+			if slices.Contains(ij.tags, tag) {
+				ij.stop()
+				delete(s.jobs.jobs, ij.id)
 				break
 			}
 		}
-	}
+	})
 }
 
 func (s *scheduler) selectStart() {
@@ -405,7 +409,7 @@ func (s *scheduler) selectStart() {
 	go s.exec.start()
 
 	s.started = true
-	for id, j := range s.jobs {
+	s.jobs.rangeOver(func(id uuid.UUID, j internalJob) {
 		next := j.startTime
 		if j.startImmediately {
 			next = s.now()
@@ -433,8 +437,8 @@ func (s *scheduler) selectStart() {
 			})
 		}
 		j.nextRun = next
-		s.jobs[id] = j
-	}
+		s.jobs.jobs[id] = j
+	})
 	select {
 	case <-s.shutdownCtx.Done():
 	case s.startedCh <- struct{}{}:
