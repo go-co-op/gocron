@@ -1350,6 +1350,48 @@ func TestScheduler_RemoveJob(t *testing.T) {
 	}
 }
 
+func TestScheduler_RemoveLotsOfJobs(t *testing.T) {
+	goleak.VerifyNone(t)
+	tests := []struct {
+		name   string
+		numJobs int
+	}{
+		{
+			"10 successes",
+			10,
+		},
+		{
+			"100 successes",
+			100,
+		},
+		{
+			"1000 successes",
+			1000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			var ids []uuid.UUID
+			for i := 0; i < tt.numJobs; i++ {
+				j, err := s.NewJob(DurationJob(time.Second), NewTask(func() {time.Sleep(20 * time.Second)}))
+				require.NoError(t, err)
+				ids = append(ids, j.ID())
+			}
+
+			for _, id := range ids {
+				err := s.RemoveJob(id)
+				require.NoError(t, err)
+			}
+
+			assert.Len(t, s.Jobs(), 0)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestScheduler_WithEventListeners(t *testing.T) {
 	goleak.VerifyNone(t)
 
