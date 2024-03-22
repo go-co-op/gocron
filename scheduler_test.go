@@ -1353,7 +1353,7 @@ func TestScheduler_RemoveJob(t *testing.T) {
 func TestScheduler_RemoveLotsOfJobs(t *testing.T) {
 	goleak.VerifyNone(t)
 	tests := []struct {
-		name   string
+		name    string
 		numJobs int
 	}{
 		{
@@ -1376,7 +1376,7 @@ func TestScheduler_RemoveLotsOfJobs(t *testing.T) {
 
 			var ids []uuid.UUID
 			for i := 0; i < tt.numJobs; i++ {
-				j, err := s.NewJob(DurationJob(time.Second), NewTask(func() {time.Sleep(20 * time.Second)}))
+				j, err := s.NewJob(DurationJob(time.Second), NewTask(func() { time.Sleep(20 * time.Second) }))
 				require.NoError(t, err)
 				ids = append(ids, j.ID())
 			}
