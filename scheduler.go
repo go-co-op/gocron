@@ -288,7 +288,12 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 // Jobs coming back from the executor to the scheduler that
 // need to evaluated for rescheduling.
 func (s *scheduler) selectExecJobIDsOut(id uuid.UUID) {
-	j := s.jobs[id]
+	j, ok := s.jobs[id]
+	if !ok {
+		// the job was removed while it was running, and
+		// so we don't need to reschedule it.
+		return
+	}
 	j.lastRun = j.nextRun
 
 	// if the job has a limited number of runs set, we need to
