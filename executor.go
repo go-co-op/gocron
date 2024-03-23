@@ -10,20 +10,21 @@ import (
 )
 
 type executor struct {
-	ctx              context.Context
-	cancel           context.CancelFunc
-	logger           Logger
-	stopCh           chan struct{}
-	jobsIn           chan jobIn
-	jobIDsOut        chan uuid.UUID
-	jobOutRequest    chan jobOutRequest
-	stopTimeout      time.Duration
-	done             chan error
-	singletonRunners *sync.Map // map[uuid.UUID]singletonRunner
-	limitMode        *limitModeConfig
-	elector          Elector
-	locker           Locker
-	monitor          Monitor
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	logger                 Logger
+	stopCh                 chan struct{}
+	jobsIn                 chan jobIn
+	jobsOutForRescheduling chan uuid.UUID
+	jobsOutCompleted       chan uuid.UUID
+	jobOutRequest          chan jobOutRequest
+	stopTimeout            time.Duration
+	done                   chan error
+	singletonRunners       *sync.Map // map[uuid.UUID]singletonRunner
+	limitMode              *limitModeConfig
+	elector                Elector
+	locker                 Locker
+	monitor                Monitor
 }
 
 type jobIn struct {
@@ -122,7 +123,7 @@ func (e *executor) start() {
 							// all runners are busy, reschedule the work for later
 							// which means we just skip it here and do nothing
 							// TODO when metrics are added, this should increment a rescheduled metric
-							e.sendOutToScheduler(&jIn)
+							e.sendOutForRescheduling(&jIn)
 						}
 					} else {
 						// since we're not using LimitModeReschedule, but instead using LimitModeWait
@@ -131,7 +132,7 @@ func (e *executor) start() {
 						// at which point this call would block.
 						// TODO when metrics are added, this should increment a wait metric
 						e.limitMode.in <- jIn
-						e.sendOutToScheduler(&jIn)
+						e.sendOutForRescheduling(&jIn)
 					}
 				} else {
 					// no limit mode, so we're either running a regular job or
@@ -167,17 +168,17 @@ func (e *executor) start() {
 							select {
 							case runner.rescheduleLimiter <- struct{}{}:
 								runner.in <- jIn
-								e.sendOutToScheduler(&jIn)
+								e.sendOutForRescheduling(&jIn)
 							default:
 								// runner is busy, reschedule the work for later
 								// which means we just skip it here and do nothing
 								// TODO when metrics are added, this should increment a rescheduled metric
-								e.sendOutToScheduler(&jIn)
+								e.sendOutForRescheduling(&jIn)
 							}
 						} else {
 							// wait mode, fill up that queue (buffered channel, so it's ok)
 							runner.in <- jIn
-							e.sendOutToScheduler(&jIn)
+							e.sendOutForRescheduling(&jIn)
 						}
 					} else {
 						select {
@@ -206,10 +207,10 @@ func (e *executor) start() {
 	}
 }
 
-func (e *executor) sendOutToScheduler(jIn *jobIn) {
+func (e *executor) sendOutForRescheduling(jIn *jobIn) {
 	if jIn.shouldSendOut {
 		select {
-		case e.jobIDsOut <- jIn.id:
+		case e.jobsOutForRescheduling <- jIn.id:
 		case <-e.ctx.Done():
 			return
 		}
@@ -250,7 +251,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 								return
 							case <-j.ctx.Done():
 								return
-							case e.jobIDsOut <- j.id:
+							case e.jobsOutForRescheduling <- j.id:
 							}
 						}
 						// remove the limiter block, as this particular job
@@ -331,20 +332,21 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 
 	if e.elector != nil {
 		if err := e.elector.IsLeader(j.ctx); err != nil {
-			e.sendOutToScheduler(&jIn)
+			e.sendOutForRescheduling(&jIn)
 			return
 		}
 	} else if e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
-			e.sendOutToScheduler(&jIn)
+			e.sendOutForRescheduling(&jIn)
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
 	}
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
 
-	e.sendOutToScheduler(&jIn)
+	e.sendOutForRescheduling(&jIn)
+	e.jobsOutCompleted <- j.id
 
 	startTime := time.Now()
 	err := callJobFuncWithParams(j.function, j.parameters...)
