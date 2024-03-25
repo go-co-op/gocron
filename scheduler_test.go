@@ -479,6 +479,12 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrCronJobParse,
 		},
 		{
+			"duration job time interval is zero",
+			DurationJob(0 * time.Second),
+			nil,
+			ErrDurationJobIntervalZero,
+		},
+		{
 			"random with bad min/max",
 			DurationRandomJob(
 				time.Second*5,
