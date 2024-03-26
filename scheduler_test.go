@@ -1809,6 +1809,81 @@ func TestScheduler_OneTimeJob(t *testing.T) {
 	}
 }
 
+func TestScheduler_WithLimitedRuns(t *testing.T) {
+	goleak.VerifyNone(t)
+
+	tests := []struct {
+		name          string
+		schedulerOpts []SchedulerOption
+		job           JobDefinition
+		jobOpts       []JobOption
+		runLimit      uint
+		expectedRuns  int
+	}{
+		{
+			"simple",
+			nil,
+			DurationJob(time.Millisecond * 100),
+			nil,
+			1,
+			1,
+		},
+		{
+			"OneTimeJob, WithLimitConcurrentJobs",
+			[]SchedulerOption{
+				WithLimitConcurrentJobs(1, LimitModeWait),
+			},
+			OneTimeJob(OneTimeJobStartImmediately()),
+			nil,
+			1,
+			1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t, tt.schedulerOpts...)
+
+			jobRan := make(chan struct{}, 10)
+
+			jobOpts := []JobOption{
+				WithLimitedRuns(tt.runLimit),
+			}
+			jobOpts = append(jobOpts, tt.jobOpts...)
+
+			_, err := s.NewJob(
+				tt.job,
+				NewTask(func() {
+					jobRan <- struct{}{}
+				}),
+				jobOpts...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			time.Sleep(time.Millisecond * 150)
+
+			assert.NoError(t, s.Shutdown())
+
+			var runCount int
+			for runCount < tt.expectedRuns {
+				select {
+				case <-jobRan:
+					runCount++
+				case <-time.After(time.Second):
+					t.Fatal("timed out waiting for job to run")
+				}
+			}
+			select {
+			case <-jobRan:
+				t.Fatal("job ran more than expected")
+			default:
+			}
+			assert.Equal(t, tt.expectedRuns, runCount)
+		})
+	}
+}
+
 func TestScheduler_Jobs(t *testing.T) {
 	tests := []struct {
 		name string
