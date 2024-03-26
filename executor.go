@@ -346,7 +346,10 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
 
 	e.sendOutForRescheduling(&jIn)
-	e.jobsOutCompleted <- j.id
+	select {
+	case e.jobsOutCompleted <- j.id:
+	case <-e.ctx.Done():
+	}
 
 	startTime := time.Now()
 	err := callJobFuncWithParams(j.function, j.parameters...)
