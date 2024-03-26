@@ -1398,6 +1398,29 @@ func TestScheduler_RemoveLotsOfJobs(t *testing.T) {
 	}
 }
 
+func TestScheduler_RemoveJob_RemoveSelf(t *testing.T) {
+	goleak.VerifyNone(t)
+	s := newTestScheduler(t)
+	s.Start()
+
+	_, err := s.NewJob(
+		DurationJob(100*time.Millisecond),
+		NewTask(func() {}),
+		WithEventListeners(
+			BeforeJobRuns(
+				func(jobID uuid.UUID, jobName string) {
+					s.RemoveByTags("tag1")
+				},
+			),
+		),
+		WithTags("tag1"),
+	)
+	require.NoError(t, err)
+
+	time.Sleep(time.Millisecond * 400)
+	assert.NoError(t, s.Shutdown())
+}
+
 func TestScheduler_WithEventListeners(t *testing.T) {
 	goleak.VerifyNone(t)
 
@@ -1673,6 +1696,67 @@ func TestScheduler_RunJobNow(t *testing.T) {
 	}
 }
 
+func TestScheduler_LastRunSingleton(t *testing.T) {
+	goleak.VerifyNone(t)
+
+	tests := []struct {
+		name string
+		f    func(t *testing.T, j Job)
+	}{
+		{
+			"simple",
+			func(t *testing.T, j Job) {},
+		},
+		{
+			"with runNow",
+			func(t *testing.T, j Job) {
+				runTime := time.Now()
+				assert.NoError(t, j.RunNow())
+
+				// because we're using wait mode we need to wait here
+				// to make sure the job queued with RunNow has finished running
+				time.Sleep(time.Millisecond * 200)
+				lastRun, err := j.LastRun()
+				assert.NoError(t, err)
+				assert.LessOrEqual(t, lastRun.Sub(runTime), time.Millisecond*125)
+				assert.GreaterOrEqual(t, lastRun.Sub(runTime), time.Millisecond*75)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			j, err := s.NewJob(
+				DurationJob(time.Millisecond*100),
+				NewTask(func() {
+					time.Sleep(time.Millisecond * 200)
+				}),
+				WithSingletonMode(LimitModeWait),
+			)
+			require.NoError(t, err)
+
+			startTime := time.Now()
+			s.Start()
+
+			lastRun, err := j.LastRun()
+			assert.NoError(t, err)
+			assert.True(t, lastRun.IsZero())
+
+			time.Sleep(time.Millisecond * 200)
+
+			lastRun, err = j.LastRun()
+			assert.NoError(t, err)
+			assert.LessOrEqual(t, lastRun.Sub(startTime), time.Millisecond*125)
+			assert.GreaterOrEqual(t, lastRun.Sub(startTime), time.Millisecond*75)
+
+			tt.f(t, j)
+
+			assert.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestScheduler_OneTimeJob(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1796,7 +1880,7 @@ func TestScheduler_WithMonitor(t *testing.T) {
 		jobName string
 	}{
 		{
-			"scheduler with monitorer",
+			"scheduler with monitor",
 			DurationJob(time.Millisecond * 50),
 			"job",
 		},
