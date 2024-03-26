@@ -300,23 +300,6 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	}
 	j.lastScheduledRun = j.nextScheduled
 
-	// if the job has a limited number of runs set, we need to
-	// check how many runs have occurred and stop running this
-	// job if it has reached the limit.
-	if j.limitRunsTo != nil {
-		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
-		if j.limitRunsTo.runCount == j.limitRunsTo.limit {
-			go func() {
-				select {
-				case <-s.shutdownCtx.Done():
-					return
-				case s.removeJobCh <- id:
-				}
-			}()
-			return
-		}
-	}
-
 	next := j.next(j.lastScheduledRun)
 	if next.IsZero() {
 		// the job's next function will return zero for OneTime jobs.
@@ -356,6 +339,24 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 	if !ok {
 		return
 	}
+
+	// if the job has a limited number of runs set, we need to
+	// check how many runs have occurred and stop running this
+	// job if it has reached the limit.
+	if j.limitRunsTo != nil {
+		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
+		if j.limitRunsTo.runCount == j.limitRunsTo.limit {
+			go func() {
+				select {
+				case <-s.shutdownCtx.Done():
+					return
+				case s.removeJobCh <- id:
+				}
+			}()
+			return
+		}
+	}
+
 	j.lastRun = s.now()
 	s.jobs[id] = j
 }
