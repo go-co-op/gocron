@@ -2,11 +2,12 @@
 
 ## Supported Versions
 
-The current plan is to maintain version 1 as long as possible incorporating any necessary security patches.
+The current plan is to maintain version 2 as long as possible incorporating any necessary security patches. Version 1 is deprecated and will no longer be patched.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
+| 1.x.x   | :heavy_multiplication_x: |
+| 2.x.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
