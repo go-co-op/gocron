@@ -24,7 +24,9 @@ type internalJob struct {
 	name   string
 	tags   []string
 	jobSchedule
-	lastRun, nextRun   time.Time
+	lastScheduledRun   time.Time
+	nextScheduled      time.Time
+	lastRun            time.Time
 	function           any
 	parameters         []any
 	timer              clockwork.Timer
@@ -681,18 +683,18 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 
 func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 	for _, at := range d.atTimes {
-		// sub the at time hour/min/sec onto the lastRun's values
+		// sub the at time hour/min/sec onto the lastScheduledRun's values
 		// to use in checks to see if we've got our next run time
 		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
 
 		if firstPass && atDate.After(lastRun) {
 			// checking to see if it is after i.e. greater than,
-			// and not greater or equal as our lastRun day/time
+			// and not greater or equal as our lastScheduledRun day/time
 			// will be in the loop, and we don't want to select it again
 			return atDate
 		} else if !firstPass && !atDate.Before(lastRun) {
 			// now that we're looking at the next day, it's ok to consider
-			// the same at time that was last run (as lastRun has been incremented)
+			// the same at time that was last run (as lastScheduledRun has been incremented)
 			return atDate
 		}
 	}
@@ -727,18 +729,18 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Tim
 			// weekDayDiff is used to add the correct amount to the atDate day below
 			weekDayDiff := wd - lastRun.Weekday()
 			for _, at := range w.atTimes {
-				// sub the at time hour/min/sec onto the lastRun's values
+				// sub the at time hour/min/sec onto the lastScheduledRun's values
 				// to use in checks to see if we've got our next run time
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
 
 				if firstPass && atDate.After(lastRun) {
 					// checking to see if it is after i.e. greater than,
-					// and not greater or equal as our lastRun day/time
+					// and not greater or equal as our lastScheduledRun day/time
 					// will be in the loop, and we don't want to select it again
 					return atDate
 				} else if !firstPass && !atDate.Before(lastRun) {
 					// now that we're looking at the next week, it's ok to consider
-					// the same at time that was last run (as lastRun has been incremented)
+					// the same at time that was last run (as lastScheduledRun has been incremented)
 					return atDate
 				}
 			}
@@ -795,7 +797,7 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 	for _, day := range days {
 		if day >= lastRun.Day() {
 			for _, at := range m.atTimes {
-				// sub the day, and the at time hour/min/sec onto the lastRun's values
+				// sub the day, and the at time hour/min/sec onto the lastScheduledRun's values
 				// to use in checks to see if we've got our next run time
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
 
@@ -807,12 +809,12 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 
 				if firstPass && atDate.After(lastRun) {
 					// checking to see if it is after i.e. greater than,
-					// and not greater or equal as our lastRun day/time
+					// and not greater or equal as our lastScheduledRun day/time
 					// will be in the loop, and we don't want to select it again
 					return atDate
 				} else if !firstPass && !atDate.Before(lastRun) {
 					// now that we're looking at the next month, it's ok to consider
-					// the same at time that was  lastRun (as lastRun has been incremented)
+					// the same at time that was  lastScheduledRun (as lastScheduledRun has been incremented)
 					return atDate
 				}
 			}
@@ -892,7 +894,7 @@ func (j job) NextRun() (time.Time, error) {
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
-	return ij.nextRun, nil
+	return ij.nextScheduled, nil
 }
 
 func (j job) Tags() []string {
