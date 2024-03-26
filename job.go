@@ -150,6 +150,9 @@ type durationJobDefinition struct {
 }
 
 func (d durationJobDefinition) setup(j *internalJob, _ *time.Location) error {
+	if d.duration == 0 {
+		return ErrDurationJobIntervalZero
+	}
 	j.jobSchedule = &durationJob{duration: d.duration}
 	return nil
 }
