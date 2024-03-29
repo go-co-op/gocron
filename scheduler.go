@@ -302,6 +302,9 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		// always grab the last element in the slice as that is the furthest
 		// out in the future and the time from which we want to calculate
 		// the subsequent next run time.
+		slices.SortStableFunc(j.nextScheduled, func(a, b time.Time) int {
+			return a.Compare(b)
+		})
 		j.lastScheduledRun = j.nextScheduled[len(j.nextScheduled)-1]
 	}
 
@@ -345,14 +348,18 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 		return
 	}
 
-	var newNextScheduled []time.Time
-	for _, t := range j.nextScheduled {
-		if t.Before(s.now()) {
-			continue
+	// if the job has more than one nextScheduled time,
+	// we need to remove any that are in the past.
+	if len(j.nextScheduled) > 1 {
+		var newNextScheduled []time.Time
+		for _, t := range j.nextScheduled {
+			if t.Before(s.now()) {
+				continue
+			}
+			newNextScheduled = append(newNextScheduled, t)
 		}
-		newNextScheduled = append(newNextScheduled, t)
+		j.nextScheduled = newNextScheduled
 	}
-	j.nextScheduled = newNextScheduled
 
 	// if the job has a limited number of runs set, we need to
 	// check how many runs have occurred and stop running this

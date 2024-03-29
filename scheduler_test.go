@@ -1622,7 +1622,7 @@ func TestScheduler_RunJobNow(t *testing.T) {
 				WithSingletonMode(LimitModeReschedule),
 			},
 			func() time.Duration {
-				return 20 * time.Second
+				return 10 * time.Second
 			},
 			1,
 		},
