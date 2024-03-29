@@ -24,8 +24,12 @@ type internalJob struct {
 	name   string
 	tags   []string
 	jobSchedule
-	lastScheduledRun   time.Time
-	nextScheduled      time.Time
+	lastScheduledRun time.Time
+
+	// as some jobs may queue up, it's possible to
+	// have multiple nextScheduled times
+	nextScheduled []time.Time
+
 	lastRun            time.Time
 	function           any
 	parameters         []any
@@ -894,7 +898,12 @@ func (j job) NextRun() (time.Time, error) {
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
-	return ij.nextScheduled, nil
+	if len(ij.nextScheduled) == 0 {
+		return time.Time{}, nil
+	}
+	// the first element is the next scheduled run with subsequent
+	// runs following after in the slice
+	return ij.nextScheduled[0], nil
 }
 
 func (j job) Tags() []string {

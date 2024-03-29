@@ -298,7 +298,12 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		// so we don't need to reschedule it.
 		return
 	}
-	j.lastScheduledRun = j.nextScheduled
+	if len(j.nextScheduled) > 0 {
+		// always grab the last element in the slice as that is the furthest
+		// out in the future and the time from which we want to calculate
+		// the subsequent next run time.
+		j.lastScheduledRun = j.nextScheduled[len(j.nextScheduled)-1]
+	}
 
 	next := j.next(j.lastScheduledRun)
 	if next.IsZero() {
@@ -316,7 +321,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 			next = j.next(next)
 		}
 	}
-	j.nextScheduled = next
+	j.nextScheduled = append(j.nextScheduled, next)
 	j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 		// set the actual timer on the job here and listen for
 		// shut down events so that the job doesn't attempt to
@@ -339,6 +344,15 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 	if !ok {
 		return
 	}
+
+	var newNextScheduled []time.Time
+	for _, t := range j.nextScheduled {
+		if t.Before(s.now()) {
+			continue
+		}
+		newNextScheduled = append(newNextScheduled, t)
+	}
+	j.nextScheduled = newNextScheduled
 
 	// if the job has a limited number of runs set, we need to
 	// check how many runs have occurred and stop running this
@@ -400,7 +414,7 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 				}
 			})
 		}
-		j.nextScheduled = next
+		j.nextScheduled = append(j.nextScheduled, next)
 	}
 
 	s.jobs[j.id] = j
@@ -451,7 +465,7 @@ func (s *scheduler) selectStart() {
 				}
 			})
 		}
-		j.nextScheduled = next
+		j.nextScheduled = append(j.nextScheduled, next)
 		s.jobs[id] = j
 	}
 	select {

@@ -492,3 +492,42 @@ func TestWithEventListeners(t *testing.T) {
 		})
 	}
 }
+
+func TestJob_NextRun(t *testing.T) {
+	testTime := time.Now()
+
+	s := newTestScheduler(t)
+
+	// run a job every 10 milliseconds that starts 10 milliseconds after the current time
+	j, err := s.NewJob(
+		DurationJob(
+			10*time.Millisecond,
+		),
+		NewTask(
+			func() {},
+		),
+		WithStartAt(WithStartDateTime(testTime.Add(10*time.Millisecond))),
+		WithSingletonMode(LimitModeReschedule),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	nextRun, err := j.NextRun()
+	require.NoError(t, err)
+
+	// `NextRun` should report `testTime.Add(10*time.Millisecond)`
+	assert.Equal(t, testTime.Add(10*time.Millisecond), nextRun)
+
+	// sleep for 11ms to wait for the next job
+	time.Sleep(11 * time.Millisecond)
+
+	nextRun, err = j.NextRun()
+	assert.NoError(t, err)
+
+	// `NextRun` should report a time 20 milliseconds after `testTime`, but instead reports a value that is `30ms` after
+	assert.Equal(t, testTime.Add(20*time.Millisecond), nextRun)
+	assert.Equal(t, 20*time.Millisecond, nextRun.Sub(testTime))
+
+	err = s.Shutdown()
+	require.NoError(t, err)
+}
