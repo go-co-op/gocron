@@ -298,6 +298,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		// so we don't need to reschedule it.
 		return
 	}
+	var scheduleFrom time.Time
 	if len(j.nextScheduled) > 0 {
 		// always grab the last element in the slice as that is the furthest
 		// out in the future and the time from which we want to calculate
@@ -305,10 +306,10 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		slices.SortStableFunc(j.nextScheduled, func(a, b time.Time) int {
 			return a.Compare(b)
 		})
-		j.lastScheduledRun = j.nextScheduled[len(j.nextScheduled)-1]
+		scheduleFrom = j.nextScheduled[len(j.nextScheduled)-1]
 	}
 
-	next := j.next(j.lastScheduledRun)
+	next := j.next(scheduleFrom)
 	if next.IsZero() {
 		// the job's next function will return zero for OneTime jobs.
 		// since they are one time only, they do not need rescheduling.

@@ -494,37 +494,57 @@ func TestWithEventListeners(t *testing.T) {
 }
 
 func TestJob_NextRun(t *testing.T) {
-	testTime := time.Now()
-
-	s := newTestScheduler(t)
-
-	// run a job every 10 milliseconds that starts 10 milliseconds after the current time
-	j, err := s.NewJob(
-		DurationJob(
-			100*time.Millisecond,
-		),
-		NewTask(
+	tests := []struct {
+		name string
+		f    func()
+	}{
+		{
+			"simple",
 			func() {},
-		),
-		WithStartAt(WithStartDateTime(testTime.Add(100*time.Millisecond))),
-		WithSingletonMode(LimitModeReschedule),
-	)
-	require.NoError(t, err)
+		},
+		{
+			"sleep 3 seconds",
+			func() {
+				time.Sleep(300 * time.Millisecond)
+			},
+		},
+	}
 
-	s.Start()
-	nextRun, err := j.NextRun()
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testTime := time.Now()
 
-	assert.Equal(t, testTime.Add(100*time.Millisecond), nextRun)
+			s := newTestScheduler(t)
 
-	time.Sleep(150 * time.Millisecond)
+			// run a job every 10 milliseconds that starts 10 milliseconds after the current time
+			j, err := s.NewJob(
+				DurationJob(
+					100*time.Millisecond,
+				),
+				NewTask(
+					func() {},
+				),
+				WithStartAt(WithStartDateTime(testTime.Add(100*time.Millisecond))),
+				WithSingletonMode(LimitModeReschedule),
+			)
+			require.NoError(t, err)
 
-	nextRun, err = j.NextRun()
-	assert.NoError(t, err)
+			s.Start()
+			nextRun, err := j.NextRun()
+			require.NoError(t, err)
 
-	assert.Equal(t, testTime.Add(200*time.Millisecond), nextRun)
-	assert.Equal(t, 200*time.Millisecond, nextRun.Sub(testTime))
+			assert.Equal(t, testTime.Add(100*time.Millisecond), nextRun)
 
-	err = s.Shutdown()
-	require.NoError(t, err)
+			time.Sleep(150 * time.Millisecond)
+
+			nextRun, err = j.NextRun()
+			assert.NoError(t, err)
+
+			assert.Equal(t, testTime.Add(200*time.Millisecond), nextRun)
+			assert.Equal(t, 200*time.Millisecond, nextRun.Sub(testTime))
+
+			err = s.Shutdown()
+			require.NoError(t, err)
+		})
+	}
 }

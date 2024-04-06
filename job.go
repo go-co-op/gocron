@@ -24,7 +24,6 @@ type internalJob struct {
 	name   string
 	tags   []string
 	jobSchedule
-	lastScheduledRun time.Time
 
 	// as some jobs may queue up, it's possible to
 	// have multiple nextScheduled times
