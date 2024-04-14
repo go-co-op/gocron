@@ -610,6 +610,20 @@ func WithTags(tags ...string) JobOption {
 	}
 }
 
+// WithIdentifier sets the identifier for the job. The identifier
+// is used to uniquely identify the job and is used for logging
+// and metrics.
+func WithIdentifier(id uuid.UUID) JobOption {
+	return func(j *internalJob) error {
+		if id == uuid.Nil {
+			return ErrWithIdentifierNil
+		}
+
+		j.id = id
+		return nil
+	}
+}
+
 // -----------------------------------------------
 // -----------------------------------------------
 // ------------- Job Event Listeners -------------

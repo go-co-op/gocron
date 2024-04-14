@@ -694,6 +694,27 @@ func ExampleWithGlobalJobOptions() {
 	// [tag4 tag5 tag6]
 }
 
+func ExampleWithIdentifier() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		WithIdentifier(uuid.MustParse("87b95dfc-3e71-11ef-9454-0242ac120002")),
+	)
+	fmt.Println(j.ID())
+	// Output:
+	// 87b95dfc-3e71-11ef-9454-0242ac120002
+}
+
 func ExampleWithLimitConcurrentJobs() {
 	_, _ = NewScheduler(
 		WithLimitConcurrentJobs(

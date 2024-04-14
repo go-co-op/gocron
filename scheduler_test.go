@@ -774,6 +774,14 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			[]JobOption{WithDistributedJobLocker(nil)},
 			ErrWithDistributedJobLockerNil,
 		},
+		{
+			"WithIdentifier is nil",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithIdentifier(uuid.Nil)},
+			ErrWithIdentifierNil,
+		},
 	}
 
 	for _, tt := range tests {
