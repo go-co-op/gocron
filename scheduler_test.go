@@ -728,6 +728,14 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			nil,
 			ErrOneTimeJobStartDateTimePast,
 		},
+		{
+			"WithDistributedJobLocker is nil",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithDistributedJobLocker(nil)},
+			ErrWithDistributedJobLockerNil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1199,17 +1207,19 @@ func TestScheduler_WithDistributed(t *testing.T) {
 
 	goleak.VerifyNone(t)
 	tests := []struct {
-		name       string
-		count      int
-		opt        SchedulerOption
-		assertions func(*testing.T)
+		name          string
+		count         int
+		schedulerOpts []SchedulerOption
+		jobOpts       []JobOption
+		assertions    func(*testing.T)
 	}{
 		{
 			"3 schedulers with elector",
 			3,
-			WithDistributedElector(&testElector{
-				notLeader: notLeader,
-			}),
+			[]SchedulerOption{
+				WithDistributedElector(&testElector{notLeader: notLeader}),
+			},
+			nil,
 			func(t *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLeaderCount int
@@ -1229,9 +1239,32 @@ func TestScheduler_WithDistributed(t *testing.T) {
 		{
 			"3 schedulers with locker",
 			3,
-			WithDistributedLocker(&testLocker{
-				notLocked: notLocked,
-			}),
+			[]SchedulerOption{
+				WithDistributedLocker(&testLocker{notLocked: notLocked}),
+			},
+			nil,
+			func(t *testing.T) {
+				timeout := time.Now().Add(1 * time.Second)
+				var notLockedCount int
+				for {
+					if time.Now().After(timeout) {
+						break
+					}
+					select {
+					case <-notLocked:
+						notLockedCount++
+					default:
+					}
+				}
+			},
+		},
+		{
+			"3 schedulers and job with Distributed locker",
+			3,
+			nil,
+			[]JobOption{
+				WithDistributedJobLocker(&testLocker{notLocked: notLocked}),
+			},
 			func(t *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLockedCount int
@@ -1257,12 +1290,17 @@ func TestScheduler_WithDistributed(t *testing.T) {
 
 			for i := tt.count; i > 0; i-- {
 				s := newTestScheduler(t,
-					tt.opt,
+					tt.schedulerOpts...,
 				)
+				jobOpts := []JobOption{
+					WithStartAt(
+						WithStartImmediately(),
+					),
+				}
+				jobOpts = append(jobOpts, tt.jobOpts...)
 
 				go func() {
 					s.Start()
-
 					_, err := s.NewJob(
 						DurationJob(
 							time.Second,
@@ -1273,9 +1311,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 								jobsRan <- struct{}{}
 							},
 						),
-						WithStartAt(
-							WithStartImmediately(),
-						),
+						jobOpts...,
 					)
 					require.NoError(t, err)
 

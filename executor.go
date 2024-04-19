@@ -335,6 +335,13 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.sendOutForRescheduling(&jIn)
 			return
 		}
+	} else if j.locker != nil {
+		lock, err := j.locker.Lock(j.ctx, j.name)
+		if err != nil {
+			e.sendOutForRescheduling(&jIn)
+			return
+		}
+		defer func() { _ = lock.Unlock(j.ctx) }()
 	} else if e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {

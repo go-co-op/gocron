@@ -36,6 +36,7 @@ var (
 	ErrWithClockNil                  = fmt.Errorf("gocron: WithClock: clock must not be nil")
 	ErrWithDistributedElectorNil     = fmt.Errorf("gocron: WithDistributedElector: elector must not be nil")
 	ErrWithDistributedLockerNil      = fmt.Errorf("gocron: WithDistributedLocker: locker must not be nil")
+	ErrWithDistributedJobLockerNil   = fmt.Errorf("gocron: WithDistributedJobLocker: locker must not be nil")
 	ErrWithLimitConcurrentJobsZero   = fmt.Errorf("gocron: WithLimitConcurrentJobs: limit must be greater than 0")
 	ErrWithLocationNil               = fmt.Errorf("gocron: WithLocation: location must not be nil")
 	ErrWithLoggerNil                 = fmt.Errorf("gocron: WithLogger: logger must not be nil")

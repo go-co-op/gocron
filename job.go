@@ -42,6 +42,8 @@ type internalJob struct {
 	afterJobRuns          func(jobID uuid.UUID, jobName string)
 	beforeJobRuns         func(jobID uuid.UUID, jobName string)
 	afterJobRunsWithError func(jobID uuid.UUID, jobName string, err error)
+
+	locker Locker
 }
 
 // stop is used to stop the job's timer and cancel the context
@@ -484,6 +486,19 @@ func OneTimeJob(startAt OneTimeJobStartAtOption) JobDefinition {
 
 // JobOption defines the constructor for job options.
 type JobOption func(*internalJob) error
+
+// WithDistributedJobLocker sets the locker to be used by multiple
+// Scheduler instances to ensure that only one instance of each
+// job is run.
+func WithDistributedJobLocker(locker Locker) JobOption {
+	return func(j *internalJob) error {
+		if locker == nil {
+			return ErrWithDistributedJobLockerNil
+		}
+		j.locker = locker
+		return nil
+	}
+}
 
 // WithEventListeners sets the event listeners that should be
 // run for the job.
