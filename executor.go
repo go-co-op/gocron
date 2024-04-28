@@ -333,12 +333,14 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	if e.elector != nil {
 		if err := e.elector.IsLeader(j.ctx); err != nil {
 			e.sendOutForRescheduling(&jIn)
+			e.incrementJobCounter(j, Skip)
 			return
 		}
 	} else if j.locker != nil {
 		lock, err := j.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			e.sendOutForRescheduling(&jIn)
+			e.incrementJobCounter(j, Skip)
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
@@ -346,6 +348,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			e.sendOutForRescheduling(&jIn)
+			e.incrementJobCounter(j, Skip)
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
@@ -365,14 +368,16 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 	if err != nil {
 		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
-		if e.monitor != nil {
-			e.monitor.IncrementJob(j.id, j.name, j.tags, Fail)
-		}
+		e.incrementJobCounter(j, Fail)
 	} else {
 		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
-		if e.monitor != nil {
-			e.monitor.IncrementJob(j.id, j.name, j.tags, Success)
-		}
+		e.incrementJobCounter(j, Success)
+	}
+}
+
+func (e *executor) incrementJobCounter(j internalJob, status JobStatus) {
+	if e.monitor != nil {
+		e.monitor.IncrementJob(j.id, j.name, j.tags, status)
 	}
 }
 

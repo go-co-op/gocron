@@ -13,6 +13,7 @@ type JobStatus string
 const (
 	Fail    JobStatus = "fail"
 	Success JobStatus = "success"
+	Skip    JobStatus = "skip"
 )
 
 // Monitor represents the interface to collect jobs metrics.
