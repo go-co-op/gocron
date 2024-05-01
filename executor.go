@@ -303,6 +303,7 @@ func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroup
 			j := requestJobCtx(ctx, jIn.id, e.jobOutRequest)
 			cancel()
 			if j != nil {
+				jIn.shouldSendOut = false
 				e.runJob(*j, jIn)
 			}
 
