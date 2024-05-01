@@ -131,8 +131,8 @@ func (e *executor) start() {
 						// to work through the channel backlog. A hard limit of 1000 is in place
 						// at which point this call would block.
 						// TODO when metrics are added, this should increment a wait metric
-						e.limitMode.in <- jIn
 						e.sendOutForRescheduling(&jIn)
+						e.limitMode.in <- jIn
 					}
 				} else {
 					// no limit mode, so we're either running a regular job or
