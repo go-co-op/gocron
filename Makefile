@@ -1,4 +1,4 @@
-.PHONY: fmt lint test mocks test_coverage
+.PHONY: fmt lint test mocks test_coverage test_actions
 
 GO_PKGS   := $(shell go list -f {{.Dir}} ./...)
 
@@ -14,6 +14,9 @@ test:
 
 test_coverage:
 	@go test -race -v $(GO_FLAGS) -count=1 -coverprofile=coverage.out -covermode=atomic $(GO_PKGS)
+
+test_actions:
+	@TEST_ENV=github_actions go test -race -v $(GO_FLAGS) -count=1 $(GO_PKGS)
 
 mocks:
 	@go generate ./...
