@@ -291,7 +291,8 @@ type Weekdays func() []time.Weekday
 // NewWeekdays provide the days of the week the job should run.
 func NewWeekdays(weekday time.Weekday, weekdays ...time.Weekday) Weekdays {
 	return func() []time.Weekday {
-		return append(weekdays, weekday)
+		weekdays = append(weekdays, weekday)
+		return weekdays
 	}
 }
 
