@@ -16,7 +16,7 @@ jobs:
       - go/save-cache
       - run:
           name: Run tests
-          command: make test
+          command: make test_ci
 
 workflows:
   test:

@@ -14,10 +14,9 @@ import (
 	"go.uber.org/goleak"
 )
 
-// github actions produces a lot of false positive goroutine leaks for reasons
+// ci/cd produces a lot of false positive goroutine leaks for reasons
 // I have not been able to pin down. All tests pass locally without leaks.
-// Tests run in github actions ci will use the ENV 'github_actions' to skip
-// running leak detection.
+// Tests run in ci will use the TEST_ENV 'ci' to skip running leak detection.
 const testEnvLocal = "local"
 
 var testEnv = testEnvLocal

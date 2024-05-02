@@ -29,4 +29,4 @@ jobs:
         with:
           version: v1.55.2
       - name: test
-        run: make test_actions
+        run: make test_ci
