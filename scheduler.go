@@ -295,6 +295,11 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 // Jobs coming back from the executor to the scheduler that
 // need to evaluated for rescheduling.
 func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
+	select {
+	case <-s.shutdownCtx.Done():
+		return
+	default:
+	}
 	j, ok := s.jobs[id]
 	if !ok {
 		// the job was removed while it was running, and

@@ -1202,10 +1202,10 @@ func (t testLock) Unlock(_ context.Context) error {
 }
 
 func TestScheduler_WithDistributed(t *testing.T) {
+	defer goleak.VerifyNone(t)
 	notLocked := make(chan struct{}, 10)
 	notLeader := make(chan struct{}, 10)
 
-	defer goleak.VerifyNone(t)
 	tests := []struct {
 		name          string
 		count         int
@@ -1605,6 +1605,8 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 }
 
 func TestScheduler_ManyJobs(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	s := newTestScheduler(t)
 	jobsRan := make(chan struct{}, 20000)
 
@@ -1638,6 +1640,8 @@ func TestScheduler_ManyJobs(t *testing.T) {
 }
 
 func TestScheduler_RunJobNow(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	chDuration := make(chan struct{}, 10)
 	chMonthly := make(chan struct{}, 10)
 	chDurationImmediate := make(chan struct{}, 10)
@@ -1847,6 +1851,8 @@ func TestScheduler_LastRunSingleton(t *testing.T) {
 }
 
 func TestScheduler_OneTimeJob(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	tests := []struct {
 		name    string
 		startAt func() OneTimeJobStartAtOption
@@ -1974,6 +1980,8 @@ func TestScheduler_WithLimitedRuns(t *testing.T) {
 }
 
 func TestScheduler_Jobs(t *testing.T) {
+	defer goleak.VerifyNone(t)
+
 	tests := []struct {
 		name string
 	}{
