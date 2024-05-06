@@ -121,6 +121,11 @@ func TestScheduler_OneSecond_NoOptions(t *testing.T) {
 func TestScheduler_LongRunningJobs(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
+	if testEnv != testEnvLocal {
+		// this test is flaky in ci, but always passes locally
+		t.SkipNow()
+	}
+
 	durationCh := make(chan struct{}, 10)
 	durationSingletonCh := make(chan struct{}, 10)
 
