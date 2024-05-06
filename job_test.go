@@ -516,7 +516,6 @@ func TestJob_NextRun(t *testing.T) {
 
 			s := newTestScheduler(t)
 
-			// run a job every 10 milliseconds that starts 10 milliseconds after the current time
 			j, err := s.NewJob(
 				DurationJob(
 					100*time.Millisecond,
@@ -545,6 +544,81 @@ func TestJob_NextRun(t *testing.T) {
 
 			err = s.Shutdown()
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestJob_NextRuns(t *testing.T) {
+	tests := []struct {
+		name      string
+		jd        JobDefinition
+		assertion func(t *testing.T, iteration int, previousRun, nextRun time.Time)
+	}{
+		{
+			"simple - milliseconds",
+			DurationJob(
+				100 * time.Millisecond,
+			),
+			func(t *testing.T, _ int, previousRun, nextRun time.Time) {
+				assert.Equal(t, previousRun.UnixMilli()+100, nextRun.UnixMilli())
+			},
+		},
+		{
+			"weekly",
+			WeeklyJob(
+				2,
+				NewWeekdays(time.Tuesday),
+				NewAtTimes(
+					NewAtTime(0, 0, 0),
+				),
+			),
+			func(t *testing.T, iteration int, previousRun, nextRun time.Time) {
+				diff := time.Hour * 14 * 24
+				if iteration == 1 {
+					// because the job is run immediately, the first run is on
+					// Saturday 1/1/2000. The following run is then on Tuesday 1/11/2000
+					diff = time.Hour * 10 * 24
+				}
+				assert.Equal(t, previousRun.Add(diff).Day(), nextRun.Day())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
+			fakeClock := clockwork.NewFakeClockAt(testTime)
+
+			s := newTestScheduler(t,
+				WithClock(fakeClock),
+			)
+
+			j, err := s.NewJob(
+				tt.jd,
+				NewTask(
+					func() {},
+				),
+				WithStartAt(WithStartImmediately()),
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			time.Sleep(10 * time.Millisecond)
+
+			nextRuns, err := j.NextRuns(5)
+			require.NoError(t, err)
+
+			assert.Len(t, nextRuns, 5)
+
+			for i := range nextRuns {
+				if i == 0 {
+					// skipping because there is no previous run
+					continue
+				}
+				tt.assertion(t, i, nextRuns[i-1], nextRuns[i])
+			}
+
+			assert.NoError(t, s.Shutdown())
 		})
 	}
 }

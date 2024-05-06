@@ -212,7 +212,25 @@ func ExampleJob_nextRun() {
 		),
 	)
 
-	fmt.Println(j.NextRun())
+	nextRun, _ := j.NextRun()
+	fmt.Println(nextRun)
+}
+
+func ExampleJob_nextRuns() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+	)
+
+	nextRuns, _ := j.NextRuns(5)
+	fmt.Println(nextRuns)
 }
 
 func ExampleJob_runNow() {

@@ -868,6 +868,8 @@ type Job interface {
 	Name() string
 	// NextRun returns the time of the job's next scheduled run.
 	NextRun() (time.Time, error)
+	// NextRuns returns the requested number of calculated next run values.
+	NextRuns(int) ([]time.Time, error)
 	// RunNow runs the job once, now. This does not alter
 	// the existing run schedule, and will respect all job
 	// and scheduler limits. This means that running a job now may
@@ -919,6 +921,33 @@ func (j job) NextRun() (time.Time, error) {
 	// the first element is the next scheduled run with subsequent
 	// runs following after in the slice
 	return ij.nextScheduled[0], nil
+}
+
+func (j job) NextRuns(count int) ([]time.Time, error) {
+	ij := requestJob(j.id, j.jobOutRequest)
+	if ij == nil || ij.id == uuid.Nil {
+		return nil, ErrJobNotFound
+	}
+
+	lengthNextScheduled := len(ij.nextScheduled)
+	if lengthNextScheduled == 0 {
+		return nil, nil
+	} else if count <= lengthNextScheduled {
+		return ij.nextScheduled[:count], nil
+	}
+
+	out := make([]time.Time, count)
+	for i := 0; i < count; i++ {
+		if i < lengthNextScheduled {
+			out[i] = ij.nextScheduled[i]
+			continue
+		}
+
+		from := out[i-1]
+		out[i] = ij.next(from)
+	}
+
+	return out, nil
 }
 
 func (j job) Tags() []string {
