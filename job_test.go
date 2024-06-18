@@ -438,11 +438,19 @@ func TestWithEventListeners(t *testing.T) {
 			nil,
 		},
 		{
+			"afterLockError",
+			[]EventListener{
+				AfterLockError(func(_ uuid.UUID, _ string, err error) {}),
+			},
+			nil,
+		},
+		{
 			"multiple event listeners",
 			[]EventListener{
 				AfterJobRuns(func(_ uuid.UUID, _ string) {}),
 				AfterJobRunsWithError(func(_ uuid.UUID, _ string, _ error) {}),
 				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
+				AfterLockError(func(_ uuid.UUID, _ string, _ error) {}),
 			},
 			nil,
 		},
@@ -486,6 +494,9 @@ func TestWithEventListeners(t *testing.T) {
 				count++
 			}
 			if ij.beforeJobRuns != nil {
+				count++
+			}
+			if ij.afterLockError != nil {
 				count++
 			}
 			assert.Equal(t, len(tt.eventListeners), count)

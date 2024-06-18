@@ -42,6 +42,7 @@ type internalJob struct {
 	afterJobRuns          func(jobID uuid.UUID, jobName string)
 	beforeJobRuns         func(jobID uuid.UUID, jobName string)
 	afterJobRunsWithError func(jobID uuid.UUID, jobName string, err error)
+	afterLockError        func(jobID uuid.UUID, jobName string, err error)
 
 	locker Locker
 }
@@ -635,6 +636,18 @@ func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) Even
 			return ErrEventListenerFuncNil
 		}
 		j.beforeJobRuns = eventListenerFunc
+		return nil
+	}
+}
+
+// AfterLockError is used to when the distributed locker returns an error and
+// then run the provided function.
+func AfterLockError(eventListenerFunc func(jobID uuid.UUID, jobName string, err error)) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.afterLockError = eventListenerFunc
 		return nil
 	}
 }
