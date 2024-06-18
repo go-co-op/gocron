@@ -22,6 +22,7 @@ type executor struct {
 	done                   chan error
 	singletonRunners       *sync.Map // map[uuid.UUID]singletonRunner
 	limitMode              *limitModeConfig
+	panicHandler           PanicHandlerFunc
 	elector                Elector
 	locker                 Locker
 	monitor                Monitor
@@ -50,6 +51,8 @@ type limitModeConfig struct {
 	singletonJobs   map[uuid.UUID]struct{}
 	singletonJobsMu sync.Mutex
 }
+
+type PanicHandlerFunc = func(jobID uuid.UUID, recoverData any)
 
 func (e *executor) start() {
 	e.logger.Debug("gocron: executor started")
@@ -366,17 +369,33 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 
 	startTime := time.Now()
-	err := callJobFuncWithParams(j.function, j.parameters...)
+
+	err := e.callJobWithRecover(j.id, j.function, j.parameters...)
 	if e.monitor != nil {
 		e.monitor.RecordJobTiming(startTime, time.Now(), j.id, j.name, j.tags)
 	}
 	if err != nil {
-		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
+		_ = e.callJobWithRecover(j.id, j.afterJobRunsWithError, j.id, j.name, err)
 		e.incrementJobCounter(j, Fail)
 	} else {
-		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
+		_ = e.callJobWithRecover(j.id, j.afterJobRuns, j.id, j.name)
 		e.incrementJobCounter(j, Success)
 	}
+}
+
+func (e *executor) callJobWithRecover(jobID uuid.UUID, jobFunc any, params ...any) (err error) {
+	if e.panicHandler != nil {
+		defer func() {
+			if recoverData := recover(); recoverData != nil {
+				e.panicHandler(jobID, recoverData)
+
+				// if the panic handler is set, we want to return a specific error
+				err = ErrPanicRecovered
+			}
+		}()
+	}
+
+	return callJobFuncWithParams(jobFunc, params...)
 }
 
 func (e *executor) incrementJobCounter(j internalJob, status JobStatus) {

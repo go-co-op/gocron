@@ -742,6 +742,16 @@ func WithDistributedLocker(locker Locker) SchedulerOption {
 	}
 }
 
+func WithPanicHandler(handler PanicHandlerFunc) SchedulerOption {
+	return func(s *scheduler) error {
+		if handler == nil {
+			return ErrWithDistributedLockerNil
+		}
+		s.exec.panicHandler = handler
+		return nil
+	}
+}
+
 // WithGlobalJobOptions sets JobOption's that will be applied to
 // all jobs added to the scheduler. JobOption's set on the job
 // itself will override if the same JobOption is set globally.
