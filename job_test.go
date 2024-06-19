@@ -651,10 +651,8 @@ func TestJob_PanicOccurred(t *testing.T) {
 	require.NoError(t, err)
 
 	s.Start()
-	select {
-	case got := <-gotCh:
-		require.EqualError(t, got.(error), "runtime error: integer divide by zero")
-	}
+	got := <-gotCh
+	require.EqualError(t, got.(error), "runtime error: integer divide by zero")
 
 	require.NoError(t, s.Shutdown())
 	close(gotCh)
