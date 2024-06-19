@@ -52,8 +52,7 @@ func newTestScheduler(t *testing.T, options ...SchedulerOption) Scheduler {
 
 var _ Locker = new(errorLocker)
 
-type errorLocker struct {
-}
+type errorLocker struct{}
 
 func (e errorLocker) Lock(_ context.Context, _ string) (Lock, error) {
 	return nil, errors.New("locked")

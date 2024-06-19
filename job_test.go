@@ -440,7 +440,7 @@ func TestWithEventListeners(t *testing.T) {
 		{
 			"afterLockError",
 			[]EventListener{
-				AfterLockError(func(_ uuid.UUID, _ string, err error) {}),
+				AfterLockError(func(_ uuid.UUID, _ string, _ error) {}),
 			},
 			nil,
 		},
