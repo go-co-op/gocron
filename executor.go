@@ -366,7 +366,6 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 
 	startTime := time.Now()
-
 	err := e.callJobWithRecover(j)
 	if e.monitor != nil {
 		e.monitor.RecordJobTiming(startTime, time.Now(), j.id, j.name, j.tags)
