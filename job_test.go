@@ -417,6 +417,13 @@ func TestWithEventListeners(t *testing.T) {
 			nil,
 		},
 		{
+			"beforeJobRuns",
+			[]EventListener{
+				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
+			},
+			nil,
+		},
+		{
 			"afterJobRuns",
 			[]EventListener{
 				AfterJobRuns(func(_ uuid.UUID, _ string) {}),
@@ -431,9 +438,9 @@ func TestWithEventListeners(t *testing.T) {
 			nil,
 		},
 		{
-			"beforeJobRuns",
+			"afterJobRunsWithPanic",
 			[]EventListener{
-				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
+				AfterJobRunsWithPanic(func(_ uuid.UUID, _ string, _ any) {}),
 			},
 			nil,
 		},
@@ -479,13 +486,16 @@ func TestWithEventListeners(t *testing.T) {
 				return
 			}
 			var count int
+			if ij.beforeJobRuns != nil {
+				count++
+			}
 			if ij.afterJobRuns != nil {
 				count++
 			}
 			if ij.afterJobRunsWithError != nil {
 				count++
 			}
-			if ij.beforeJobRuns != nil {
+			if ij.afterJobRunsWithPanic != nil {
 				count++
 			}
 			assert.Equal(t, len(tt.eventListeners), count)

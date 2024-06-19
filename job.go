@@ -42,6 +42,7 @@ type internalJob struct {
 	afterJobRuns          func(jobID uuid.UUID, jobName string)
 	beforeJobRuns         func(jobID uuid.UUID, jobName string)
 	afterJobRunsWithError func(jobID uuid.UUID, jobName string, err error)
+	afterJobRunsWithPanic func(jobID uuid.UUID, jobName string, recoverData any)
 
 	locker Locker
 }
@@ -603,6 +604,18 @@ func WithTags(tags ...string) JobOption {
 // listeners that can be used to listen for job events.
 type EventListener func(*internalJob) error
 
+// BeforeJobRuns is used to listen for when a job is about to run and
+// then run the provided function.
+func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.beforeJobRuns = eventListenerFunc
+		return nil
+	}
+}
+
 // AfterJobRuns is used to listen for when a job has run
 // without an error, and then run the provided function.
 func AfterJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
@@ -627,14 +640,14 @@ func AfterJobRunsWithError(eventListenerFunc func(jobID uuid.UUID, jobName strin
 	}
 }
 
-// BeforeJobRuns is used to listen for when a job is about to run and
-// then run the provided function.
-func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
+// AfterJobRunsWithPanic is used to listen for when a job has run and
+// returned panicked recover data, and then run the provided function.
+func AfterJobRunsWithPanic(eventListenerFunc func(jobID uuid.UUID, jobName string, recoverData any)) EventListener {
 	return func(j *internalJob) error {
 		if eventListenerFunc == nil {
 			return ErrEventListenerFuncNil
 		}
-		j.beforeJobRuns = eventListenerFunc
+		j.afterJobRunsWithPanic = eventListenerFunc
 		return nil
 	}
 }
