@@ -634,7 +634,7 @@ func TestJob_NextRuns(t *testing.T) {
 }
 
 func TestJob_PanicOccurred(t *testing.T) {
-	var gotCh = make(chan any)
+	gotCh := make(chan any)
 	s := newTestScheduler(t)
 	_, err := s.NewJob(
 		DurationJob(10*time.Millisecond),

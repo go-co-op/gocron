@@ -51,7 +51,6 @@ func main() {
 					log.Println("run job")
 				}),
 			)
-
 			if err != nil {
 				log.Println(err)
 				return
