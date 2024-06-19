@@ -632,3 +632,27 @@ func TestJob_NextRuns(t *testing.T) {
 		})
 	}
 }
+
+func TestJob_PanicOccurred(t *testing.T) {
+	var got any
+	s := newTestScheduler(t)
+	_, err := s.NewJob(
+		DurationJob(10*time.Millisecond),
+		NewTask(func() {
+			a := 0
+			_ = 1 / a
+		}),
+		WithEventListeners(
+			AfterJobRunsWithPanic(func(_ uuid.UUID, _ string, recoverData any) {
+				got = recoverData
+			}),
+		),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	time.Sleep(15 * time.Millisecond)
+	require.EqualError(t, got.(error), "runtime error: integer divide by zero")
+
+	require.NoError(t, s.Shutdown())
+}
