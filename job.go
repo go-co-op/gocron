@@ -124,7 +124,7 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error 
 	)
 
 	if c.withSeconds {
-		p := cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
+		p := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 		cronSchedule, err = p.Parse(withLocation)
 	} else {
 		cronSchedule, err = cron.ParseStandard(withLocation)
