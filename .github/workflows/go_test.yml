@@ -6,7 +6,7 @@
      branches:
        - v2
 
- name: golangci-lint
+ name: lint and test
  jobs:
    golangci:
      strategy:

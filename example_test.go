@@ -1,6 +1,8 @@
 package gocron_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,6 +11,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 )
+
+var _ Locker = new(errorLocker)
+
+type errorLocker struct{}
+
+func (e errorLocker) Lock(_ context.Context, _ string) (Lock, error) {
+	return nil, errors.New("locked")
+}
 
 func ExampleAfterJobRuns() {
 	s, _ := NewScheduler()
@@ -46,6 +56,28 @@ func ExampleAfterJobRunsWithError() {
 			AfterJobRunsWithError(
 				func(jobID uuid.UUID, jobName string, err error) {
 					// do something when the job returns an error
+				},
+			),
+		),
+	)
+}
+
+func ExampleAfterLockError() {
+	s, _ := NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {},
+		),
+		WithDistributedJobLocker(&errorLocker{}),
+		WithEventListeners(
+			AfterLockError(
+				func(jobID uuid.UUID, jobName string, err error) {
+					// do something immediately before the job is run
 				},
 			),
 		),

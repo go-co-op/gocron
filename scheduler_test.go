@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -47,6 +48,14 @@ func newTestScheduler(t *testing.T, options ...SchedulerOption) Scheduler {
 	s, err := NewScheduler(out...)
 	require.NoError(t, err)
 	return s
+}
+
+var _ Locker = new(errorLocker)
+
+type errorLocker struct{}
+
+func (e errorLocker) Lock(_ context.Context, _ string) (Lock, error) {
+	return nil, errors.New("locked")
 }
 
 func TestScheduler_OneSecond_NoOptions(t *testing.T) {
@@ -1605,6 +1614,66 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 				WithStartAt(
 					WithStartImmediately(),
 				),
+				WithEventListeners(tt.el),
+				WithLimitedRuns(1),
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			if tt.expectRun {
+				select {
+				case err = <-listenerRunCh:
+					assert.ErrorIs(t, err, tt.expectErr)
+				case <-time.After(time.Second):
+					t.Fatal("timed out waiting for listener to run")
+				}
+			} else {
+				select {
+				case <-listenerRunCh:
+					t.Fatal("listener ran when it shouldn't have")
+				case <-time.After(time.Millisecond * 100):
+				}
+			}
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_WithLocker_WithEventListeners(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	listenerRunCh := make(chan error, 1)
+	tests := []struct {
+		name      string
+		locker    Locker
+		tsk       Task
+		el        EventListener
+		expectRun bool
+		expectErr error
+	}{
+		{
+			"AfterLockError",
+			errorLocker{},
+			NewTask(func() {}),
+			AfterLockError(func(_ uuid.UUID, _ string, err error) {
+				listenerRunCh <- nil
+			}),
+			true,
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			_, err := s.NewJob(
+				DurationJob(time.Minute*10),
+				tt.tsk,
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithDistributedJobLocker(tt.locker),
 				WithEventListeners(tt.el),
 				WithLimitedRuns(1),
 			)
