@@ -602,7 +602,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		}
 	}
 
-	if err := definition.setup(&j, s.location); err != nil {
+	if err := definition.setup(&j, s.location, s.clock.Now()); err != nil {
 		return nil, err
 	}
 

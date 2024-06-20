@@ -98,7 +98,7 @@ type limitRunsTo struct {
 // JobDefinition defines the interface that must be
 // implemented to create a job from the definition.
 type JobDefinition interface {
-	setup(*internalJob, *time.Location) error
+	setup(j *internalJob, l *time.Location, now time.Time) error
 }
 
 var _ JobDefinition = (*cronJobDefinition)(nil)
@@ -108,7 +108,7 @@ type cronJobDefinition struct {
 	withSeconds bool
 }
 
-func (c cronJobDefinition) setup(j *internalJob, location *time.Location) error {
+func (c cronJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
@@ -156,7 +156,7 @@ type durationJobDefinition struct {
 	duration time.Duration
 }
 
-func (d durationJobDefinition) setup(j *internalJob, _ *time.Location) error {
+func (d durationJobDefinition) setup(j *internalJob, _ *time.Location, _ time.Time) error {
 	if d.duration == 0 {
 		return ErrDurationJobIntervalZero
 	}
@@ -178,7 +178,7 @@ type durationRandomJobDefinition struct {
 	min, max time.Duration
 }
 
-func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location) error {
+func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location, _ time.Time) error {
 	if d.min >= d.max {
 		return ErrDurationRandomJobMinMax
 	}
@@ -228,7 +228,7 @@ type dailyJobDefinition struct {
 	atTimes  AtTimes
 }
 
-func (d dailyJobDefinition) setup(j *internalJob, location *time.Location) error {
+func (d dailyJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
 	atTimesDate, err := convertAtTimesToDateTime(d.atTimes, location)
 	switch {
 	case errors.Is(err, errAtTimesNil):
@@ -257,7 +257,7 @@ type weeklyJobDefinition struct {
 	atTimes       AtTimes
 }
 
-func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location) error {
+func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
 	var ws weeklyJob
 	ws.interval = w.interval
 
@@ -322,7 +322,7 @@ type monthlyJobDefinition struct {
 	atTimes        AtTimes
 }
 
-func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location) error {
+func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
 	var ms monthlyJob
 	ms.interval = m.interval
 
@@ -445,9 +445,17 @@ type oneTimeJobDefinition struct {
 	startAt OneTimeJobStartAtOption
 }
 
-func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location) error {
+func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.Time) error {
 	j.jobSchedule = oneTimeJob{}
-	return o.startAt(j)
+	if err := o.startAt(j); err != nil {
+		return err
+	}
+	// in case we are not in the `startImmediately` case, our start-date must be in
+	// the future according to the scheduler clock
+	if !j.startImmediately && (j.startTime.IsZero() || j.startTime.Before(now)) {
+		return ErrOneTimeJobStartDateTimePast
+	}
+	return nil
 }
 
 // OneTimeJobStartAtOption defines when the one time job is run
@@ -462,12 +470,9 @@ func OneTimeJobStartImmediately() OneTimeJobStartAtOption {
 }
 
 // OneTimeJobStartDateTime sets the date & time at which the job should run.
-// This datetime must be in the future.
+// This datetime must be in the future (according to the scheduler clock).
 func OneTimeJobStartDateTime(start time.Time) OneTimeJobStartAtOption {
 	return func(j *internalJob) error {
-		if start.IsZero() || start.Before(time.Now()) {
-			return ErrOneTimeJobStartDateTimePast
-		}
 		j.startTime = start
 		return nil
 	}
