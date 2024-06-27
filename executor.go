@@ -479,4 +479,8 @@ func (e *executor) stop(standardJobsWg, singletonJobsWg, limitModeJobsWg *waitGr
 		e.logger.Debug("gocron: executor stopped")
 	}
 	waiterCancel()
+
+	if e.limitMode != nil {
+		e.limitMode.started = false
+	}
 }
