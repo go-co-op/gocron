@@ -535,6 +535,47 @@ func (s *scheduler) NewJob(jobDefinition JobDefinition, task Task, options ...Jo
 	return s.addOrUpdateJob(uuid.Nil, jobDefinition, task, options)
 }
 
+func (s *scheduler) verifyParameterType(taskFunc reflect.Value, tsk task) error {
+	isVariadic := taskFunc.Type().IsVariadic()
+
+	if isVariadic {
+		parameterType := taskFunc.Type().In(0).Elem().Kind()
+		if parameterType == reflect.Interface || parameterType == reflect.Pointer {
+			parameterType = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(0))).Kind()
+		}
+
+		for i := range tsk.parameters {
+			argumentType := reflect.TypeOf(tsk.parameters[i]).Kind()
+			if argumentType == reflect.Interface || argumentType == reflect.Pointer {
+				argumentType = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
+			}
+			if argumentType != parameterType {
+				return ErrNewJobWrongTypeOfParameters
+			}
+		}
+	} else {
+		expectedParameterLength := taskFunc.Type().NumIn()
+		if len(tsk.parameters) != expectedParameterLength {
+			return ErrNewJobWrongNumberOfParameters
+		}
+
+		for i := 0; i < expectedParameterLength; i++ {
+			t1 := reflect.TypeOf(tsk.parameters[i]).Kind()
+			if t1 == reflect.Interface || t1 == reflect.Pointer {
+				t1 = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
+			}
+			t2 := reflect.New(taskFunc.Type().In(i)).Elem().Kind()
+			if t2 == reflect.Interface || t2 == reflect.Pointer {
+				t2 = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(i))).Kind()
+			}
+			if t1 != t2 {
+				return ErrNewJobWrongTypeOfParameters
+			}
+		}
+	}
+	return nil
+}
+
 func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskWrapper Task, options []JobOption) (Job, error) {
 	j := internalJob{}
 	if id == uuid.Nil {
@@ -569,23 +610,8 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		return nil, ErrNewJobTaskNotFunc
 	}
 
-	expectedParameterLength := taskFunc.Type().NumIn()
-	if len(tsk.parameters) != expectedParameterLength {
-		return nil, ErrNewJobWrongNumberOfParameters
-	}
-
-	for i := 0; i < expectedParameterLength; i++ {
-		t1 := reflect.TypeOf(tsk.parameters[i]).Kind()
-		if t1 == reflect.Interface || t1 == reflect.Pointer {
-			t1 = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
-		}
-		t2 := reflect.New(taskFunc.Type().In(i)).Elem().Kind()
-		if t2 == reflect.Interface || t2 == reflect.Pointer {
-			t2 = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(i))).Kind()
-		}
-		if t1 != t2 {
-			return nil, ErrNewJobWrongTypeOfParameters
-		}
+	if err := s.verifyParameterType(taskFunc, tsk); err != nil {
+		return nil, err
 	}
 
 	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()

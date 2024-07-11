@@ -899,6 +899,26 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			NewTask(&testFuncWithParams, "one", "two"),
 			nil,
 		},
+		{
+			"parameter type does not match - different argument types against variadic parameters",
+			NewTask(func(args ...string) {}, "one", 2),
+			ErrNewJobWrongTypeOfParameters,
+		},
+		{
+			"all good string - variadic",
+			NewTask(func(args ...string) {}, "one", "two"),
+			nil,
+		},
+		{
+			"all good struct - variadic",
+			NewTask(func(args ...interface{}) {}, struct{}{}),
+			nil,
+		},
+		{
+			"all good no arguments passed in - variadic",
+			NewTask(func(args ...interface{}) {}),
+			nil,
+		},
 	}
 
 	for _, tt := range tests {
