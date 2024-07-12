@@ -910,6 +910,11 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			nil,
 		},
 		{
+			"all good mixed variadic",
+			NewTask(func(arg int, args ...string) {}, 1, "one", "two"),
+			nil,
+		},
+		{
 			"all good struct - variadic",
 			NewTask(func(args ...interface{}) {}, struct{}{}),
 			nil,
