@@ -535,12 +535,25 @@ func (s *scheduler) NewJob(jobDefinition JobDefinition, task Task, options ...Jo
 	return s.addOrUpdateJob(uuid.Nil, jobDefinition, task, options)
 }
 
+func (s *scheduler) verifyInterfaceVariadic(taskFunc reflect.Value, tsk task, variadicStart int) error {
+	ifaceType := taskFunc.Type().In(variadicStart).Elem()
+	for i := variadicStart; i < len(tsk.parameters); i++ {
+		if !reflect.TypeOf(tsk.parameters[i]).Implements(ifaceType) {
+			return ErrNewJobWrongTypeOfParameters
+		}
+	}
+	return nil
+}
+
 func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicStart int) error {
 	if err := s.verifyNonVariadic(taskFunc, tsk, variadicStart); err != nil {
 		return err
 	}
 	parameterType := taskFunc.Type().In(variadicStart).Elem().Kind()
-	if parameterType == reflect.Interface || parameterType == reflect.Pointer {
+	if parameterType == reflect.Interface {
+		return s.verifyInterfaceVariadic(taskFunc, tsk, variadicStart)
+	}
+	if parameterType == reflect.Pointer {
 		parameterType = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(variadicStart))).Kind()
 	}
 

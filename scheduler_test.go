@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -923,6 +924,16 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			"all good no arguments passed in - variadic",
 			NewTask(func(args ...interface{}) {}),
 			nil,
+		},
+		{
+			"all good no arguments passed in - interface variadic",
+			NewTask(func(args ...interface{}) {}, 1, "2", 3.0),
+			nil,
+		},
+		{
+			"parameter type does not match - different argument types against interface variadic parameters",
+			NewTask(func(args ...io.Reader) {}, os.Stdout, any(3.0)),
+			ErrNewJobWrongTypeOfParameters,
 		},
 	}
 
