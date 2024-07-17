@@ -926,7 +926,7 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			nil,
 		},
 		{
-			"all good no arguments passed in - interface variadic",
+			"all good - interface variadic, int, string",
 			NewTask(func(args ...interface{}) {}, 1, "2", 3.0),
 			nil,
 		},
