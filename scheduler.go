@@ -473,6 +473,10 @@ func (s *scheduler) selectStart() {
 				next = j.next(s.now())
 			}
 
+			if j.stopTimeReached() {
+				continue
+			}
+
 			jobID := id
 			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {

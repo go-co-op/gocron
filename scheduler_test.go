@@ -151,6 +151,21 @@ func TestScheduler_LongRunningJobs(t *testing.T) {
 		expectedRuns int
 	}{
 		{
+			"duration with stop time between executions",
+			durationCh,
+			DurationJob(
+				time.Millisecond * 500,
+			),
+			NewTask(
+				func() {
+					time.Sleep(1 * time.Second)
+					durationCh <- struct{}{}
+				}),
+			[]JobOption{WithStopAt(WithStopDateTime(time.Now().Add(time.Millisecond * 1100)))},
+			[]SchedulerOption{WithStopTimeout(time.Second * 2)},
+			2,
+		},
+		{
 			"duration",
 			durationCh,
 			DurationJob(
@@ -754,6 +769,22 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			),
 			[]JobOption{WithStartAt(WithStartDateTime(time.Now().Add(-time.Second)))},
 			ErrWithStartDateTimePast,
+		},
+		{
+			"WithStartDateTime is later than the end",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithStopAt(WithStopDateTime(time.Now().Add(time.Second))), WithStartAt(WithStartDateTime(time.Now().Add(time.Hour)))},
+			ErrStartTimeLaterThanEndTime,
+		},
+		{
+			"WithStopDateTime is earlier than the start",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithStartAt(WithStartDateTime(time.Now().Add(time.Hour))), WithStopAt(WithStopDateTime(time.Now().Add(time.Second)))},
+			ErrStopTimeEarlierThanStartTime,
 		},
 		{
 			"oneTimeJob start at is zero",

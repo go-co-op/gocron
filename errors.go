@@ -45,6 +45,9 @@ var (
 	ErrWithMonitorNil                = fmt.Errorf("gocron: WithMonitor: monitor must not be nil")
 	ErrWithNameEmpty                 = fmt.Errorf("gocron: WithName: name must not be empty")
 	ErrWithStartDateTimePast         = fmt.Errorf("gocron: WithStartDateTime: start must not be in the past")
+	ErrWithStopDateTimePast          = fmt.Errorf("gocron: WithStopDateTime: end must not be in the past")
+	ErrStartTimeLaterThanEndTime     = fmt.Errorf("gocron: WithStartDateTime: start must not be later than end")
+	ErrStopTimeEarlierThanStartTime  = fmt.Errorf("gocron: WithStopDateTime: end must not be earlier than start")
 	ErrWithStopTimeoutZeroOrNegative = fmt.Errorf("gocron: WithStopTimeout: timeout must be greater than 0")
 )
 

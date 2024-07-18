@@ -146,6 +146,11 @@ func (e *executor) start() {
 						// safety check as it'd be strange bug if this occurred
 						return
 					}
+
+					if j.stopTimeReached() {
+						return
+					}
+
 					if j.singletonMode {
 						// for singleton mode, get the existing runner for the job
 						// or spin up a new one
