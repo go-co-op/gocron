@@ -475,7 +475,7 @@ func OneTimeJobStartImmediately() OneTimeJobStartAtOption {
 // OneTimeJobStartDateTime sets the date & time at which the job should run.
 // This datetime must be in the future (according to the scheduler clock).
 func OneTimeJobStartDateTime(start time.Time) OneTimeJobStartAtOption {
-	return func(j *internalJob) []time.Time {
+	return func(_ *internalJob) []time.Time {
 		return []time.Time{start}
 	}
 }
@@ -483,7 +483,7 @@ func OneTimeJobStartDateTime(start time.Time) OneTimeJobStartAtOption {
 // OneTimeJobStartDateTimes sets the date & times at which the job should run.
 // At least one of the date/times must be in the future (according to the scheduler clock).
 func OneTimeJobStartDateTimes(times ...time.Time) OneTimeJobStartAtOption {
-	return func(j *internalJob) []time.Time {
+	return func(_ *internalJob) []time.Time {
 		return times
 	}
 }
@@ -503,13 +503,13 @@ func OneTimeJob(startAt OneTimeJobStartAtOption) JobDefinition {
 // -----------------------------------------------
 
 // JobOption defines the constructor for job options.
-type JobOption func(*internalJob) error
+type JobOption func(*internalJob, time.Time) error
 
 // WithDistributedJobLocker sets the locker to be used by multiple
 // Scheduler instances to ensure that only one instance of each
 // job is run.
 func WithDistributedJobLocker(locker Locker) JobOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		if locker == nil {
 			return ErrWithDistributedJobLockerNil
 		}
@@ -521,7 +521,7 @@ func WithDistributedJobLocker(locker Locker) JobOption {
 // WithEventListeners sets the event listeners that should be
 // run for the job.
 func WithEventListeners(eventListeners ...EventListener) JobOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		for _, eventListener := range eventListeners {
 			if err := eventListener(j); err != nil {
 				return err
@@ -534,7 +534,7 @@ func WithEventListeners(eventListeners ...EventListener) JobOption {
 // WithLimitedRuns limits the number of executions of this job to n.
 // Upon reaching the limit, the job is removed from the scheduler.
 func WithLimitedRuns(limit uint) JobOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		j.limitRunsTo = &limitRunsTo{
 			limit:    limit,
 			runCount: 0,
@@ -546,8 +546,7 @@ func WithLimitedRuns(limit uint) JobOption {
 // WithName sets the name of the job. Name provides
 // a human-readable identifier for the job.
 func WithName(name string) JobOption {
-	// TODO use the name for metrics and future logging option
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		if name == "" {
 			return ErrWithNameEmpty
 		}
@@ -560,7 +559,7 @@ func WithName(name string) JobOption {
 // This is useful for jobs that should not overlap, and that occasionally
 // (but not consistently) run longer than the interval between job runs.
 func WithSingletonMode(mode LimitMode) JobOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		j.singletonMode = true
 		j.singletonLimitMode = mode
 		return nil
@@ -570,19 +569,19 @@ func WithSingletonMode(mode LimitMode) JobOption {
 // WithStartAt sets the option for starting the job at
 // a specific datetime.
 func WithStartAt(option StartAtOption) JobOption {
-	return func(j *internalJob) error {
-		return option(j)
+	return func(j *internalJob, now time.Time) error {
+		return option(j, now)
 	}
 }
 
 // StartAtOption defines options for starting the job
-type StartAtOption func(*internalJob) error
+type StartAtOption func(*internalJob, time.Time) error
 
 // WithStartImmediately tells the scheduler to run the job immediately
 // regardless of the type or schedule of job. After this immediate run
 // the job is scheduled from this time based on the job definition.
 func WithStartImmediately() StartAtOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		j.startImmediately = true
 		return nil
 	}
@@ -591,8 +590,8 @@ func WithStartImmediately() StartAtOption {
 // WithStartDateTime sets the first date & time at which the job should run.
 // This datetime must be in the future.
 func WithStartDateTime(start time.Time) StartAtOption {
-	return func(j *internalJob) error {
-		if start.IsZero() || start.Before(time.Now()) {
+	return func(j *internalJob, now time.Time) error {
+		if start.IsZero() || start.Before(now) {
 			return ErrWithStartDateTimePast
 		}
 		j.startTime = start
@@ -604,7 +603,7 @@ func WithStartDateTime(start time.Time) StartAtOption {
 // a way to identify jobs by a set of tags and remove
 // multiple jobs by tag.
 func WithTags(tags ...string) JobOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		j.tags = tags
 		return nil
 	}
@@ -614,7 +613,7 @@ func WithTags(tags ...string) JobOption {
 // is used to uniquely identify the job and is used for logging
 // and metrics.
 func WithIdentifier(id uuid.UUID) JobOption {
-	return func(j *internalJob) error {
+	return func(j *internalJob, _ time.Time) error {
 		if id == uuid.Nil {
 			return ErrWithIdentifierNil
 		}

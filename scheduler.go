@@ -56,25 +56,43 @@ type Scheduler interface {
 // -----------------------------------------------
 
 type scheduler struct {
-	shutdownCtx      context.Context
-	shutdownCancel   context.CancelFunc
-	exec             executor
-	jobs             map[uuid.UUID]internalJob
-	location         *time.Location
-	clock            clockwork.Clock
-	started          bool
+	// context used for shutting down
+	shutdownCtx context.Context
+	// cancel used to signal scheduler should shut down
+	shutdownCancel context.CancelFunc
+	// the executor, which actually runs the jobs sent to it via the scheduler
+	exec executor
+	// the map of jobs registered in the scheduler
+	jobs map[uuid.UUID]internalJob
+	// the location used by the scheduler for scheduling when relevant
+	location *time.Location
+	// whether the scheduler has been started or not
+	started bool
+	// globally applied JobOption's set on all jobs added to the scheduler
+	// note: individually set JobOption's take precedence.
 	globalJobOptions []JobOption
-	logger           Logger
+	// the scheduler's logger
+	logger Logger
 
-	startCh            chan struct{}
-	startedCh          chan struct{}
-	stopCh             chan struct{}
-	stopErrCh          chan error
-	allJobsOutRequest  chan allJobsOutRequest
-	jobOutRequestCh    chan jobOutRequest
-	runJobRequestCh    chan runJobRequest
-	newJobCh           chan newJobIn
-	removeJobCh        chan uuid.UUID
+	// used to tell the scheduler to start
+	startCh chan struct{}
+	// used to report that the scheduler has started
+	startedCh chan struct{}
+	// used to tell the scheduler to stop
+	stopCh chan struct{}
+	// used to report that the scheduler has stopped
+	stopErrCh chan error
+	// used to send all the jobs out when a request is made by the client
+	allJobsOutRequest chan allJobsOutRequest
+	// used to send a jobs out when a request is made by the client
+	jobOutRequestCh chan jobOutRequest
+	// used to run a job on-demand when requested by the client
+	runJobRequestCh chan runJobRequest
+	// new jobs are received here
+	newJobCh chan newJobIn
+	// requests from the client to remove jobs by ID are received here
+	removeJobCh chan uuid.UUID
+	// requests from the client to remove jobs by tags are received here
 	removeJobsByTagsCh chan []string
 }
 
@@ -111,6 +129,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		stopTimeout:      time.Second * 10,
 		singletonRunners: nil,
 		logger:           &noOpLogger{},
+		clock:            clockwork.NewRealClock(),
 
 		jobsIn:                 make(chan jobIn),
 		jobsOutForRescheduling: make(chan uuid.UUID),
@@ -125,7 +144,6 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		exec:           exec,
 		jobs:           make(map[uuid.UUID]internalJob),
 		location:       time.Local,
-		clock:          clockwork.NewRealClock(),
 		logger:         &noOpLogger{},
 
 		newJobCh:           make(chan newJobIn),
@@ -338,7 +356,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		}
 	}
 	j.nextScheduled = append(j.nextScheduled, next)
-	j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
+	j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 		// set the actual timer on the job here and listen for
 		// shut down events so that the job doesn't attempt to
 		// run if the scheduler has been shutdown.
@@ -422,7 +440,7 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 			}
 
 			id := j.id
-			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
+			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
 				case <-s.shutdownCtx.Done():
 				case s.exec.jobsIn <- jobIn{
@@ -474,7 +492,7 @@ func (s *scheduler) selectStart() {
 			}
 
 			jobID := id
-			j.timer = s.clock.AfterFunc(next.Sub(s.now()), func() {
+			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
 				case <-s.shutdownCtx.Done():
 				case s.exec.jobsIn <- jobIn{
@@ -502,7 +520,7 @@ func (s *scheduler) selectStart() {
 // -----------------------------------------------
 
 func (s *scheduler) now() time.Time {
-	return s.clock.Now().In(s.location)
+	return s.exec.clock.Now().In(s.location)
 }
 
 func (s *scheduler) jobFromInternalJob(in internalJob) job {
@@ -643,19 +661,19 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 
 	// apply global job options
 	for _, option := range s.globalJobOptions {
-		if err := option(&j); err != nil {
+		if err := option(&j, s.now()); err != nil {
 			return nil, err
 		}
 	}
 
 	// apply job specific options, which take precedence
 	for _, option := range options {
-		if err := option(&j); err != nil {
+		if err := option(&j, s.now()); err != nil {
 			return nil, err
 		}
 	}
 
-	if err := definition.setup(&j, s.location, s.clock.Now()); err != nil {
+	if err := definition.setup(&j, s.location, s.exec.clock.Now()); err != nil {
 		return nil, err
 	}
 
@@ -758,7 +776,7 @@ func WithClock(clock clockwork.Clock) SchedulerOption {
 		if clock == nil {
 			return ErrWithClockNil
 		}
-		s.clock = clock
+		s.exec.clock = clock
 		return nil
 	}
 }

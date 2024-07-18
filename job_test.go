@@ -487,7 +487,7 @@ func TestWithEventListeners(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var ij internalJob
-			err := WithEventListeners(tt.eventListeners...)(&ij)
+			err := WithEventListeners(tt.eventListeners...)(&ij, time.Now())
 			assert.Equal(t, tt.err, err)
 
 			if err != nil {

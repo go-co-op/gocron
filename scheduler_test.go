@@ -812,7 +812,7 @@ func TestScheduler_NewJobTask(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
 	testFuncPtr := func() {}
-	testFuncWithParams := func(one, two string) {}
+	testFuncWithParams := func(_, _ string) {}
 	testStruct := struct{}{}
 
 	tests := []struct {
@@ -862,37 +862,37 @@ func TestScheduler_NewJobTask(t *testing.T) {
 		},
 		{
 			"all good struct",
-			NewTask(func(one struct{}) {}, struct{}{}),
+			NewTask(func(_ struct{}) {}, struct{}{}),
 			nil,
 		},
 		{
 			"all good interface",
-			NewTask(func(one interface{}) {}, struct{}{}),
+			NewTask(func(_ interface{}) {}, struct{}{}),
 			nil,
 		},
 		{
 			"all good any",
-			NewTask(func(one any) {}, struct{}{}),
+			NewTask(func(_ any) {}, struct{}{}),
 			nil,
 		},
 		{
 			"all good slice",
-			NewTask(func(one []struct{}) {}, []struct{}{}),
+			NewTask(func(_ []struct{}) {}, []struct{}{}),
 			nil,
 		},
 		{
 			"all good chan",
-			NewTask(func(one chan struct{}) {}, make(chan struct{})),
+			NewTask(func(_ chan struct{}) {}, make(chan struct{})),
 			nil,
 		},
 		{
 			"all good pointer",
-			NewTask(func(one *struct{}) {}, &testStruct),
+			NewTask(func(_ *struct{}) {}, &testStruct),
 			nil,
 		},
 		{
 			"all good map",
-			NewTask(func(one map[string]struct{}) {}, make(map[string]struct{})),
+			NewTask(func(_ map[string]struct{}) {}, make(map[string]struct{})),
 			nil,
 		},
 		{
@@ -902,37 +902,37 @@ func TestScheduler_NewJobTask(t *testing.T) {
 		},
 		{
 			"parameter type does not match - different argument types against variadic parameters",
-			NewTask(func(args ...string) {}, "one", 2),
+			NewTask(func(_ ...string) {}, "one", 2),
 			ErrNewJobWrongTypeOfParameters,
 		},
 		{
 			"all good string - variadic",
-			NewTask(func(args ...string) {}, "one", "two"),
+			NewTask(func(_ ...string) {}, "one", "two"),
 			nil,
 		},
 		{
 			"all good mixed variadic",
-			NewTask(func(arg int, args ...string) {}, 1, "one", "two"),
+			NewTask(func(_ int, _ ...string) {}, 1, "one", "two"),
 			nil,
 		},
 		{
 			"all good struct - variadic",
-			NewTask(func(args ...interface{}) {}, struct{}{}),
+			NewTask(func(_ ...interface{}) {}, struct{}{}),
 			nil,
 		},
 		{
 			"all good no arguments passed in - variadic",
-			NewTask(func(args ...interface{}) {}),
+			NewTask(func(_ ...interface{}) {}),
 			nil,
 		},
 		{
 			"all good - interface variadic, int, string",
-			NewTask(func(args ...interface{}) {}, 1, "2", 3.0),
+			NewTask(func(_ ...interface{}) {}, 1, "2", 3.0),
 			nil,
 		},
 		{
 			"parameter type does not match - different argument types against interface variadic parameters",
-			NewTask(func(args ...io.Reader) {}, os.Stdout, any(3.0)),
+			NewTask(func(_ ...io.Reader) {}, os.Stdout, any(3.0)),
 			ErrNewJobWrongTypeOfParameters,
 		},
 	}
@@ -1411,7 +1411,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 				WithDistributedLocker(&testLocker{notLocked: notLocked}),
 			},
 			nil,
-			func(t *testing.T) {
+			func(_ *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLockedCount int
 				for {
@@ -1433,7 +1433,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			[]JobOption{
 				WithDistributedJobLocker(&testLocker{notLocked: notLocked}),
 			},
-			func(t *testing.T) {
+			func(_ *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLockedCount int
 				for {
@@ -1665,7 +1665,7 @@ func TestScheduler_RemoveJob_RemoveSelf(t *testing.T) {
 		NewTask(func() {}),
 		WithEventListeners(
 			BeforeJobRuns(
-				func(jobID uuid.UUID, jobName string) {
+				func(_ uuid.UUID, _ string) {
 					s.RemoveByTags("tag1")
 				},
 			),
@@ -1788,7 +1788,7 @@ func TestScheduler_WithLocker_WithEventListeners(t *testing.T) {
 			"AfterLockError",
 			errorLocker{},
 			NewTask(func() {}),
-			AfterLockError(func(_ uuid.UUID, _ string, err error) {
+			AfterLockError(func(_ uuid.UUID, _ string, _ error) {
 				listenerRunCh <- nil
 			}),
 			true,
@@ -2031,7 +2031,7 @@ func TestScheduler_LastRunSingleton(t *testing.T) {
 	}{
 		{
 			"simple",
-			func(t *testing.T, j Job, jobRan chan struct{}) {},
+			func(_ *testing.T, _ Job, _ chan struct{}) {},
 		},
 		{
 			"with runNow",
@@ -2155,7 +2155,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "no at times",
 			atTimes:   []time.Time{},
 			fakeClock: clockwork.NewFakeClock(),
-			assertErr: func(t require.TestingT, err error, i ...interface{}) {
+			assertErr: func(t require.TestingT, err error, _ ...interface{}) {
 				require.ErrorIs(t, err, ErrOneTimeJobStartDateTimePast)
 			},
 		},
@@ -2163,7 +2163,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "all in the past",
 			atTimes:   []time.Time{n.Add(-1 * time.Second)},
 			fakeClock: clockwork.NewFakeClockAt(n),
-			assertErr: func(t require.TestingT, err error, i ...interface{}) {
+			assertErr: func(t require.TestingT, err error, _ ...interface{}) {
 				require.ErrorIs(t, err, ErrOneTimeJobStartDateTimePast)
 			},
 		},
