@@ -57,7 +57,7 @@ func TestCallJobFuncWithParams(t *testing.T) {
 		},
 		{
 			"wrong number of params",
-			func(one string, two int) {},
+			func(_ string, _ int) {},
 			[]any{"one"},
 			nil,
 		},

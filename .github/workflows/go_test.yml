@@ -27,6 +27,6 @@
        - name: golangci-lint
          uses: golangci/golangci-lint-action@v6.0.1
          with:
-           version: v1.55.2
+           version: v1.59.1
        - name: test
          run: make test_ci

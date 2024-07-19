@@ -7,25 +7,48 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
+
 	"github.com/google/uuid"
 )
 
 type executor struct {
-	ctx                    context.Context
-	cancel                 context.CancelFunc
-	logger                 Logger
-	stopCh                 chan struct{}
-	jobsIn                 chan jobIn
+	// context used for shutting down
+	ctx context.Context
+	// cancel used by the executor to signal a stop of it's functions
+	cancel context.CancelFunc
+	// clock used for regular time or mocking time
+	clock clockwork.Clock
+	// the executor's logger
+	logger Logger
+
+	// receives jobs scheduled to execute
+	jobsIn chan jobIn
+	// sends out jobs for rescheduling
 	jobsOutForRescheduling chan uuid.UUID
-	jobsOutCompleted       chan uuid.UUID
-	jobOutRequest          chan jobOutRequest
-	stopTimeout            time.Duration
-	done                   chan error
-	singletonRunners       *sync.Map // map[uuid.UUID]singletonRunner
-	limitMode              *limitModeConfig
-	elector                Elector
-	locker                 Locker
-	monitor                Monitor
+	// sends out jobs once completed
+	jobsOutCompleted chan uuid.UUID
+	// used to request jobs from the scheduler
+	jobOutRequest chan jobOutRequest
+
+	// used by the executor to receive a stop signal from the scheduler
+	stopCh chan struct{}
+	// the timeout value when stopping
+	stopTimeout time.Duration
+	// used to signal that the executor has completed shutdown
+	done chan error
+
+	// runners for any singleton type jobs
+	// map[uuid.UUID]singletonRunner
+	singletonRunners *sync.Map
+	// config for limit mode
+	limitMode *limitModeConfig
+	// the elector when running distributed instances
+	elector Elector
+	// the locker when running distributed instances
+	locker Locker
+	// monitor for reporting metrics
+	monitor Monitor
 }
 
 type jobIn struct {
