@@ -325,6 +325,10 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		return
 	}
 
+	if j.stopTimeReached(s.now()) {
+		return
+	}
+
 	scheduleFrom := j.lastRun
 	if len(j.nextScheduled) > 0 {
 		// always grab the last element in the slice as that is the furthest
@@ -489,10 +493,6 @@ func (s *scheduler) selectStart() {
 		} else {
 			if next.IsZero() {
 				next = j.next(s.now())
-			}
-
-			if j.stopTimeReached() {
-				continue
 			}
 
 			jobID := id

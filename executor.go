@@ -169,11 +169,6 @@ func (e *executor) start() {
 						// safety check as it'd be strange bug if this occurred
 						return
 					}
-
-					if j.stopTimeReached() {
-						return
-					}
-
 					if j.singletonMode {
 						// for singleton mode, get the existing runner for the job
 						// or spin up a new one
@@ -361,6 +356,10 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	case <-j.ctx.Done():
 		return
 	default:
+	}
+
+	if j.stopTimeReached(e.clock.Now()) {
+		return
 	}
 
 	if e.elector != nil {
