@@ -5,13 +5,14 @@
 //
 //	mockgen -destination=mocks/scheduler.go -package=gocronmocks . Scheduler
 //
+
 // Package gocronmocks is a generated GoMock package.
 package gocronmocks
 
 import (
 	reflect "reflect"
 
-	gocron "github.com/go-co-op/gocron/v2"
+	v2 "github.com/go-co-op/gocron/v2"
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -20,6 +21,7 @@ import (
 type MockScheduler struct {
 	ctrl     *gomock.Controller
 	recorder *MockSchedulerMockRecorder
+	isgomock struct{}
 }
 
 // MockSchedulerMockRecorder is the mock recorder for MockScheduler.
@@ -40,10 +42,10 @@ func (m *MockScheduler) EXPECT() *MockSchedulerMockRecorder {
 }
 
 // Jobs mocks base method.
-func (m *MockScheduler) Jobs() []gocron.Job {
+func (m *MockScheduler) Jobs() []v2.Job {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Jobs")
-	ret0, _ := ret[0].([]gocron.Job)
+	ret0, _ := ret[0].([]v2.Job)
 	return ret0
 }
 
@@ -68,14 +70,14 @@ func (mr *MockSchedulerMockRecorder) JobsWaitingInQueue() *gomock.Call {
 }
 
 // NewJob mocks base method.
-func (m *MockScheduler) NewJob(arg0 gocron.JobDefinition, arg1 gocron.Task, arg2 ...gocron.JobOption) (gocron.Job, error) {
+func (m *MockScheduler) NewJob(arg0 v2.JobDefinition, arg1 v2.Task, arg2 ...v2.JobOption) (v2.Job, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1}
 	for _, a := range arg2 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "NewJob", varargs...)
-	ret0, _ := ret[0].(gocron.Job)
+	ret0, _ := ret[0].(v2.Job)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -158,14 +160,14 @@ func (mr *MockSchedulerMockRecorder) StopJobs() *gomock.Call {
 }
 
 // Update mocks base method.
-func (m *MockScheduler) Update(arg0 uuid.UUID, arg1 gocron.JobDefinition, arg2 gocron.Task, arg3 ...gocron.JobOption) (gocron.Job, error) {
+func (m *MockScheduler) Update(arg0 uuid.UUID, arg1 v2.JobDefinition, arg2 v2.Task, arg3 ...v2.JobOption) (v2.Job, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{arg0, arg1, arg2}
 	for _, a := range arg3 {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "Update", varargs...)
-	ret0, _ := ret[0].(gocron.Job)
+	ret0, _ := ret[0].(v2.Job)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -5,6 +5,7 @@
 //
 //	mockgen -destination=mocks/job.go -package=gocronmocks . Job
 //
+
 // Package gocronmocks is a generated GoMock package.
 package gocronmocks
 
@@ -12,6 +13,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	v2 "github.com/go-co-op/gocron/v2"
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -20,6 +22,7 @@ import (
 type MockJob struct {
 	ctrl     *gomock.Controller
 	recorder *MockJobMockRecorder
+	isgomock struct{}
 }
 
 // MockJobMockRecorder is the mock recorder for MockJob.
@@ -66,6 +69,20 @@ func (m *MockJob) LastRun() (time.Time, error) {
 func (mr *MockJobMockRecorder) LastRun() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastRun", reflect.TypeOf((*MockJob)(nil).LastRun))
+}
+
+// Lock mocks base method.
+func (m *MockJob) Lock() v2.Lock {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Lock")
+	ret0, _ := ret[0].(v2.Lock)
+	return ret0
+}
+
+// Lock indicates an expected call of Lock.
+func (mr *MockJobMockRecorder) Lock() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockJob)(nil).Lock))
 }
 
 // Name mocks base method.
