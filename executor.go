@@ -196,7 +196,7 @@ func (e *executor) start() {
 							default:
 								// runner is busy, reschedule the work for later
 								// which means we just skip it here and do nothing
-								// TODO when metrics are added, this should increment a rescheduled metric
+								e.incrementJobCounter(*j, SingletonRescheduled)
 								e.sendOutForRescheduling(&jIn)
 							}
 						} else {
@@ -397,9 +397,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 
 	startTime := time.Now()
 	err := e.callJobWithRecover(j)
-	if e.monitor != nil {
-		e.monitor.RecordJobTiming(startTime, time.Now(), j.id, j.name, j.tags)
-	}
+	e.recordJobTiming(startTime, time.Now(), j)
 	if err != nil {
 		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
 		e.incrementJobCounter(j, Fail)
@@ -420,6 +418,12 @@ func (e *executor) callJobWithRecover(j internalJob) (err error) {
 	}()
 
 	return callJobFuncWithParams(j.function, j.parameters...)
+}
+
+func (e *executor) recordJobTiming(start time.Time, end time.Time, j internalJob) {
+	if e.monitor != nil {
+		e.monitor.RecordJobTiming(start, end, j.id, j.name, j.tags)
+	}
 }
 
 func (e *executor) incrementJobCounter(j internalJob, status JobStatus) {

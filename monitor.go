@@ -11,9 +11,10 @@ type JobStatus string
 
 // The different statuses of job that can be used.
 const (
-	Fail    JobStatus = "fail"
-	Success JobStatus = "success"
-	Skip    JobStatus = "skip"
+	Fail                 JobStatus = "fail"
+	Success              JobStatus = "success"
+	Skip                 JobStatus = "skip"
+	SingletonRescheduled JobStatus = "singleton_rescheduled"
 )
 
 // Monitor represents the interface to collect jobs metrics.
