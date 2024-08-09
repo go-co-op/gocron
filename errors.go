@@ -4,6 +4,7 @@ import "fmt"
 
 // Public error definitions
 var (
+	ErrCronJobInvalid                = fmt.Errorf("gocron: CronJob: invalid crontab")
 	ErrCronJobParse                  = fmt.Errorf("gocron: CronJob: crontab parse failure")
 	ErrDailyJobAtTimeNil             = fmt.Errorf("gocron: DailyJob: atTime within atTimes must not be nil")
 	ErrDailyJobAtTimesNil            = fmt.Errorf("gocron: DailyJob: atTimes must not be nil")

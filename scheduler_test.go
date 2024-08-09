@@ -533,6 +533,15 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrCronJobParse,
 		},
 		{
+			"cron invalid date",
+			CronJob(
+				"* * * 31 FEB *",
+				true,
+			),
+			nil,
+			ErrCronJobInvalid,
+		},
+		{
 			"duration job time interval is zero",
 			DurationJob(0 * time.Second),
 			nil,

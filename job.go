@@ -116,7 +116,7 @@ type cronJobDefinition struct {
 	withSeconds bool
 }
 
-func (c cronJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
+func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now time.Time) error {
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
@@ -139,6 +139,9 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, _ time
 	}
 	if err != nil {
 		return errors.Join(ErrCronJobParse, err)
+	}
+	if cronSchedule.Next(now).IsZero() {
+		return ErrCronJobInvalid
 	}
 
 	j.jobSchedule = &cronJob{cronSchedule: cronSchedule}
