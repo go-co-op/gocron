@@ -35,9 +35,15 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 	return nil
 }
 
-func requestJob(id uuid.UUID, ch chan jobOutRequest) *internalJob {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+func requestJob(id uuid.UUID, ch chan jobOutRequest, timeout bool) *internalJob {
+	var cancel context.CancelFunc
+	ctx := context.Background()
+
+	if timeout {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+	}
+
 	return requestJobCtx(ctx, id, ch)
 }
 

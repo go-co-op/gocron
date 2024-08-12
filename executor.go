@@ -401,7 +401,6 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 
 		defer func() {
 			_ = lock.Unlock(j.ctx)
-
 		}()
 	} else if !j.disabledLocker && e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)

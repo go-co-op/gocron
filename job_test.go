@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 	"time"
@@ -648,6 +649,38 @@ func TestJob_NextRuns(t *testing.T) {
 
 			assert.NoError(t, s.Shutdown())
 		})
+	}
+}
+
+func TestJob_Context(t *testing.T) {
+	s := newTestScheduler(t)
+
+	j, err := s.NewJob(
+		DurationJob(time.Second),
+		NewTask(func(ctx context.Context) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(2 * time.Second):
+				t.Error("context not canceled")
+			}
+		}),
+	)
+	require.NoError(t, err)
+
+	ctx := j.Context()
+	assert.NotNil(t, ctx)
+
+	// Verify context is canceled when scheduler shuts down
+	s.Start()
+	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, s.Shutdown())
+
+	select {
+	case <-ctx.Done():
+		// Expected
+	case <-time.After(time.Second):
+		t.Error("context not canceled after shutdown")
 	}
 }
 
