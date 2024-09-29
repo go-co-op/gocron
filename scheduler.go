@@ -5,6 +5,7 @@ import (
 	"context"
 	"reflect"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -132,8 +133,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		clock:            clockwork.NewRealClock(),
 
 		jobsIn:                 make(chan jobIn),
-		jobsOutForRescheduling: make(chan uuid.UUID),
-		jobsOutCompleted:       make(chan uuid.UUID),
+		jobsOutForRescheduling: make(chan jobIn),
+		jobsOutCompleted:       make(chan jobIn),
 		jobOutRequest:          make(chan jobOutRequest, 1000),
 		done:                   make(chan error),
 	}
@@ -169,11 +170,11 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		s.logger.Info("gocron: new scheduler created")
 		for {
 			select {
-			case id := <-s.exec.jobsOutForRescheduling:
-				s.selectExecJobsOutForRescheduling(id)
+			case jIn := <-s.exec.jobsOutForRescheduling:
+				s.selectExecJobsOutForRescheduling(jIn)
 
-			case id := <-s.exec.jobsOutCompleted:
-				s.selectExecJobsOutCompleted(id)
+			case jIn := <-s.exec.jobsOutCompleted:
+				s.selectExecJobsOutCompleted(jIn)
 
 			case in := <-s.newJobCh:
 				s.selectNewJob(in)
@@ -195,7 +196,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 			case run := <-s.runJobRequestCh:
 				s.selectRunJobRequest(run)
-
+			// 开启scheduler
 			case <-s.startCh:
 				s.selectStart()
 
@@ -235,9 +236,6 @@ func (s *scheduler) stopScheduler() {
 	}
 	for id, j := range s.jobs {
 		<-j.ctx.Done()
-		if j.singletonJobRunning != nil {
-			close(j.singletonJobRunning)
-		}
 		j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
 		s.jobs[id] = j
 	}
@@ -295,6 +293,7 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	case s.exec.jobsIn <- jobIn{
 		id:            j.id,
 		shouldSendOut: false,
+		selectRun:     true,
 	}:
 		select {
 		case run.outChan <- nil:
@@ -312,17 +311,31 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 	if j.singletonJobRunning != nil {
 		close(j.singletonJobRunning)
 	}
+	if s.exec.singletonRunners != nil {
+		runnerSrc, isOk := s.exec.singletonRunners.Load(j.id)
+		if isOk {
+			runner := runnerSrc.(*singletonRunner)
+			if runner.in != nil {
+				close(runner.in)
+			}
+			if runner.rescheduleLimiter != nil {
+				close(runner.rescheduleLimiter)
+			}
+		}
+		s.exec.singletonRunners.Delete(j.id)
+	}
 	delete(s.jobs, id)
 }
 
 // Jobs coming back from the executor to the scheduler that
 // need to be evaluated for rescheduling.
-func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
+func (s *scheduler) selectExecJobsOutForRescheduling(jIn jobIn) {
 	select {
 	case <-s.shutdownCtx.Done():
 		return
 	default:
 	}
+	id := jIn.id
 	j, ok := s.jobs[id]
 	if !ok {
 		// the job was removed while it was running, and
@@ -334,44 +347,29 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		return
 	}
 
-	scheduleFrom := j.lastRun
-	if len(j.nextScheduled) > 0 {
-		// always grab the last element in the slice as that is the furthest
-		// out in the future and the time from which we want to calculate
-		// the subsequent next run time.
-		slices.SortStableFunc(j.nextScheduled, ascendingTime)
-		scheduleFrom = j.nextScheduled[len(j.nextScheduled)-1]
-	}
-
-	if scheduleFrom.IsZero() {
-		scheduleFrom = j.startTime
-	}
-
-	next := j.next(scheduleFrom)
+	lastScheduleTime := jIn.scheduleTime
+	next := j.next(lastScheduleTime)
 	if next.IsZero() {
-		// the job's next function will return zero for OneTime jobs.
-		// since they are one time only, they do not need rescheduling.
 		return
-	}
-
-	if next.Before(s.now()) {
-		// in some cases the next run time can be in the past, for example:
-		// - the time on the machine was incorrect and has been synced with ntp
-		// - the machine went to sleep, and woke up some time later
-		// in those cases, we want to increment to the next run in the future
-		// and schedule the job for that time.
-		for next.Before(s.now()) {
-			next = j.next(next)
-			if next.IsZero() {
-				return
-			}
-		}
 	}
 
 	// Clean up any existing timer to prevent leaks
 	if j.timer != nil {
 		j.timer.Stop()
 		j.timer = nil // Ensure timer is cleared for GC
+	}
+
+	// if the job has a limited number of runs set, we need to
+	// check how many runs have occurred and stop running this
+	// job if it has reached the limit.
+	needTriggerOnJobLimitedRunsComplete := false
+	if j.limitRunsTo != nil {
+		if j.limitRunsTo.runCount == j.limitRunsTo.limit-1 {
+			needTriggerOnJobLimitedRunsComplete = true
+		} else if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+			return
+		}
+		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
 	}
 
 	j.nextScheduled = append(j.nextScheduled, next)
@@ -383,8 +381,10 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		case <-s.shutdownCtx.Done():
 			return
 		case s.exec.jobsIn <- jobIn{
-			id:            j.id,
-			shouldSendOut: true,
+			id:                              j.id,
+			shouldSendOut:                   true,
+			triggerOnJobLimitedRunsComplete: needTriggerOnJobLimitedRunsComplete,
+			scheduleTime:                    next,
 		}:
 		}
 	})
@@ -392,39 +392,33 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	s.jobs[id] = j
 }
 
-func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
+func (s *scheduler) selectExecJobsOutCompleted(jIn jobIn) {
+	id := jIn.id
 	j, ok := s.jobs[id]
 	if !ok {
 		return
 	}
+	if jIn.needRemoveJob && (j.afterJobRunCompleteRemove || j.limitRunsTo != nil) {
+		go func() {
+			select {
+			case <-s.shutdownCtx.Done():
+				return
+			case s.removeJobCh <- id:
 
+			}
+		}()
+		return
+	}
 	// if the job has nextScheduled time in the past,
 	// we need to remove any that are in the past.
 	var newNextScheduled []time.Time
 	for _, t := range j.nextScheduled {
-		if t.Before(s.now()) {
+		if t == jIn.scheduleTime {
 			continue
 		}
 		newNextScheduled = append(newNextScheduled, t)
 	}
 	j.nextScheduled = newNextScheduled
-
-	// if the job has a limited number of runs set, we need to
-	// check how many runs have occurred and stop running this
-	// job if it has reached the limit.
-	if j.limitRunsTo != nil {
-		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
-		if j.limitRunsTo.runCount == j.limitRunsTo.limit {
-			go func() {
-				select {
-				case <-s.shutdownCtx.Done():
-					return
-				case s.removeJobCh <- id:
-				}
-			}()
-			return
-		}
-	}
 
 	j.lastRun = s.now()
 	s.jobs[id] = j
@@ -443,14 +437,30 @@ func (s *scheduler) selectJobOutRequest(out jobOutRequest) {
 func (s *scheduler) selectNewJob(in newJobIn) {
 	j := in.job
 	if s.started {
+
+		needTriggerBeforeStartTime := false
+		if !j.startTime.IsZero() && j.startTime.After(s.now()) {
+			needTriggerBeforeStartTime = true
+		}
+
+		needTriggerOnJobLimitedRunsComplete := false
+		if j.limitRunsTo != nil {
+			if j.limitRunsTo.runCount == j.limitRunsTo.limit-1 {
+				needTriggerOnJobLimitedRunsComplete = true
+			}
+			j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
+		}
+
 		next := j.startTime
 		if j.startImmediately {
 			next = s.now()
 			select {
 			case <-s.shutdownCtx.Done():
 			case s.exec.jobsIn <- jobIn{
-				id:            j.id,
-				shouldSendOut: true,
+				id:                              j.id,
+				shouldSendOut:                   true,
+				triggerOnJobLimitedRunsComplete: needTriggerOnJobLimitedRunsComplete,
+				scheduleTime:                    next,
 			}:
 			}
 		} else {
@@ -475,13 +485,15 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 				select {
 				case <-s.shutdownCtx.Done():
 				case s.exec.jobsIn <- jobIn{
-					id:            id,
-					shouldSendOut: true,
+					id:                              id,
+					shouldSendOut:                   true,
+					triggerBeforeStartTime:          needTriggerBeforeStartTime,
+					triggerOnJobLimitedRunsComplete: needTriggerOnJobLimitedRunsComplete,
+					scheduleTime:                    next,
 				}:
 				}
 			})
 		}
-		j.startTime = next
 		j.nextScheduled = append(j.nextScheduled, next)
 	}
 
@@ -497,6 +509,19 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 				if j.singletonJobRunning != nil {
 					close(j.singletonJobRunning)
 				}
+				if s.exec.singletonRunners != nil {
+					runnerSrc, ok := s.exec.singletonRunners.Load(j.id)
+					if ok {
+						runner := runnerSrc.(*singletonRunner)
+						if runner.in != nil {
+							close(runner.in)
+						}
+						if runner.rescheduleLimiter != nil {
+							close(runner.rescheduleLimiter)
+						}
+					}
+					s.exec.singletonRunners.Delete(j.id)
+				}
 				delete(s.jobs, j.id)
 				break
 			}
@@ -510,19 +535,45 @@ func (s *scheduler) selectStart() {
 
 	s.started = true
 	for id, j := range s.jobs {
+		needTriggerBeforeStartTime := false
+		if !j.startTime.IsZero() && j.startTime.After(s.now()) {
+			needTriggerBeforeStartTime = true
+		}
+
+		triggerOnJobLimitedRunsComplete := false
+		if j.limitRunsTo != nil {
+			if j.limitRunsTo.runCount == j.limitRunsTo.limit-1 {
+				triggerOnJobLimitedRunsComplete = true
+			}
+			j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
+		}
+
 		next := j.startTime
 		if j.startImmediately {
 			next = s.now()
 			select {
 			case <-s.shutdownCtx.Done():
 			case s.exec.jobsIn <- jobIn{
-				id:            id,
-				shouldSendOut: true,
+				id:                              id,
+				shouldSendOut:                   true,
+				triggerOnJobLimitedRunsComplete: triggerOnJobLimitedRunsComplete,
+				scheduleTime:                    next,
 			}:
 			}
 		} else {
 			if next.IsZero() {
 				next = j.next(s.now())
+			} else {
+				// 开始时间可能是个之前的时间,那么需要获取到当前时间之后的时间
+				if next.Before(s.now()) {
+					for next.Before(s.now()) {
+						next = j.next(next)
+						// 防止出现死循环,如果获取到了空时间也证明没有需要执行的了
+						if next.IsZero() {
+							continue
+						}
+					}
+				}
 			}
 
 			jobID := id
@@ -530,13 +581,15 @@ func (s *scheduler) selectStart() {
 				select {
 				case <-s.shutdownCtx.Done():
 				case s.exec.jobsIn <- jobIn{
-					id:            jobID,
-					shouldSendOut: true,
+					id:                              jobID,
+					shouldSendOut:                   true,
+					triggerBeforeStartTime:          needTriggerBeforeStartTime,
+					triggerOnJobLimitedRunsComplete: triggerOnJobLimitedRunsComplete,
+					scheduleTime:                    next,
 				}:
 				}
 			})
 		}
-		j.startTime = next
 		j.nextScheduled = append(j.nextScheduled, next)
 		s.jobs[id] = j
 	}
@@ -668,7 +721,8 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 
 		j.id = id
 	}
-
+	//每次更新都初始化下锁
+	j.hookOnce = &sync.Once{}
 	j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
 
 	if taskWrapper == nil {
@@ -710,11 +764,11 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	if err := definition.setup(&j, s.location, s.exec.clock.Now()); err != nil {
 		return nil, err
 	}
-
-	if s.exec.limitMode != nil && j.singletonMode == true {
+	// If update, no initialization is required
+	// 可能更新时会导致singletonMode发生变化,所以无论何时都创建
+	if s.exec.limitMode != nil && j.singletonJobRunning == nil {
 		j.singletonJobRunning = make(chan struct{}, 1)
 	}
-
 	newJobCtx, newJobCancel := context.WithCancel(context.Background())
 	select {
 	case <-s.shutdownCtx.Done():
@@ -795,7 +849,7 @@ func (s *scheduler) Update(id uuid.UUID, jobDefinition JobDefinition, task Task,
 }
 
 func (s *scheduler) JobsWaitingInQueue() int {
-	if s.exec.limitMode != nil && s.exec.limitMode.mode == LimitModeWait {
+	if s.exec.limitMode != nil {
 		return len(s.exec.limitMode.in)
 	}
 	return 0
@@ -921,7 +975,7 @@ func WithLimitConcurrentJobs(limit uint, mode LimitMode, jobLimitModeCanOverride
 			singletonJobs:           make(map[uuid.UUID]struct{}),
 			jobLimitModeCanOverride: jobLimitModeCanOverride,
 		}
-		if mode == LimitModeReschedule {
+		if mode == LimitModeReschedule || jobLimitModeCanOverride {
 			s.exec.limitMode.rescheduleLimiter = make(chan struct{}, limit)
 		}
 		return nil

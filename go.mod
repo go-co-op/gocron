@@ -1,4 +1,4 @@
-module github.com/go-co-op/gocron/v2
+module github.com/gaoyaxuan/gocron/v3
 
 go 1.20
 

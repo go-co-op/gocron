@@ -59,7 +59,7 @@ func TestCallJobFuncWithParams(t *testing.T) {
 			"wrong number of params",
 			func(_ string, _ int) {},
 			[]any{"one"},
-			nil,
+			fmt.Errorf("parameter count mismatch"),
 		},
 		{
 			"function that returns an error",
@@ -77,11 +77,87 @@ func TestCallJobFuncWithParams(t *testing.T) {
 			nil,
 			nil,
 		},
+		{
+			"requires non-nil value",
+			func(_ string) interface{} {
+				return "test value"
+			},
+			[]any{nil},
+			fmt.Errorf("parameter 0 is nil but requires non-nil value of type string"),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := callJobFuncWithParams(tt.jobFunc, tt.params...)
+			assert.Equal(t, tt.expectedErr, err)
+		})
+	}
+}
+
+func TestCallJobFuncHasReturnWithParams(t *testing.T) {
+	type f1 func()
+	tests := []struct {
+		name        string
+		jobFunc     any
+		params      []any
+		expectedErr interface{}
+	}{
+		{
+			"nil jobFunc",
+			nil,
+			nil,
+			nil,
+		},
+		{
+			"zero jobFunc",
+			f1(nil),
+			nil,
+			nil,
+		},
+		{
+			"wrong number of params",
+			func(_ string, _ int) {},
+			[]any{"one"},
+			fmt.Errorf("parameter count mismatch"),
+		},
+		{
+			"function that returns an error",
+			func() error {
+				return fmt.Errorf("test error")
+			},
+			nil,
+			fmt.Errorf("test error"),
+		},
+		{
+			"function that returns no error",
+			func() error {
+				return nil
+			},
+			nil,
+			nil,
+		},
+		{
+			"function that returns a str",
+			func() string {
+				return "test value"
+			},
+			nil,
+			"test value",
+		},
+		{
+			"requires non-nil value",
+			func(_ string) interface{} {
+				return "test value"
+			},
+			[]any{nil},
+			fmt.Errorf("parameter 0 is nil but requires non-nil value of type string"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := callJobFuncHasReturnWithParams(tt.jobFunc, tt.params...)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}

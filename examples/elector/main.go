@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/go-co-op/gocron/v2"
+	"github.com/gaoyaxuan/gocron/v2"
 )
 
 var _ gocron.Elector = (*myElector)(nil)

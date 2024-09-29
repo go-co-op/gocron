@@ -15,6 +15,7 @@ const (
 	Success              JobStatus = "success"
 	Skip                 JobStatus = "skip"
 	SingletonRescheduled JobStatus = "singleton_rescheduled"
+	Rescheduled          JobStatus = "rescheduled"
 )
 
 // Monitor represents the interface to collect jobs metrics.

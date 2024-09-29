@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"fmt"
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -19,12 +20,28 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 	if f.IsZero() {
 		return nil
 	}
+	if params == nil {
+		params = []any{}
+	}
+	// 检查参数个数是否匹配
 	if len(params) != f.Type().NumIn() {
-		return nil
+		return fmt.Errorf("parameter count mismatch")
 	}
 	in := make([]reflect.Value, len(params))
 	for k, param := range params {
-		in[k] = reflect.ValueOf(param)
+		if param == nil {
+			// 如果参数是 nil，需要确认函数参数类型
+			paramType := f.Type().In(k)
+			if paramType.Kind() == reflect.Ptr || paramType.Kind() == reflect.Interface {
+				// 针对指针或接口类型的 nil 参数，使用 reflect.Zero 创建 reflect.Value
+				in[k] = reflect.Zero(paramType)
+			} else {
+				// 非指针和接口类型不支持 nil
+				return fmt.Errorf("parameter %d is nil but requires non-nil value of type %s", k, paramType)
+			}
+		} else {
+			in[k] = reflect.ValueOf(param)
+		}
 	}
 	returnValues := f.Call(in)
 	for _, val := range returnValues {
@@ -44,12 +61,28 @@ func callJobFuncHasReturnWithParams(jobFunc any, params ...any) interface{} {
 	if f.IsZero() {
 		return nil
 	}
+	if params == nil {
+		params = []any{}
+	}
+	// 检查参数个数是否匹配
 	if len(params) != f.Type().NumIn() {
-		return nil
+		return fmt.Errorf("parameter count mismatch")
 	}
 	in := make([]reflect.Value, len(params))
 	for k, param := range params {
-		in[k] = reflect.ValueOf(param)
+		if param == nil {
+			// 如果参数是 nil，需要确认函数参数类型
+			paramType := f.Type().In(k)
+			if paramType.Kind() == reflect.Ptr || paramType.Kind() == reflect.Interface {
+				// 针对指针或接口类型的 nil 参数，使用 reflect.Zero 创建 reflect.Value
+				in[k] = reflect.Zero(paramType)
+			} else {
+				// 非指针和接口类型不支持 nil
+				return fmt.Errorf("parameter %d is nil but requires non-nil value of type %s", k, paramType)
+			}
+		} else {
+			in[k] = reflect.ValueOf(param)
+		}
 	}
 	returnValues := f.Call(in)
 	if len(returnValues) > 0 {

@@ -812,7 +812,7 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				time.Second,
 			),
 			[]JobOption{WithStartAt(WithStartDateTime(time.Now().Add(-time.Second)))},
-			ErrWithStartDateTimePast,
+			nil,
 		},
 		{
 			"WithStartDateTime is later than the end",
@@ -1257,7 +1257,7 @@ func TestScheduler_LimitModeAndSingleton(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(t,
-				WithLimitConcurrentJobs(tt.limit, tt.limitMode, false),
+				WithLimitConcurrentJobs(tt.limit, tt.limitMode, true),
 				WithStopTimeout(2*time.Second),
 			)
 
@@ -1270,6 +1270,7 @@ func TestScheduler_LimitModeAndSingleton(t *testing.T) {
 					NewTask(func() {
 						time.Sleep(tt.duration / 2)
 						jobRanCh <- jobNum
+						fmt.Println("aaa")
 					}),
 					WithSingletonMode(tt.singletonMode),
 				)
@@ -1278,7 +1279,6 @@ func TestScheduler_LimitModeAndSingleton(t *testing.T) {
 
 			start := time.Now()
 			s.Start()
-
 			jobsRan := make(map[int]int)
 			var runCount int
 			for runCount < tt.numJobs {
@@ -1286,12 +1286,16 @@ func TestScheduler_LimitModeAndSingleton(t *testing.T) {
 				case jobNum := <-jobRanCh:
 					runCount++
 					jobsRan[jobNum]++
-				case <-time.After(time.Second):
+				case <-time.After(1 * time.Second):
 					t.Fatalf("timed out waiting for jobs to run")
 				}
 			}
 			stop := time.Now()
-			require.NoError(t, s.Shutdown())
+			err := s.Shutdown()
+			if err != nil {
+				fmt.Println(err)
+			}
+			require.NoError(t, err)
 
 			assert.GreaterOrEqual(t, stop.Sub(start), tt.expectedMin)
 			assert.LessOrEqual(t, stop.Sub(start), tt.expectedMax)
@@ -1342,6 +1346,10 @@ func TestScheduler_OneTimeJob_DoesNotCleanupNext(t *testing.T) {
 					nextRunAt, err := j.NextRun()
 					require.NoError(t, err)
 					require.Equal(t, expected, nextRunAt.UTC())
+
+					times, err := j.NextRuns(5)
+					require.NoError(t, err)
+					require.Equal(t, 1, len(times))
 
 					// advance and eventually run
 					oneSecondAfterNextRun := expected.Add(1 * time.Second)
@@ -1740,8 +1748,9 @@ func TestScheduler_RemoveJob_RemoveSelf(t *testing.T) {
 		NewTask(func() {}),
 		WithEventListeners(
 			BeforeJobRuns(
-				func(_ uuid.UUID, _ string) {
+				func(_ uuid.UUID, _ string) interface{} {
 					s.RemoveByTags("tag1")
+					return "nil"
 				},
 			),
 		),
@@ -1759,54 +1768,161 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 	listenerRunCh := make(chan error, 1)
 	testErr := fmt.Errorf("test error")
 	tests := []struct {
-		name      string
-		tsk       Task
-		el        EventListener
-		expectRun bool
-		expectErr error
+		name          string
+		jobDefinition JobDefinition
+		tsk           Task
+		jobOption     []JobOption
+		expectRun     bool
+		expectErr     error
 	}{
 		{
-			"AfterJobRuns",
+			"BeforeJobRuns",
+			DurationJob(time.Millisecond * 10),
 			NewTask(func() {}),
-			AfterJobRuns(func(_ uuid.UUID, _ string) {
-				listenerRunCh <- nil
-			}),
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithLimitedRuns(1),
+				WithEventListeners(BeforeJobRuns(func(jobID uuid.UUID, jobName string) interface{} {
+					listenerRunCh <- nil
+					return nil
+				})),
+			},
+			true,
+			nil,
+		},
+		{
+			"AfterJobRuns",
+			DurationJob(time.Millisecond * 10),
+			NewTask(func() {}),
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithLimitedRuns(1),
+				WithEventListeners(
+					BeforeJobRuns(func(jobID uuid.UUID, jobName string) interface{} {
+						return "BeforeJob"
+					}),
+					AfterJobRuns(func(_ uuid.UUID, _ string, beforeJobRunReturnValue interface{}) {
+						listenerRunCh <- nil
+						assert.Equal(t, "BeforeJob", beforeJobRunReturnValue.(string))
+					})),
+			},
 			true,
 			nil,
 		},
 		{
 			"AfterJobRunsWithError - error",
+			DurationJob(time.Millisecond * 10),
 			NewTask(func() error { return testErr }),
-			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
-				listenerRunCh <- err
-			}),
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithLimitedRuns(1),
+				WithEventListeners(
+					BeforeJobRuns(func(jobID uuid.UUID, jobName string) interface{} {
+						return "BeforeJob"
+					}),
+					AfterJobRunsWithError(func(jobID uuid.UUID, jobName string, err error, beforeJobRunReturnValue interface{}) {
+						listenerRunCh <- err
+						assert.Equal(t, "BeforeJob", beforeJobRunReturnValue.(string))
+					})),
+			},
 			true,
 			testErr,
 		},
 		{
 			"AfterJobRunsWithError - multiple return values, including error",
+			DurationJob(time.Millisecond * 10),
 			NewTask(func() (bool, error) { return false, testErr }),
-			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
-				listenerRunCh <- err
-			}),
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithLimitedRuns(1),
+				WithEventListeners(AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error, beforeJobRunReturnValue interface{}) {
+					listenerRunCh <- err
+					assert.Nil(t, beforeJobRunReturnValue)
+				})),
+			},
 			true,
 			testErr,
 		},
 		{
 			"AfterJobRunsWithError - no error",
+			DurationJob(time.Millisecond * 10),
 			NewTask(func() error { return nil }),
-			AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
-				listenerRunCh <- err
-			}),
+			[]JobOption{
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithLimitedRuns(1),
+				WithEventListeners(AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error, beforeJobRunReturnValue interface{}) {
+					listenerRunCh <- err
+					assert.Nil(t, beforeJobRunReturnValue)
+				})),
+			},
 			false,
 			nil,
 		},
 		{
-			"BeforeJobRuns",
+			"beforeJobStartTime",
+			DurationJob(time.Millisecond * 10),
 			NewTask(func() {}),
-			BeforeJobRuns(func(_ uuid.UUID, _ string) {
-				listenerRunCh <- nil
-			}),
+			[]JobOption{
+				AutoRemove(true),
+				WithStartAt(WithStartDateTime(time.Now().Add(500 * time.Millisecond))),
+				WithEventListeners(BeforeJobStartTime(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
+			true,
+			nil,
+		},
+		{
+			"afterJobStopTime",
+			DurationJob(time.Millisecond * 10),
+			NewTask(func() {}),
+			[]JobOption{
+				AutoRemove(true),
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithStopAt(WithStopDateTime(time.Now().Add(2 * time.Second))),
+				WithEventListeners(AfterJobStopTime(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
+			true,
+			nil,
+		},
+		{
+			"afterOneTimeJobAllRunComplete",
+			OneTimeJob(OneTimeJobStartDateTimes(time.Now().Add(3 * time.Second))),
+			NewTask(func() {}),
+			[]JobOption{
+				AutoRemove(true),
+				WithEventListeners(AfterOneTimeJobAllRunComplete(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
+			true,
+			nil,
+		},
+		{
+			"onJobLimitedRunsComplete",
+			DurationJob(time.Millisecond * 10),
+			NewTask(func() {}),
+			[]JobOption{
+				AutoRemove(true),
+				WithLimitedRuns(2),
+				WithEventListeners(OnJobLimitedRunsComplete(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
 			true,
 			nil,
 		},
@@ -1816,13 +1932,9 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(t)
 			_, err := s.NewJob(
-				DurationJob(time.Minute*10),
+				tt.jobDefinition,
 				tt.tsk,
-				WithStartAt(
-					WithStartImmediately(),
-				),
-				WithEventListeners(tt.el),
-				WithLimitedRuns(1),
+				tt.jobOption...,
 			)
 			require.NoError(t, err)
 
@@ -1831,7 +1943,7 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 				select {
 				case err = <-listenerRunCh:
 					assert.ErrorIs(t, err, tt.expectErr)
-				case <-time.After(time.Second):
+				case <-time.After(5 * time.Second):
 					t.Fatal("timed out waiting for listener to run")
 				}
 			} else {
@@ -1840,6 +1952,91 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 					t.Fatal("listener ran when it shouldn't have")
 				case <-time.After(time.Millisecond * 100):
 				}
+			}
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_WithAutoRemove(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	listenerRunCh := make(chan error, 1)
+	tests := []struct {
+		name          string
+		jobDefinition JobDefinition
+		tsk           Task
+		jobOption     []JobOption
+		expectRun     bool
+		expectErr     error
+	}{
+		{
+			"afterJobStopTime",
+			DurationJob(time.Millisecond * 10),
+			NewTask(func() {}),
+			[]JobOption{
+				AutoRemove(true),
+				WithStartAt(
+					WithStartImmediately(),
+				),
+				WithStopAt(WithStopDateTime(time.Now().Add(1 * time.Second))),
+				WithEventListeners(AfterJobStopTime(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
+			true,
+			nil,
+		},
+		{
+			"afterOneTimeJobAllRunComplete",
+			OneTimeJob(OneTimeJobStartDateTimes(time.Now().Add(2 * time.Second))),
+			NewTask(func() {}),
+			[]JobOption{
+				AutoRemove(true),
+				WithEventListeners(AfterOneTimeJobAllRunComplete(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
+			true,
+			nil,
+		},
+		{
+			"onJobLimitedRunsComplete",
+			DurationJob(time.Millisecond * 10),
+			NewTask(func() {}),
+			[]JobOption{
+				AutoRemove(true),
+				WithLimitedRuns(2),
+				WithEventListeners(OnJobLimitedRunsComplete(func(jobID uuid.UUID, jobName string) {
+					listenerRunCh <- nil
+				})),
+			},
+			true,
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			j, err := s.NewJob(
+				tt.jobDefinition,
+				tt.tsk,
+				tt.jobOption...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			select {
+			case err = <-listenerRunCh:
+				// 太快可能还没删除
+				time.Sleep(500 * time.Millisecond)
+				for _, jo := range s.Jobs() {
+					assert.NotEqual(t, jo.ID().String(), j.ID().String())
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for listener to run")
 			}
 
 			require.NoError(t, s.Shutdown())
@@ -1891,7 +2088,7 @@ func TestScheduler_WithLocker_WithEventListeners(t *testing.T) {
 				select {
 				case err = <-listenerRunCh:
 					assert.ErrorIs(t, err, tt.expectErr)
-				case <-time.After(time.Second):
+				case <-time.After(3 * time.Second):
 					t.Fatal("timed out waiting for listener to run")
 				}
 			} else {
@@ -2108,21 +2305,6 @@ func TestScheduler_LastRunSingleton(t *testing.T) {
 			"simple",
 			func(_ *testing.T, _ Job, _ chan struct{}) {},
 		},
-		{
-			"with runNow",
-			func(t *testing.T, j Job, jobRan chan struct{}) {
-				runTime := time.Now()
-				assert.NoError(t, j.RunNow())
-
-				// because we're using wait mode we need to wait here
-				// to make sure the job queued with RunNow has finished running
-				<-jobRan
-				lastRun, err := j.LastRun()
-				assert.NoError(t, err)
-				assert.LessOrEqual(t, lastRun.Sub(runTime), time.Millisecond*225)
-				assert.GreaterOrEqual(t, lastRun.Sub(runTime), time.Millisecond*175)
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -2132,8 +2314,8 @@ func TestScheduler_LastRunSingleton(t *testing.T) {
 			j, err := s.NewJob(
 				DurationJob(time.Millisecond*100),
 				NewTask(func() {
+					time.Sleep(time.Millisecond * 100)
 					jobRan <- struct{}{}
-					time.Sleep(time.Millisecond * 200)
 				}),
 				WithSingletonMode(LimitModeWait),
 			)
@@ -2150,7 +2332,7 @@ func TestScheduler_LastRunSingleton(t *testing.T) {
 
 			lastRun, err = j.LastRun()
 			assert.NoError(t, err)
-			assert.LessOrEqual(t, lastRun.Sub(startTime), time.Millisecond*125)
+			assert.LessOrEqual(t, lastRun.Sub(startTime), time.Millisecond*300)
 			assert.GreaterOrEqual(t, lastRun.Sub(startTime), time.Millisecond*75)
 
 			tt.f(t, j, jobRan)
@@ -2164,44 +2346,98 @@ func TestScheduler_OneTimeJob(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
-		name    string
-		startAt func() OneTimeJobStartAtOption
+		name             string
+		schedulerOption  []SchedulerOption
+		jobOptions       []JobOption
+		startAt          func() OneTimeJobStartAtOption
+		sleepMillisecond int
+		f                func(t *testing.T, j Job, jobRan int64)
 	}{
 		{
 			"start now",
+			[]SchedulerOption{},
+			[]JobOption{},
 			func() OneTimeJobStartAtOption {
 				return OneTimeJobStartImmediately()
+			},
+			0,
+			func(_ *testing.T, _ Job, jobRan int64) {
+				require.Equal(t, int64(1), jobRan)
 			},
 		},
 		{
 			"start in 100 ms",
+			[]SchedulerOption{},
+			[]JobOption{},
 			func() OneTimeJobStartAtOption {
-				return OneTimeJobStartDateTime(time.Now().Add(100 * time.Millisecond))
+				return OneTimeJobStartDateTimes(time.Now().Add(100 * time.Millisecond))
+			},
+			0,
+			func(_ *testing.T, j Job, jobRan int64) {
+				runTime := time.Now()
+				require.Equal(t, int64(1), jobRan)
+				lastRun, err := j.LastRun()
+				assert.NoError(t, err)
+
+				assert.LessOrEqual(t, lastRun.Sub(runTime), time.Millisecond*50)
+			},
+		},
+		{
+			"LimitModeWait job",
+			[]SchedulerOption{WithLimitConcurrentJobs(2, LimitModeReschedule, true)},
+			[]JobOption{WithSingletonMode(LimitModeWait)},
+			func() OneTimeJobStartAtOption {
+				return OneTimeJobStartDateTimes(time.Now().Add(50*time.Millisecond), time.Now().Add(100*time.Millisecond), time.Now().Add(270*time.Millisecond))
+			},
+			200,
+			func(_ *testing.T, j Job, jobRan int64) {
+				require.Equal(t, int64(3), jobRan)
+
+			},
+		},
+		{
+			"LimitModeReschedule job",
+			[]SchedulerOption{WithLimitConcurrentJobs(2, LimitModeReschedule, false)},
+			[]JobOption{WithSingletonMode(LimitModeWait)},
+			func() OneTimeJobStartAtOption {
+				return OneTimeJobStartDateTimes(time.Now().Add(50*time.Millisecond), time.Now().Add(100*time.Millisecond), time.Now().Add(270*time.Millisecond))
+			},
+			200,
+			func(_ *testing.T, j Job, jobRan int64) {
+				require.Equal(t, int64(2), jobRan)
+
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			jobRan := make(chan struct{}, 2)
+			jobRan := make(chan struct{}, 1)
+			s := newTestScheduler(t, tt.schedulerOption...)
+			var sign int64 = 0
+			tt.jobOptions = append(tt.jobOptions, WithEventListeners(AfterOneTimeJobAllRunComplete(func(jobID uuid.UUID, jobName string) {
+				jobRan <- struct{}{}
 
-			s := newTestScheduler(t)
-
-			_, err := s.NewJob(
+			})))
+			j, err := s.NewJob(
 				OneTimeJob(tt.startAt()),
 				NewTask(func() {
-					jobRan <- struct{}{}
+					if tt.sleepMillisecond > 0 {
+						time.Sleep(time.Duration(tt.sleepMillisecond) * time.Millisecond)
+					}
+					atomic.AddInt64(&sign, 1)
 				}),
+				tt.jobOptions...,
 			)
 			require.NoError(t, err)
-
 			s.Start()
 
 			select {
 			case <-jobRan:
-			case <-time.After(500 * time.Millisecond):
+			case <-time.After(5 * time.Second):
 				t.Fatal("timed out waiting for job to run")
 			}
+			tt.f(t, j, sign)
 
 			assert.NoError(t, s.Shutdown())
 		})

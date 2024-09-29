@@ -25,9 +25,9 @@ type executor struct {
 	// receives jobs scheduled to execute
 	jobsIn chan jobIn
 	// sends out jobs for rescheduling
-	jobsOutForRescheduling chan uuid.UUID
+	jobsOutForRescheduling chan jobIn
 	// sends out jobs once completed
-	jobsOutCompleted chan uuid.UUID
+	jobsOutCompleted chan jobIn
 	// used to request jobs from the scheduler
 	jobOutRequest chan jobOutRequest
 
@@ -49,11 +49,20 @@ type executor struct {
 	locker Locker
 	// monitor for reporting metrics
 	monitor Monitor
+	//
 }
 
 type jobIn struct {
-	id            uuid.UUID
-	shouldSendOut bool
+	id                              uuid.UUID
+	shouldSendOut                   bool
+	triggerBeforeStartTime          bool
+	triggerOnJobLimitedRunsComplete bool
+	scheduleTime                    time.Time
+	selectRun                       bool
+	needRemoveJob                   bool
+	// 下面两个只有在limitMode 下需要用到,保证正确的释放锁
+	singletonMode  bool
+	finalLimitMode LimitMode
 }
 
 type singletonRunner struct {
@@ -122,13 +131,20 @@ func (e *executor) start() {
 				e.limitMode.started = true
 				for i := e.limitMode.limit; i > 0; i-- {
 					limitModeJobsWg.Add(1)
-					go e.limitModeRunner("limitMode-"+strconv.Itoa(int(i)), e.limitMode.in, limitModeJobsWg, e.limitMode.mode, e.limitMode.rescheduleLimiter)
+					go e.limitModeRunner("limitMode-"+strconv.Itoa(int(i)), e.limitMode.in, limitModeJobsWg, e.limitMode.rescheduleLimiter)
 				}
 			}
 
 			// spin off into a goroutine to unblock the executor and
 			// allow for processing for more work
 			go func() {
+				// 处理 chan 出现阻塞,此时删除任务会关闭chan会导致出现异常 关闭的管道发送数据错误
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Println("goCron: executor panicked", r)
+						return
+					}
+				}()
 				// make sure to cancel the above context per the docs
 				// // Canceling this context releases resources associated with it, so code should
 				// // call cancel as soon as the operations running in this Context complete.
@@ -146,35 +162,84 @@ func (e *executor) start() {
 					if j.singletonMode && e.limitMode.jobLimitModeCanOverride {
 						finalLimitMode = j.singletonLimitMode
 					}
+					// limitMode 模式下 防止任务执行中更新job参数或者删除job无法正确释放锁
+					jIn.singletonMode = j.singletonMode
+					jIn.finalLimitMode = finalLimitMode
 					if j.singletonMode {
-						defer func() {
-							if r := recover(); r != nil {
-							}
-						}()
+
 						if finalLimitMode == LimitModeReschedule {
+							// 如果rescheduleLimiter或者 singletonJobRunning 阻塞都应该跳过执行
+							// rescheduleLimiter 满了代表所有的协程都在运行任务
+							// singletonJobRunning 满了代表任务在执行中
+							select {
+							case e.limitMode.rescheduleLimiter <- struct{}{}:
+								select {
+								case j.singletonJobRunning <- struct{}{}:
+									select {
+									case e.limitMode.in <- jIn:
+										e.sendOutForRescheduling(&jIn)
+									case <-j.ctx.Done():
+										return
+									case <-e.ctx.Done():
+										return
+									}
+								case <-j.ctx.Done():
+									return
+								case <-e.ctx.Done():
+									return
+								default:
+									e.incrementJobCounter(*j, SingletonRescheduled)
+									e.sendOutForReschedulingAndIgnoreThisExecution(&jIn)
+								}
+							case <-j.ctx.Done():
+								return
+							case <-e.ctx.Done():
+								return
+							default:
+								e.incrementJobCounter(*j, SingletonRescheduled)
+								e.sendOutForReschedulingAndIgnoreThisExecution(&jIn)
+							}
+						} else {
 							select {
 							case j.singletonJobRunning <- struct{}{}:
-								e.limitMode.in <- jIn
-							default:
-								e.sendOutForRescheduling(&jIn)
+								select {
+								case e.limitMode.in <- jIn:
+									e.sendOutForRescheduling(&jIn)
+								case <-j.ctx.Done():
+									return
+								case <-e.ctx.Done():
+									return
+								}
+							case <-j.ctx.Done():
+								return
+							case <-e.ctx.Done():
+								return
 							}
-
-						} else {
-							j.singletonJobRunning <- struct{}{}
-							e.limitMode.in <- jIn
 						}
 
 					} else {
 						if finalLimitMode == LimitModeReschedule {
 							select {
 							case e.limitMode.rescheduleLimiter <- struct{}{}:
-								e.limitMode.in <- jIn
+								select {
+								case e.limitMode.in <- jIn:
+									e.sendOutForRescheduling(&jIn)
+								case <-j.ctx.Done():
+									return
+								case <-e.ctx.Done():
+									return
+								}
+							case <-j.ctx.Done():
+								return
+							case <-e.ctx.Done():
+								return
 							default:
-								e.sendOutForRescheduling(&jIn)
+								e.incrementJobCounter(*j, Rescheduled)
+								e.sendOutForReschedulingAndIgnoreThisExecution(&jIn)
 							}
 						} else {
-							e.sendOutForRescheduling(&jIn)
 							e.limitMode.in <- jIn
+							e.sendOutForRescheduling(&jIn)
 						}
 
 					}
@@ -198,28 +263,44 @@ func (e *executor) start() {
 							}
 							e.singletonRunners.Store(jIn.id, runner)
 							singletonJobsWg.Add(1)
-							go e.singletonModeRunner("singleton-"+jIn.id.String(), runner.in, singletonJobsWg, j.singletonLimitMode, runner.rescheduleLimiter)
+							go e.singletonModeRunner("singleton-"+jIn.id.String(), runner.in, singletonJobsWg, runner.rescheduleLimiter, j.ctx)
 						} else {
 							runner = runnerSrc.(*singletonRunner)
 						}
-
+						jIn.finalLimitMode = j.singletonLimitMode
 						if j.singletonLimitMode == LimitModeReschedule {
 							// reschedule mode uses the limiter channel to check
 							// for a running job and reschedules if the channel is full.
 							select {
 							case runner.rescheduleLimiter <- struct{}{}:
-								runner.in <- jIn
-								e.sendOutForRescheduling(&jIn)
+								select {
+								case runner.in <- jIn:
+									e.sendOutForRescheduling(&jIn)
+								case <-j.ctx.Done():
+									return
+								case <-e.ctx.Done():
+									return
+								}
+							case <-j.ctx.Done():
+								return
+							case <-e.ctx.Done():
+								return
 							default:
 								// runner is busy, reschedule the work for later
 								// which means we just skip it here and do nothing
 								e.incrementJobCounter(*j, SingletonRescheduled)
-								e.sendOutForRescheduling(&jIn)
+								e.sendOutForReschedulingAndIgnoreThisExecution(&jIn)
 							}
 						} else {
 							// wait mode, fill up that queue (buffered channel, so it's ok)
-							runner.in <- jIn
-							e.sendOutForRescheduling(&jIn)
+							select {
+							case runner.in <- jIn:
+								e.sendOutForRescheduling(&jIn)
+							case <-j.ctx.Done():
+								return
+							case <-e.ctx.Done():
+								return
+							}
 						}
 					} else {
 						select {
@@ -251,7 +332,7 @@ func (e *executor) start() {
 func (e *executor) sendOutForRescheduling(jIn *jobIn) {
 	if jIn.shouldSendOut {
 		select {
-		case e.jobsOutForRescheduling <- jIn.id:
+		case e.jobsOutForRescheduling <- *jIn:
 		case <-e.ctx.Done():
 			return
 		}
@@ -262,7 +343,55 @@ func (e *executor) sendOutForRescheduling(jIn *jobIn) {
 	jIn.shouldSendOut = false
 }
 
-func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
+func (e *executor) sendOutForReschedulingAndIgnoreThisExecution(jIn *jobIn) {
+	if jIn.shouldSendOut {
+		select {
+		case e.jobsOutForRescheduling <- *jIn:
+			ctx, cancel := context.WithCancel(e.ctx)
+			j := requestJobCtx(ctx, jIn.id, e.jobOutRequest)
+			cancel()
+
+			if jIn.triggerBeforeStartTime {
+				_ = callJobFuncWithParams(j.beforeJobStartTime, j.id, j.name)
+			}
+
+			oTJ, isOk := j.jobSchedule.(oneTimeJob)
+			if isOk {
+				lenSortedTimes := len(oTJ.sortedTimes)
+				if jIn.scheduleTime == oTJ.sortedTimes[lenSortedTimes-1] {
+					jIn.needRemoveJob = true
+					_ = callJobFuncWithParams(j.afterOneTimeJobAllRunComplete, j.id, j.name)
+				}
+			}
+
+			if jIn.triggerOnJobLimitedRunsComplete {
+				jIn.needRemoveJob = true
+				_ = callJobFuncWithParams(j.onJobLimitedRunsComplete, j.id, j.name)
+			}
+
+			if j.stopTimeReached(e.clock.Now()) {
+				j.hookOnce.Do(func() {
+					jIn.needRemoveJob = true
+					_ = callJobFuncWithParams(j.afterJobStopTime, j.id, j.name)
+				})
+			}
+
+			select {
+			case e.jobsOutCompleted <- *jIn:
+			case <-e.ctx.Done():
+			}
+		case <-e.ctx.Done():
+			return
+		}
+	}
+
+	// we need to set this to false now, because to handle
+	// non-limit jobs, we send out from the e.runJob function
+	// and in this case we don't want to send out twice.
+	jIn.shouldSendOut = false
+}
+
+func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, rescheduleLimiter chan struct{}) {
 	e.logger.Debug("gocron: limitModeRunner starting", "name", name)
 	for {
 		select {
@@ -278,23 +407,18 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 			ctx, cancel := context.WithCancel(e.ctx)
 			j := requestJobCtx(ctx, jIn.id, e.jobOutRequest)
 			cancel()
-			if j == nil {
-				return
+			if j != nil {
+				jIn.shouldSendOut = false
+				e.runJob(*j, jIn)
+				if jIn.singletonMode {
+					<-j.singletonJobRunning
+				}
 			}
-			finalLimitMode := e.limitMode.mode
-			if j.singletonMode && e.limitMode.jobLimitModeCanOverride {
-				finalLimitMode = j.singletonLimitMode
-			}
-			e.runJob(*j, jIn)
-
-			if j.singletonMode {
-				<-j.singletonJobRunning
-			}
-
 			// remove the limiter block to allow another job to be scheduled
-			if finalLimitMode == LimitModeReschedule {
+			if jIn.finalLimitMode == LimitModeReschedule {
 				<-rescheduleLimiter
 			}
+
 		case <-e.ctx.Done():
 			e.logger.Debug("limitModeRunner shutting down", "name", name)
 			wg.Done()
@@ -303,7 +427,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 	}
 }
 
-func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
+func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, rescheduleLimiter chan struct{}, jobCtx context.Context) {
 	e.logger.Debug("gocron: singletonModeRunner starting", "name", name)
 	for {
 		select {
@@ -328,13 +452,18 @@ func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroup
 			}
 
 			// remove the limiter block to allow another job to be scheduled
-			if limitMode == LimitModeReschedule {
+			if jIn.finalLimitMode == LimitModeReschedule {
 				<-rescheduleLimiter
 			}
 		case <-e.ctx.Done():
 			e.logger.Debug("singletonModeRunner shutting down", "name", name)
 			wg.Done()
 			return
+		case <-jobCtx.Done():
+			e.logger.Debug("singletonModeRunner shutting down", "name", name)
+			wg.Done()
+			return
+
 		}
 	}
 }
@@ -352,6 +481,14 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 
 	if j.stopTimeReached(e.clock.Now()) {
+		j.hookOnce.Do(func() {
+			_ = callJobFuncWithParams(j.afterJobStopTime, j.id, j.name)
+			jIn.needRemoveJob = true
+			select {
+			case e.jobsOutCompleted <- jIn:
+			case <-e.ctx.Done():
+			}
+		})
 		return
 	}
 
@@ -380,27 +517,49 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
 	}
-	beforeJobStartTimeReturnValue := callJobFuncHasReturnWithParams(j.beforeJobRuns, j.id, j.name)
-	//防止返回的是nil导致反射调用报错
-	if beforeJobStartTimeReturnValue == nil {
-		beforeJobStartTimeReturnValue = ""
+	if jIn.triggerBeforeStartTime {
+		_ = callJobFuncWithParams(j.beforeJobStartTime, j.id, j.name)
 	}
+
+	beforeJobReturnValue := callJobFuncHasReturnWithParams(j.beforeJobRuns, j.id, j.name)
 	e.sendOutForRescheduling(&jIn)
-	select {
-	case e.jobsOutCompleted <- j.id:
-	case <-e.ctx.Done():
-	}
 
 	startTime := time.Now()
 	err := e.callJobWithRecover(j)
 	e.recordJobTiming(startTime, time.Now(), j)
 	if err != nil {
-		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err, beforeJobStartTimeReturnValue)
+		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err, beforeJobReturnValue)
 		e.incrementJobCounter(j, Fail)
 	} else {
-		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name, beforeJobStartTimeReturnValue)
+		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name, beforeJobReturnValue)
 		e.incrementJobCounter(j, Success)
 	}
+	oTJ, isOk := j.jobSchedule.(oneTimeJob)
+	if isOk {
+		lenSortedTimes := len(oTJ.sortedTimes)
+		if lenSortedTimes == 0 || jIn.scheduleTime == oTJ.sortedTimes[lenSortedTimes-1] {
+			jIn.needRemoveJob = true
+			_ = callJobFuncWithParams(j.afterOneTimeJobAllRunComplete, j.id, j.name)
+		}
+	}
+
+	if jIn.triggerOnJobLimitedRunsComplete {
+		jIn.needRemoveJob = true
+		_ = callJobFuncWithParams(j.onJobLimitedRunsComplete, j.id, j.name)
+	}
+
+	if j.stopTimeReached(e.clock.Now()) {
+		j.hookOnce.Do(func() {
+			jIn.needRemoveJob = true
+			_ = callJobFuncWithParams(j.afterJobStopTime, j.id, j.name)
+		})
+	}
+
+	select {
+	case e.jobsOutCompleted <- jIn:
+	case <-e.ctx.Done():
+	}
+
 }
 
 func (e *executor) callJobWithRecover(j internalJob) (err error) {

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/go-co-op/gocron/v2" // nolint:revive
+	. "github.com/gaoyaxuan/gocron/v2" // nolint:revive
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 )
@@ -33,7 +33,7 @@ func ExampleAfterJobRuns() {
 		),
 		WithEventListeners(
 			AfterJobRuns(
-				func(jobID uuid.UUID, jobName string) {
+				func(_ uuid.UUID, _ string, beforeJobRunReturnValue interface{}) {
 					// do something after the job completes
 				},
 			),
@@ -54,7 +54,7 @@ func ExampleAfterJobRunsWithError() {
 		),
 		WithEventListeners(
 			AfterJobRunsWithError(
-				func(jobID uuid.UUID, jobName string, err error) {
+				func(jobID uuid.UUID, jobName string, err error, beforeJobRunReturnValue interface{}) {
 					// do something when the job returns an error
 				},
 			),
@@ -97,8 +97,9 @@ func ExampleBeforeJobRuns() {
 		),
 		WithEventListeners(
 			BeforeJobRuns(
-				func(jobID uuid.UUID, jobName string) {
+				func(jobID uuid.UUID, jobName string) interface{} {
 					// do something immediately before the job is run
+					return nil
 				},
 			),
 		),
@@ -630,18 +631,19 @@ func ExampleWithEventListeners() {
 		),
 		WithEventListeners(
 			AfterJobRuns(
-				func(jobID uuid.UUID, jobName string) {
+				func(_ uuid.UUID, _ string, beforeJobRunReturnValue interface{}) {
 					// do something after the job completes
 				},
 			),
 			AfterJobRunsWithError(
-				func(jobID uuid.UUID, jobName string, err error) {
+				func(_ uuid.UUID, _ string, err error, beforeJobRunReturnValue interface{}) {
 					// do something when the job returns an error
 				},
 			),
 			BeforeJobRuns(
-				func(jobID uuid.UUID, jobName string) {
+				func(jobID uuid.UUID, jobName string) interface{} {
 					// do something immediately before the job is run
+					return nil
 				},
 			),
 		),

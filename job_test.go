@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -419,21 +420,23 @@ func TestWithEventListeners(t *testing.T) {
 		{
 			"beforeJobRuns",
 			[]EventListener{
-				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
+				BeforeJobRuns(func(jobID uuid.UUID, jobName string) interface{} {
+					return nil
+				}),
 			},
 			nil,
 		},
 		{
 			"afterJobRuns",
 			[]EventListener{
-				AfterJobRuns(func(_ uuid.UUID, _ string) {}),
+				AfterJobRuns(func(_ uuid.UUID, _ string, beforeJobRunReturnValue interface{}) {}),
 			},
 			nil,
 		},
 		{
 			"afterJobRunsWithError",
 			[]EventListener{
-				AfterJobRunsWithError(func(_ uuid.UUID, _ string, _ error) {}),
+				AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error, beforeJobRunReturnValue interface{}) {}),
 			},
 			nil,
 		},
@@ -454,9 +457,11 @@ func TestWithEventListeners(t *testing.T) {
 		{
 			"multiple event listeners",
 			[]EventListener{
-				AfterJobRuns(func(_ uuid.UUID, _ string) {}),
-				AfterJobRunsWithError(func(_ uuid.UUID, _ string, _ error) {}),
-				BeforeJobRuns(func(_ uuid.UUID, _ string) {}),
+				AfterJobRuns(func(_ uuid.UUID, _ string, beforeJobRunReturnValue interface{}) {}),
+				AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error, beforeJobRunReturnValue interface{}) {}),
+				BeforeJobRuns(func(jobID uuid.UUID, jobName string) interface{} {
+					return nil
+				}),
 				AfterLockError(func(_ uuid.UUID, _ string, _ error) {}),
 			},
 			nil,
@@ -596,8 +601,8 @@ func TestJob_NextRuns(t *testing.T) {
 			func(t *testing.T, iteration int, previousRun, nextRun time.Time) {
 				diff := time.Hour * 14 * 24
 				if iteration == 1 {
-					// because the job is run immediately, the first run is on
-					// Saturday 1/1/2000. The following run is then on Tuesday 1/11/2000
+					//because the job is run immediately, the first run is on
+					//Saturday 1/11/2000. The following run is then on Tuesday 1/25/2000
 					diff = time.Hour * 10 * 24
 				}
 				assert.Equal(t, previousRun.Add(diff).Day(), nextRun.Day())
@@ -617,7 +622,9 @@ func TestJob_NextRuns(t *testing.T) {
 			j, err := s.NewJob(
 				tt.jd,
 				NewTask(
-					func() {},
+					func() {
+						time.Sleep(1 * time.Second)
+					},
 				),
 				WithStartAt(WithStartImmediately()),
 			)
@@ -630,7 +637,7 @@ func TestJob_NextRuns(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Len(t, nextRuns, 5)
-
+			fmt.Println(nextRuns)
 			for i := range nextRuns {
 				if i == 0 {
 					// skipping because there is no previous run
@@ -657,7 +664,7 @@ func TestJob_PanicOccurred(t *testing.T) {
 		WithEventListeners(
 			AfterJobRunsWithPanic(func(_ uuid.UUID, _ string, recoverData any) {
 				gotCh <- recoverData
-			}), AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) {
+			}), AfterJobRunsWithError(func(jobID uuid.UUID, jobName string, err error, beforeJobRunReturnValue interface{}) {
 				errCh <- err
 			}),
 		),

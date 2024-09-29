@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,7 +49,18 @@ type internalJob struct {
 	afterJobRunsWithPanic func(jobID uuid.UUID, jobName string, recoverData any)
 	afterLockError        func(jobID uuid.UUID, jobName string, err error)
 
-	locker Locker
+	// 到达开始时间,任务开始运行前触发
+	beforeJobStartTime func(jobID uuid.UUID, jobName string)
+	// afterJobStopTime  在StopTime 后
+	afterJobStopTime func(jobID uuid.UUID, jobName string)
+	//OneTimeJob 所有指定的时间都执行完成以后
+	afterOneTimeJobAllRunComplete func(jobID uuid.UUID, jobName string)
+
+	// 如果设置了WithLimitedRuns,执行完成会调用
+	onJobLimitedRunsComplete  func(jobID uuid.UUID, jobName string)
+	hookOnce                  *sync.Once
+	locker                    Locker
+	afterJobRunCompleteRemove bool
 }
 
 // stop is used to stop the job's timer and cancel the context
@@ -566,6 +578,14 @@ func WithEventListeners(eventListeners ...EventListener) JobOption {
 	}
 }
 
+// AutoRemove after OneTimeJob all run complete or after job stopTime  or job Limited Run Complete
+func AutoRemove(afterJobRunCompleteRemove bool) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		j.afterJobRunCompleteRemove = afterJobRunCompleteRemove
+		return nil
+	}
+}
+
 // WithLimitedRuns limits the number of executions of this job to n.
 // Upon reaching the limit, the job is removed from the scheduler.
 func WithLimitedRuns(limit uint) JobOption {
@@ -758,6 +778,50 @@ func AfterLockError(eventListenerFunc func(jobID uuid.UUID, jobName string, err 
 	}
 }
 
+// BeforeJobStartTime 会在到达设置的startTime job 运行前触发,在BeforeJobRuns 之前
+func BeforeJobStartTime(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.beforeJobStartTime = eventListenerFunc
+		return nil
+	}
+}
+
+// AfterOneTimeJobAllRunComplete OneTimeJob 所有指定的时间都执行完成以后
+func AfterOneTimeJobAllRunComplete(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.afterOneTimeJobAllRunComplete = eventListenerFunc
+		return nil
+	}
+}
+
+// AfterJobStopTime  在StopTime 前最后一次正常运行后调用,如果job 执行时间大于调度间隔,那么AfterOneTimeJobAllRunComplete 会先执行
+func AfterJobStopTime(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.afterJobStopTime = eventListenerFunc
+		return nil
+	}
+}
+
+// OnJobLimitedRunsComplete 如果设置了WithLimitedRuns,执行完成会调用
+func OnJobLimitedRunsComplete(eventListenerFunc func(jobID uuid.UUID, jobName string)) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.onJobLimitedRunsComplete = eventListenerFunc
+		return nil
+	}
+}
+
 // -----------------------------------------------
 // -----------------------------------------------
 // ---------------- Job Schedules ----------------
@@ -814,7 +878,6 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 		return next
 	}
 	firstPass = false
-
 	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
 	return d.nextDay(startNextDay, firstPass)
 }
@@ -1054,7 +1117,7 @@ func (j job) Name() string {
 
 func (j job) NextRun() (time.Time, error) {
 	runs, err := j.NextRuns(1)
-	if err != nil {
+	if err != nil || len(runs) == 0 {
 		return time.Time{}, err
 	}
 	return runs[0], nil
