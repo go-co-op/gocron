@@ -608,6 +608,17 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrDailyJobMinutesSeconds,
 		},
 		{
+			"daily job interval 0",
+			DailyJob(
+				0,
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrDailyJobZeroInterval,
+		},
+		{
 			"weekly job at times nil",
 			WeeklyJob(
 				1,

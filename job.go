@@ -252,6 +252,10 @@ func (d dailyJobDefinition) setup(j *internalJob, location *time.Location, _ tim
 		return ErrDailyJobMinutesSeconds
 	}
 
+	if d.interval == 0 {
+		return ErrDailyJobZeroInterval
+	}
+
 	ds := dailyJob{
 		interval: d.interval,
 		atTimes:  atTimesDate,

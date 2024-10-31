@@ -9,6 +9,7 @@ var (
 	ErrDailyJobAtTimeNil             = fmt.Errorf("gocron: DailyJob: atTime within atTimes must not be nil")
 	ErrDailyJobAtTimesNil            = fmt.Errorf("gocron: DailyJob: atTimes must not be nil")
 	ErrDailyJobHours                 = fmt.Errorf("gocron: DailyJob: atTimes hours must be between 0 and 23 inclusive")
+	ErrDailyJobZeroInterval          = fmt.Errorf("gocron: DailyJob: interval must be greater than 0")
 	ErrDailyJobMinutesSeconds        = fmt.Errorf("gocron: DailyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
 	ErrDurationJobIntervalZero       = fmt.Errorf("gocron: DurationJob: time interval is 0")
 	ErrDurationRandomJobMinMax       = fmt.Errorf("gocron: DurationRandomJob: minimum duration must be less than maximum duration")
