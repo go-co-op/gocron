@@ -97,6 +97,21 @@ func (mr *MockJobMockRecorder) NextRun() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextRun", reflect.TypeOf((*MockJob)(nil).NextRun))
 }
 
+// NextRuns mocks base method.
+func (m *MockJob) NextRuns(arg0 int) ([]time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NextRuns", arg0)
+	ret0, _ := ret[0].([]time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NextRuns indicates an expected call of NextRuns.
+func (mr *MockJobMockRecorder) NextRuns(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextRuns", reflect.TypeOf((*MockJob)(nil).NextRuns), arg0)
+}
+
 // RunNow mocks base method.
 func (m *MockJob) RunNow() error {
 	m.ctrl.T.Helper()
