@@ -608,6 +608,17 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrDailyJobMinutesSeconds,
 		},
 		{
+			"daily job interval 0",
+			DailyJob(
+				0,
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrDailyJobZeroInterval,
+		},
+		{
 			"weekly job at times nil",
 			WeeklyJob(
 				1,
@@ -674,6 +685,18 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			),
 			nil,
 			ErrWeeklyJobMinutesSeconds,
+		},
+		{
+			"weekly job interval zero",
+			WeeklyJob(
+				0,
+				NewWeekdays(time.Monday),
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrWeeklyJobZeroInterval,
 		},
 		{
 			"monthly job at times nil",
@@ -754,6 +777,18 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			),
 			nil,
 			ErrMonthlyJobMinutesSeconds,
+		},
+		{
+			"monthly job interval zero",
+			MonthlyJob(
+				0,
+				NewDaysOfTheMonth(1),
+				NewAtTimes(
+					NewAtTime(1, 0, 0),
+				),
+			),
+			nil,
+			ErrMonthlyJobZeroInterval,
 		},
 		{
 			"WithName no name",
