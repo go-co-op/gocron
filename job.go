@@ -274,6 +274,9 @@ type weeklyJobDefinition struct {
 
 func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
 	var ws weeklyJob
+	if w.interval == 0 {
+		return ErrWeeklyJobZeroInterval
+	}
 	ws.interval = w.interval
 
 	if w.daysOfTheWeek == nil {
@@ -339,6 +342,9 @@ type monthlyJobDefinition struct {
 
 func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
 	var ms monthlyJob
+	if m.interval == 0 {
+		return ErrMonthlyJobZeroInterval
+	}
 	ms.interval = m.interval
 
 	if m.daysOfTheMonth == nil {
