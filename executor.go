@@ -396,7 +396,12 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 
 	startTime := time.Now()
-	err := e.callJobWithRecover(j)
+	var err error
+	if j.afterJobRunsWithPanic != nil {
+		err = e.callJobWithRecover(j)
+	} else {
+		err = callJobFuncWithParams(j.function, j.parameters...)
+	}
 	e.recordJobTiming(startTime, time.Now(), j)
 	if err != nil {
 		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
