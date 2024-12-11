@@ -241,9 +241,11 @@ func (s *scheduler) stopScheduler() {
 	}
 	var err error
 	if s.started {
+		t := time.NewTimer(s.exec.stopTimeout + 1*time.Second)
 		select {
 		case err = <-s.exec.done:
-		case <-time.After(s.exec.stopTimeout + 1*time.Second):
+			t.Stop()
+		case <-t.C:
 			err = ErrStopExecutorTimedOut
 		}
 	}
@@ -741,20 +743,27 @@ func (s *scheduler) StopJobs() error {
 		return nil
 	case s.stopCh <- struct{}{}:
 	}
+
+	t := time.NewTimer(s.exec.stopTimeout + 2*time.Second)
 	select {
 	case err := <-s.stopErrCh:
+		t.Stop()
 		return err
-	case <-time.After(s.exec.stopTimeout + 2*time.Second):
+	case <-t.C:
 		return ErrStopSchedulerTimedOut
 	}
 }
 
 func (s *scheduler) Shutdown() error {
 	s.shutdownCancel()
+
+	t := time.NewTimer(s.exec.stopTimeout + 2*time.Second)
 	select {
 	case err := <-s.stopErrCh:
+
+		t.Stop()
 		return err
-	case <-time.After(s.exec.stopTimeout + 2*time.Second):
+	case <-t.C:
 		return ErrStopSchedulerTimedOut
 	}
 }
