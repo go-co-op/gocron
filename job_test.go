@@ -676,3 +676,51 @@ func TestJob_PanicOccurred(t *testing.T) {
 	close(gotCh)
 	close(errCh)
 }
+
+func TestTimeFromAtTime(t *testing.T) {
+	testTimeUTC := time.Date(0, 0, 0, 1, 1, 1, 0, time.UTC)
+	cst, err := time.LoadLocation("America/Chicago")
+	require.NoError(t, err)
+	testTimeCST := time.Date(0, 0, 0, 1, 1, 1, 0, cst)
+
+	tests := []struct {
+		name         string
+		at           AtTime
+		loc          *time.Location
+		expectedTime time.Time
+		expectedStr  string
+	}{
+		{
+			"UTC",
+			NewAtTime(
+				uint(testTimeUTC.Hour()),
+				uint(testTimeUTC.Minute()),
+				uint(testTimeUTC.Second()),
+			),
+			time.UTC,
+			testTimeUTC,
+			"01:01:01",
+		},
+		{
+			"CST",
+			NewAtTime(
+				uint(testTimeCST.Hour()),
+				uint(testTimeCST.Minute()),
+				uint(testTimeCST.Second()),
+			),
+			cst,
+			testTimeCST,
+			"01:01:01",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := TimeFromAtTime(tt.at, tt.loc)
+			assert.Equal(t, tt.expectedTime, result)
+
+			resultFmt := result.Format("15:04:05")
+			assert.Equal(t, tt.expectedStr, resultFmt)
+		})
+	}
+}

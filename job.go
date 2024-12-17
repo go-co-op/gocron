@@ -413,6 +413,14 @@ func (a atTime) time(location *time.Location) time.Time {
 	return time.Date(0, 0, 0, int(a.hours), int(a.minutes), int(a.seconds), 0, location)
 }
 
+// TimeFromAtTime is a helper function to allow converting AtTime into a time.Time value
+// Note: the time.Time value will have zero values for all Time fields except Hours, Minutes, Seconds.
+//
+//	For example: time.Date(0, 0, 0, 1, 1, 1, 0, time.UTC)
+func TimeFromAtTime(at AtTime, loc *time.Location) time.Time {
+	return at().time(loc)
+}
+
 // AtTime defines a function that returns the internal atTime
 type AtTime func() atTime
 
