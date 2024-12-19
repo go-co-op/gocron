@@ -311,8 +311,7 @@ type Weekdays func() []time.Weekday
 // NewWeekdays provide the days of the week the job should run.
 func NewWeekdays(weekday time.Weekday, weekdays ...time.Weekday) Weekdays {
 	return func() []time.Weekday {
-		weekdays = append(weekdays, weekday)
-		return weekdays
+		return append([]time.Weekday{weekday}, weekdays...)
 	}
 }
 
@@ -400,8 +399,7 @@ type DaysOfTheMonth func() days
 //	-5 == 5 days before the end of the month.
 func NewDaysOfTheMonth(day int, moreDays ...int) DaysOfTheMonth {
 	return func() days {
-		moreDays = append(moreDays, day)
-		return moreDays
+		return append([]int{day}, moreDays...)
 	}
 }
 
@@ -439,8 +437,7 @@ type AtTimes func() []AtTime
 // the job should be run
 func NewAtTimes(atTime AtTime, atTimes ...AtTime) AtTimes {
 	return func() []AtTime {
-		atTimes = append(atTimes, atTime)
-		return atTimes
+		return append([]AtTime{atTime}, atTimes...)
 	}
 }
 
