@@ -1499,6 +1499,8 @@ func TestScheduler_WithDistributed(t *testing.T) {
 					default:
 					}
 				}
+
+				assert.Equal(t, 2, notLockedCount)
 			},
 		},
 		{
@@ -1521,6 +1523,8 @@ func TestScheduler_WithDistributed(t *testing.T) {
 					default:
 					}
 				}
+
+				assert.Equal(t, 2, notLockedCount)
 			},
 		},
 	}
