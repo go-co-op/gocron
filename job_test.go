@@ -724,3 +724,59 @@ func TestTimeFromAtTime(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAtTimes(t *testing.T) {
+	at := NewAtTimes(
+		NewAtTime(1, 1, 1),
+		NewAtTime(2, 2, 2),
+	)
+
+	var times []string
+	for _, att := range at() {
+		timeStr := TimeFromAtTime(att, time.UTC).Format("15:04")
+		times = append(times, timeStr)
+	}
+
+	var timesAgain []string
+	for _, att := range at() {
+		timeStr := TimeFromAtTime(att, time.UTC).Format("15:04")
+		timesAgain = append(timesAgain, timeStr)
+	}
+
+	assert.Equal(t, times, timesAgain)
+}
+
+func TestNewWeekdays(t *testing.T) {
+	wd := NewWeekdays(
+		time.Monday,
+		time.Tuesday,
+	)
+
+	var dayStrings []string
+	for _, w := range wd() {
+		dayStrings = append(dayStrings, w.String())
+	}
+
+	var dayStringsAgain []string
+	for _, w := range wd() {
+		dayStringsAgain = append(dayStringsAgain, w.String())
+	}
+
+	assert.Equal(t, dayStrings, dayStringsAgain)
+}
+
+func TestNewDaysOfTheMonth(t *testing.T) {
+	dom := NewDaysOfTheMonth(1, 2, 3)
+
+	var domInts []int
+	for _, d := range dom() {
+		domInts = append(domInts, d)
+	}
+
+	var domIntsAgain []int
+	for _, d := range dom() {
+		domIntsAgain = append(domIntsAgain, d)
+	}
+
+	assert.Equal(t, domInts, domIntsAgain)
+}
