@@ -818,6 +818,8 @@ func WithDistributedElector(elector Elector) SchedulerOption {
 // WithDistributedLocker sets the locker to be used by multiple
 // Scheduler instances to ensure that only one instance of each
 // job is run.
+// To disable this global locker for specific jobs, see
+// WithDisabledDistributedJobLocker.
 func WithDistributedLocker(locker Locker) SchedulerOption {
 	return func(s *scheduler) error {
 		if locker == nil {

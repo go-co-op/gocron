@@ -370,7 +370,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.incrementJobCounter(j, Skip)
 			return
 		}
-	} else if j.locker != nil {
+	} else if !j.disabledLocker && j.locker != nil {
 		lock, err := j.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)
@@ -379,7 +379,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
-	} else if e.locker != nil {
+	} else if !j.disabledLocker && e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)

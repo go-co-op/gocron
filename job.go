@@ -45,6 +45,7 @@ type internalJob struct {
 	afterJobRunsWithError func(jobID uuid.UUID, jobName string, err error)
 	afterJobRunsWithPanic func(jobID uuid.UUID, jobName string, recoverData any)
 	afterLockError        func(jobID uuid.UUID, jobName string, err error)
+	disabledLocker        bool
 
 	locker Locker
 }
@@ -552,6 +553,16 @@ func WithDistributedJobLocker(locker Locker) JobOption {
 			return ErrWithDistributedJobLockerNil
 		}
 		j.locker = locker
+		return nil
+	}
+}
+
+// WithDisabledDistributedJobLocker disables the distributed job locker.
+// This is useful when a global distributed locker has been set on the scheduler
+// level using WithDistributedLocker and need to be disabled for specific jobs.
+func WithDisabledDistributedJobLocker(disabled bool) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		j.disabledLocker = disabled
 		return nil
 	}
 }
