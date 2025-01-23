@@ -21,6 +21,9 @@ type Scheduler interface {
 	// NewJob creates a new job in the Scheduler. The job is scheduled per the provided
 	// definition when the Scheduler is started. If the Scheduler is already running
 	// the job will be scheduled when the Scheduler is started.
+	// If you set the first argument of your Task func to be a context.Context,
+	// gocron will pass in a context to the job and will cancel on shutdown.
+	// This allows you to listen for and handle cancellation within your job.
 	NewJob(JobDefinition, Task, ...JobOption) (Job, error)
 	// RemoveByTags removes all jobs that have at least one of the provided tags.
 	RemoveByTags(...string)

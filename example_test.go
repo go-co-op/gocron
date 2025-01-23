@@ -354,6 +354,21 @@ func ExampleNewScheduler() {
 	fmt.Println(s.Jobs())
 }
 
+func ExampleNewTask() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		gocron.DurationJob(time.Second),
+		gocron.NewTask(
+			func(ctx context.Context) {
+				// gocron will pass in a context to the job and will cancel on shutdown.
+				// this allows you to listen for and handle cancellation within your job.
+			},
+		),
+	)
+}
+
 func ExampleOneTimeJob() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
@@ -596,6 +611,27 @@ func ExampleWithClock() {
 	_ = s.StopJobs()
 	// Output:
 	// one, 2
+}
+
+func ExampleWithContext() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func(ctx context.Context) {
+				// gocron will pass in a context to the job and will cancel on shutdown.
+				// this allows you to listen for and handle cancellation within your job.
+			},
+		),
+		gocron.WithContext(ctx),
+	)
 }
 
 func ExampleWithDisabledDistributedJobLocker() {

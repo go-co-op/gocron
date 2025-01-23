@@ -83,6 +83,9 @@ type task struct {
 type Task func() task
 
 // NewTask provides the job's task function and parameters.
+// If you set the first argument of your Task func to be a context.Context,
+// gocron will pass in a context to the job and will cancel on shutdown.
+// This allows you to listen for and handle cancellation within your job.
 func NewTask(function any, parameters ...any) Task {
 	return func() task {
 		return task{
@@ -705,8 +708,14 @@ func WithIdentifier(id uuid.UUID) JobOption {
 }
 
 // WithContext sets the parent context for the job
+// If you set the first argument of your Task func to be a context.Context,
+// gocron will pass in a context to the job and will cancel on shutdown.
+// This allows you to listen for and handle cancellation within your job.
 func WithContext(ctx context.Context) JobOption {
 	return func(j *internalJob, _ time.Time) error {
+		if ctx == nil {
+			return ErrWithContextNil
+		}
 		j.parentCtx = ctx
 		return nil
 	}

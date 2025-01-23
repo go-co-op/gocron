@@ -394,6 +394,77 @@ func TestScheduler_StopLongRunningJobs(t *testing.T) {
 		require.NoError(t, s.StopJobs())
 		time.Sleep(100 * time.Millisecond)
 	})
+	t.Run("start, run job, stop jobs before job is completed - manual context cancel", func(t *testing.T) {
+		s := newTestScheduler(t,
+			WithStopTimeout(50*time.Millisecond),
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		_, err := s.NewJob(
+			DurationJob(
+				50*time.Millisecond,
+			),
+			NewTask(
+				func(ctx context.Context) {
+					select {
+					case <-ctx.Done():
+					case <-time.After(100 * time.Millisecond):
+						t.Fatal("job can not been canceled")
+					}
+				}, ctx,
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+			WithSingletonMode(LimitModeReschedule),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		time.Sleep(20 * time.Millisecond)
+		// the running job is canceled, no unexpected timeout error
+		cancel()
+		require.NoError(t, s.StopJobs())
+		time.Sleep(100 * time.Millisecond)
+	})
+	t.Run("start, run job, stop jobs before job is completed - manual context cancel WithContext", func(t *testing.T) {
+		s := newTestScheduler(t,
+			WithStopTimeout(50*time.Millisecond),
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		_, err := s.NewJob(
+			DurationJob(
+				50*time.Millisecond,
+			),
+			NewTask(
+				func(ctx context.Context) {
+					select {
+					case <-ctx.Done():
+					case <-time.After(100 * time.Millisecond):
+						t.Fatal("job can not been canceled")
+					}
+				},
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+			WithSingletonMode(LimitModeReschedule),
+			WithContext(ctx),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		time.Sleep(20 * time.Millisecond)
+		// the running job is canceled, no unexpected timeout error
+		cancel()
+		require.NoError(t, s.StopJobs())
+		time.Sleep(100 * time.Millisecond)
+	})
 }
 
 func TestScheduler_Shutdown(t *testing.T) {
@@ -575,6 +646,12 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			),
 			nil,
 			ErrCronJobInvalid,
+		},
+		{
+			"context nil",
+			DurationJob(time.Second),
+			[]JobOption{WithContext(nil)}, //nolint:staticcheck
+			ErrWithContextNil,
 		},
 		{
 			"duration job time interval is zero",
