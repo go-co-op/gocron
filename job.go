@@ -18,11 +18,12 @@ import (
 // internalJob stores the information needed by the scheduler
 // to manage scheduling, starting and stopping the job
 type internalJob struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	id     uuid.UUID
-	name   string
-	tags   []string
+	ctx       context.Context
+	parentCtx context.Context
+	cancel    context.CancelFunc
+	id        uuid.UUID
+	name      string
+	tags      []string
 	jobSchedule
 
 	// as some jobs may queue up, it's possible to
@@ -82,6 +83,10 @@ type task struct {
 type Task func() task
 
 // NewTask provides the job's task function and parameters.
+// If you set the first argument of your Task func to be a context.Context,
+// gocron will pass in a context (either the default Job context, or one
+// provided via WithContext) to the job and will cancel the context on shutdown.
+// This allows you to listen for and handle cancellation within your job.
 func NewTask(function any, parameters ...any) Task {
 	return func() task {
 		return task{
@@ -699,6 +704,22 @@ func WithIdentifier(id uuid.UUID) JobOption {
 		}
 
 		j.id = id
+		return nil
+	}
+}
+
+// WithContext sets the parent context for the job.
+// If you set the first argument of your Task func to be a context.Context,
+// gocron will pass in the provided context to the job and will cancel the
+// context on shutdown. If you cancel the context the job will no longer be
+// scheduled as well. This allows you to both control the job via a context
+// and listen for and handle cancellation within your job.
+func WithContext(ctx context.Context) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		if ctx == nil {
+			return ErrWithContextNil
+		}
+		j.parentCtx = ctx
 		return nil
 	}
 }
