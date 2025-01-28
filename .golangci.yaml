@@ -20,10 +20,9 @@ issues:
 linters:
   enable:
     - bodyclose
-    - exportloopref
+    - copyloopvar
     - gofumpt
     - goimports
-    - gosec
     - gosimple
     - govet
     - ineffassign
@@ -39,6 +38,5 @@ output:
     - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
-  uniq-by-line: true
   path-prefix: ""
   sort-results: true

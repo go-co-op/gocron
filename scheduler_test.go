@@ -1426,13 +1426,13 @@ func TestScheduler_OneTimeJob_DoesNotCleanupNext(t *testing.T) {
 	tests := []struct {
 		name      string
 		runAt     time.Time
-		fakeClock clockwork.FakeClock
+		fakeClock *clockwork.FakeClock
 		assertErr require.ErrorAssertionFunc
 		// asserts things about schedules, advance time and perform new assertions
 		advanceAndAsserts []func(
 			t *testing.T,
 			j Job,
-			clock clockwork.FakeClock,
+			clock *clockwork.FakeClock,
 			runs *atomic.Uint32,
 		)
 	}{
@@ -1440,8 +1440,8 @@ func TestScheduler_OneTimeJob_DoesNotCleanupNext(t *testing.T) {
 			name:      "exhausted run do does not cleanup next item",
 			runAt:     time.Date(2024, time.April, 22, 4, 5, 0, 0, time.UTC),
 			fakeClock: clockwork.NewFakeClockAt(schedulerStartTime),
-			advanceAndAsserts: []func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32){
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+			advanceAndAsserts: []func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32){
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					require.Equal(t, uint32(0), runs.Load())
 
 					// last not initialized
@@ -2377,13 +2377,13 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 	tests := []struct {
 		name      string
 		atTimes   []time.Time
-		fakeClock clockwork.FakeClock
+		fakeClock *clockwork.FakeClock
 		assertErr require.ErrorAssertionFunc
 		// asserts things about schedules, advance time and perform new assertions
 		advanceAndAsserts []func(
 			t *testing.T,
 			j Job,
-			clock clockwork.FakeClock,
+			clock *clockwork.FakeClock,
 			runs *atomic.Uint32,
 		)
 	}{
@@ -2407,8 +2407,8 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "one run 1 millisecond in the future",
 			atTimes:   []time.Time{n.Add(1 * time.Millisecond)},
 			fakeClock: clockwork.NewFakeClockAt(n),
-			advanceAndAsserts: []func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32){
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+			advanceAndAsserts: []func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32){
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					require.Equal(t, uint32(0), runs.Load())
 
 					// last not initialized
@@ -2442,8 +2442,8 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "one run in the past and one in the future",
 			atTimes:   []time.Time{n.Add(-1 * time.Millisecond), n.Add(1 * time.Millisecond)},
 			fakeClock: clockwork.NewFakeClockAt(n),
-			advanceAndAsserts: []func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32){
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+			advanceAndAsserts: []func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32){
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					require.Equal(t, uint32(0), runs.Load())
 
 					// last not initialized
@@ -2473,8 +2473,8 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "two runs in the future - order is maintained even if times are provided out of order",
 			atTimes:   []time.Time{n.Add(3 * time.Millisecond), n.Add(1 * time.Millisecond)},
 			fakeClock: clockwork.NewFakeClockAt(n),
-			advanceAndAsserts: []func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32){
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+			advanceAndAsserts: []func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32){
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					require.Equal(t, uint32(0), runs.Load())
 
 					// last not initialized
@@ -2503,7 +2503,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					require.Equal(t, n.Add(3*time.Millisecond), nextRunAt)
 				},
 
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
@@ -2526,8 +2526,8 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "two runs in the future - order is maintained even if times are provided out of order - deduplication",
 			atTimes:   []time.Time{n.Add(3 * time.Millisecond), n.Add(1 * time.Millisecond), n.Add(1 * time.Millisecond), n.Add(3 * time.Millisecond)},
 			fakeClock: clockwork.NewFakeClockAt(n),
-			advanceAndAsserts: []func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32){
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+			advanceAndAsserts: []func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32){
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					require.Equal(t, uint32(0), runs.Load())
 
 					// last not initialized
@@ -2556,7 +2556,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					require.Equal(t, n.Add(3*time.Millisecond), nextRunAt)
 				},
 
-				func(t *testing.T, j Job, clock clockwork.FakeClock, runs *atomic.Uint32) {
+				func(t *testing.T, j Job, clock *clockwork.FakeClock, runs *atomic.Uint32) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {

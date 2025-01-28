@@ -606,7 +606,7 @@ func ExampleWithClock() {
 		),
 	)
 	s.Start()
-	fakeClock.BlockUntil(1)
+	_ = fakeClock.BlockUntilContext(context.Background(), 1)
 	fakeClock.Advance(time.Second * 5)
 	wg.Wait()
 	_ = s.StopJobs()
