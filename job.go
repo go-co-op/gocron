@@ -18,11 +18,12 @@ import (
 // internalJob stores the information needed by the scheduler
 // to manage scheduling, starting and stopping the job
 type internalJob struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	id     uuid.UUID
-	name   string
-	tags   []string
+	ctx       context.Context
+	parentCtx context.Context
+	cancel    context.CancelFunc
+	id        uuid.UUID
+	name      string
+	tags      []string
 	jobSchedule
 
 	// as some jobs may queue up, it's possible to
@@ -40,11 +41,13 @@ type internalJob struct {
 	startImmediately   bool
 	stopTime           time.Time
 	// event listeners
-	afterJobRuns          func(jobID uuid.UUID, jobName string)
-	beforeJobRuns         func(jobID uuid.UUID, jobName string)
-	afterJobRunsWithError func(jobID uuid.UUID, jobName string, err error)
-	afterJobRunsWithPanic func(jobID uuid.UUID, jobName string, recoverData any)
-	afterLockError        func(jobID uuid.UUID, jobName string, err error)
+	afterJobRuns                        func(jobID uuid.UUID, jobName string)
+	beforeJobRuns                       func(jobID uuid.UUID, jobName string)
+	beforeJobRunsSkipIfBeforeFuncErrors func(jobID uuid.UUID, jobName string) error
+	afterJobRunsWithError               func(jobID uuid.UUID, jobName string, err error)
+	afterJobRunsWithPanic               func(jobID uuid.UUID, jobName string, recoverData any)
+	afterLockError                      func(jobID uuid.UUID, jobName string, err error)
+	disabledLocker                      bool
 
 	locker Locker
 }
@@ -80,6 +83,10 @@ type task struct {
 type Task func() task
 
 // NewTask provides the job's task function and parameters.
+// If you set the first argument of your Task func to be a context.Context,
+// gocron will pass in a context (either the default Job context, or one
+// provided via WithContext) to the job and will cancel the context on shutdown.
+// This allows you to listen for and handle cancellation within your job.
 func NewTask(function any, parameters ...any) Task {
 	return func() task {
 		return task{
@@ -556,6 +563,16 @@ func WithDistributedJobLocker(locker Locker) JobOption {
 	}
 }
 
+// WithDisabledDistributedJobLocker disables the distributed job locker.
+// This is useful when a global distributed locker has been set on the scheduler
+// level using WithDistributedLocker and need to be disabled for specific jobs.
+func WithDisabledDistributedJobLocker(disabled bool) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		j.disabledLocker = disabled
+		return nil
+	}
+}
+
 // WithEventListeners sets the event listeners that should be
 // run for the job.
 func WithEventListeners(eventListeners ...EventListener) JobOption {
@@ -691,6 +708,22 @@ func WithIdentifier(id uuid.UUID) JobOption {
 	}
 }
 
+// WithContext sets the parent context for the job.
+// If you set the first argument of your Task func to be a context.Context,
+// gocron will pass in the provided context to the job and will cancel the
+// context on shutdown. If you cancel the context the job will no longer be
+// scheduled as well. This allows you to both control the job via a context
+// and listen for and handle cancellation within your job.
+func WithContext(ctx context.Context) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		if ctx == nil {
+			return ErrWithContextNil
+		}
+		j.parentCtx = ctx
+		return nil
+	}
+}
+
 // -----------------------------------------------
 // -----------------------------------------------
 // ------------- Job Event Listeners -------------
@@ -709,6 +742,19 @@ func BeforeJobRuns(eventListenerFunc func(jobID uuid.UUID, jobName string)) Even
 			return ErrEventListenerFuncNil
 		}
 		j.beforeJobRuns = eventListenerFunc
+		return nil
+	}
+}
+
+// BeforeJobRunsSkipIfBeforeFuncErrors is used to listen for when a job is about to run and
+// then runs the provided function. If the provided function returns an error, the job will be
+// rescheduled and the current run will be skipped.
+func BeforeJobRunsSkipIfBeforeFuncErrors(eventListenerFunc func(jobID uuid.UUID, jobName string) error) EventListener {
+	return func(j *internalJob) error {
+		if eventListenerFunc == nil {
+			return ErrEventListenerFuncNil
+		}
+		j.beforeJobRunsSkipIfBeforeFuncErrors = eventListenerFunc
 		return nil
 	}
 }

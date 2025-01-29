@@ -361,6 +361,112 @@ func TestScheduler_StopTimeout(t *testing.T) {
 	}
 }
 
+func TestScheduler_StopLongRunningJobs(t *testing.T) {
+	t.Run("start, run job, stop jobs before job is completed", func(t *testing.T) {
+		s := newTestScheduler(t,
+			WithStopTimeout(50*time.Millisecond),
+		)
+
+		_, err := s.NewJob(
+			DurationJob(
+				50*time.Millisecond,
+			),
+			NewTask(
+				func(ctx context.Context) {
+					select {
+					case <-ctx.Done():
+					case <-time.After(100 * time.Millisecond):
+						t.Fatal("job can not been canceled")
+					}
+				},
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+			WithSingletonMode(LimitModeReschedule),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		time.Sleep(20 * time.Millisecond)
+		// the running job is canceled, no unexpected timeout error
+		require.NoError(t, s.StopJobs())
+		time.Sleep(100 * time.Millisecond)
+	})
+	t.Run("start, run job, stop jobs before job is completed - manual context cancel", func(t *testing.T) {
+		s := newTestScheduler(t,
+			WithStopTimeout(50*time.Millisecond),
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		_, err := s.NewJob(
+			DurationJob(
+				50*time.Millisecond,
+			),
+			NewTask(
+				func(ctx context.Context) {
+					select {
+					case <-ctx.Done():
+					case <-time.After(100 * time.Millisecond):
+						t.Fatal("job can not been canceled")
+					}
+				}, ctx,
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+			WithSingletonMode(LimitModeReschedule),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		time.Sleep(20 * time.Millisecond)
+		// the running job is canceled, no unexpected timeout error
+		cancel()
+		require.NoError(t, s.StopJobs())
+		time.Sleep(100 * time.Millisecond)
+	})
+	t.Run("start, run job, stop jobs before job is completed - manual context cancel WithContext", func(t *testing.T) {
+		s := newTestScheduler(t,
+			WithStopTimeout(50*time.Millisecond),
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		_, err := s.NewJob(
+			DurationJob(
+				50*time.Millisecond,
+			),
+			NewTask(
+				func(ctx context.Context) {
+					select {
+					case <-ctx.Done():
+					case <-time.After(100 * time.Millisecond):
+						t.Fatal("job can not been canceled")
+					}
+				},
+			),
+			WithStartAt(
+				WithStartImmediately(),
+			),
+			WithSingletonMode(LimitModeReschedule),
+			WithContext(ctx),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		time.Sleep(20 * time.Millisecond)
+		// the running job is canceled, no unexpected timeout error
+		cancel()
+		require.NoError(t, s.StopJobs())
+		time.Sleep(100 * time.Millisecond)
+	})
+}
+
 func TestScheduler_Shutdown(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
@@ -540,6 +646,12 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			),
 			nil,
 			ErrCronJobInvalid,
+		},
+		{
+			"context nil",
+			DurationJob(time.Second),
+			[]JobOption{WithContext(nil)}, //nolint:staticcheck
+			ErrWithContextNil,
 		},
 		{
 			"duration job time interval is zero",
@@ -1452,6 +1564,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 	tests := []struct {
 		name          string
 		count         int
+		runCount      int
 		schedulerOpts []SchedulerOption
 		jobOpts       []JobOption
 		assertions    func(*testing.T)
@@ -1459,6 +1572,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 		{
 			"3 schedulers with elector",
 			3,
+			1,
 			[]SchedulerOption{
 				WithDistributedElector(&testElector{notLeader: notLeader}),
 			},
@@ -1482,6 +1596,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 		{
 			"3 schedulers with locker",
 			3,
+			1,
 			[]SchedulerOption{
 				WithDistributedLocker(&testLocker{notLocked: notLocked}),
 			},
@@ -1499,11 +1614,14 @@ func TestScheduler_WithDistributed(t *testing.T) {
 					default:
 					}
 				}
+
+				assert.Equal(t, 2, notLockedCount)
 			},
 		},
 		{
 			"3 schedulers and job with Distributed locker",
 			3,
+			1,
 			nil,
 			[]JobOption{
 				WithDistributedJobLocker(&testLocker{notLocked: notLocked}),
@@ -1521,6 +1639,35 @@ func TestScheduler_WithDistributed(t *testing.T) {
 					default:
 					}
 				}
+
+				assert.Equal(t, 2, notLockedCount)
+			},
+		},
+		{
+			"3 schedulers and job with disabled Distributed locker",
+			3,
+			3,
+			[]SchedulerOption{
+				WithDistributedLocker(&testLocker{notLocked: notLocked}),
+			},
+			[]JobOption{
+				WithDisabledDistributedJobLocker(true),
+			},
+			func(_ *testing.T) {
+				timeout := time.Now().Add(1 * time.Second)
+				var notLockedCount int
+				for {
+					if time.Now().After(timeout) {
+						break
+					}
+					select {
+					case <-notLocked:
+						notLockedCount++
+					default:
+					}
+				}
+
+				assert.Equal(t, 0, notLockedCount)
 			},
 		},
 	}
@@ -1531,6 +1678,11 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			schedulersDone := make(chan struct{}, tt.count)
 
+			var (
+				runCount  int
+				doneCount int
+			)
+
 			for i := tt.count; i > 0; i-- {
 				s := newTestScheduler(t,
 					tt.schedulerOpts...,
@@ -1539,6 +1691,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 					WithStartAt(
 						WithStartImmediately(),
 					),
+					WithLimitedRuns(1),
 				}
 				jobOpts = append(jobOpts, tt.jobOpts...)
 
@@ -1565,31 +1718,39 @@ func TestScheduler_WithDistributed(t *testing.T) {
 				}()
 			}
 
-			var runCount int
-			select {
-			case <-jobsRan:
-				cancel()
-				runCount++
-			case <-time.After(time.Second):
-				cancel()
-				t.Error("timed out waiting for job to run")
+		RunCountLoop:
+			for {
+				select {
+				case <-jobsRan:
+					runCount++
+					if runCount >= tt.runCount {
+						break RunCountLoop
+					}
+				case <-time.After(time.Second):
+					t.Error("timed out waiting for job to run")
+					break RunCountLoop
+				}
 			}
 
-			var doneCount int
-			timeout := time.Now().Add(3 * time.Second)
-			for doneCount < tt.count && time.Now().After(timeout) {
+			cancel()
+			assert.Equal(t, tt.runCount, runCount)
+
+		DoneCountLoop:
+			for {
 				select {
 				case <-schedulersDone:
 					doneCount++
-				default:
+					if doneCount >= tt.count {
+						break DoneCountLoop
+					}
+				case <-time.After(3 * time.Second):
+					t.Error("timed out waiting for schedulers to shutdown")
+					break DoneCountLoop
 				}
 			}
-			close(jobsRan)
-			for range jobsRan {
-				runCount++
-			}
 
-			assert.Equal(t, 1, runCount)
+			assert.Equal(t, tt.count, doneCount)
+
 			time.Sleep(time.Second)
 			tt.assertions(t)
 		})

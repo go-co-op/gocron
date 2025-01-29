@@ -482,6 +482,13 @@ func TestWithEventListeners(t *testing.T) {
 			},
 			ErrEventListenerFuncNil,
 		},
+		{
+			"nil before job runs error listener",
+			[]EventListener{
+				BeforeJobRunsSkipIfBeforeFuncErrors(nil),
+			},
+			ErrEventListenerFuncNil,
+		},
 	}
 
 	for _, tt := range tests {

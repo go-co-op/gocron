@@ -39,6 +39,7 @@ var (
 	ErrWeeklyJobMinutesSeconds       = fmt.Errorf("gocron: WeeklyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
 	ErrPanicRecovered                = fmt.Errorf("gocron: panic recovered")
 	ErrWithClockNil                  = fmt.Errorf("gocron: WithClock: clock must not be nil")
+	ErrWithContextNil                = fmt.Errorf("gocron: WithContext: context must not be nil")
 	ErrWithDistributedElectorNil     = fmt.Errorf("gocron: WithDistributedElector: elector must not be nil")
 	ErrWithDistributedLockerNil      = fmt.Errorf("gocron: WithDistributedLocker: locker must not be nil")
 	ErrWithDistributedJobLockerNil   = fmt.Errorf("gocron: WithDistributedJobLocker: locker must not be nil")

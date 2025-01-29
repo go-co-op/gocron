@@ -370,7 +370,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.incrementJobCounter(j, Skip)
 			return
 		}
-	} else if j.locker != nil {
+	} else if !j.disabledLocker && j.locker != nil {
 		lock, err := j.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)
@@ -379,7 +379,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
-	} else if e.locker != nil {
+	} else if !j.disabledLocker && e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)
@@ -389,7 +389,20 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
 	}
+
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
+
+	err := callJobFuncWithParams(j.beforeJobRunsSkipIfBeforeFuncErrors, j.id, j.name)
+	if err != nil {
+		e.sendOutForRescheduling(&jIn)
+
+		select {
+		case e.jobsOutCompleted <- j.id:
+		case <-e.ctx.Done():
+		}
+
+		return
+	}
 
 	e.sendOutForRescheduling(&jIn)
 	select {
@@ -398,7 +411,6 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 
 	startTime := time.Now()
-	var err error
 	if j.afterJobRunsWithPanic != nil {
 		err = e.callJobWithRecover(j)
 	} else {

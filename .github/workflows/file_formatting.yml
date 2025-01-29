@@ -16,4 +16,4 @@ jobs:
         uses: actions/checkout@v4
       - name: verify example_test.go
         run: |
-          grep "^func " example_test.go | sort -c
+          grep "^func [a-z-A-Z]" example_test.go | sort -c

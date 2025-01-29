@@ -2,37 +2,28 @@ package gocron_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	. "github.com/go-co-op/gocron/v2" // nolint:revive
+	"github.com/go-co-op/gocron/v2"
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 )
 
-var _ Locker = new(errorLocker)
-
-type errorLocker struct{}
-
-func (e errorLocker) Lock(_ context.Context, _ string) (Lock, error) {
-	return nil, errors.New("locked")
-}
-
 func ExampleAfterJobRuns() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithEventListeners(
-			AfterJobRuns(
+		gocron.WithEventListeners(
+			gocron.AfterJobRuns(
 				func(jobID uuid.UUID, jobName string) {
 					// do something after the job completes
 				},
@@ -42,18 +33,18 @@ func ExampleAfterJobRuns() {
 }
 
 func ExampleAfterJobRunsWithError() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithEventListeners(
-			AfterJobRunsWithError(
+		gocron.WithEventListeners(
+			gocron.AfterJobRunsWithError(
 				func(jobID uuid.UUID, jobName string, err error) {
 					// do something when the job returns an error
 				},
@@ -62,20 +53,28 @@ func ExampleAfterJobRunsWithError() {
 	)
 }
 
+var _ gocron.Locker = new(errorLocker)
+
+type errorLocker struct{}
+
+func (e errorLocker) Lock(_ context.Context, _ string) (gocron.Lock, error) {
+	return nil, fmt.Errorf("locked")
+}
+
 func ExampleAfterLockError() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithDistributedJobLocker(&errorLocker{}),
-		WithEventListeners(
-			AfterLockError(
+		gocron.WithDistributedJobLocker(&errorLocker{}),
+		gocron.WithEventListeners(
+			gocron.AfterLockError(
 				func(jobID uuid.UUID, jobName string, err error) {
 					// do something immediately before the job is run
 				},
@@ -85,18 +84,18 @@ func ExampleAfterLockError() {
 }
 
 func ExampleBeforeJobRuns() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithEventListeners(
-			BeforeJobRuns(
+		gocron.WithEventListeners(
+			gocron.BeforeJobRuns(
 				func(jobID uuid.UUID, jobName string) {
 					// do something immediately before the job is run
 				},
@@ -105,45 +104,68 @@ func ExampleBeforeJobRuns() {
 	)
 }
 
-func ExampleCronJob() {
-	s, _ := NewScheduler()
+func ExampleBeforeJobRunsSkipIfBeforeFuncErrors() {
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		CronJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func() {
+				fmt.Println("Will never run, because before job func errors")
+			},
+		),
+		gocron.WithEventListeners(
+			gocron.BeforeJobRunsSkipIfBeforeFuncErrors(
+				func(jobID uuid.UUID, jobName string) error {
+					return fmt.Errorf("error")
+				},
+			),
+		),
+	)
+}
+
+func ExampleCronJob() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		gocron.CronJob(
 			// standard cron tab parsing
 			"1 * * * *",
 			false,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 	_, _ = s.NewJob(
-		CronJob(
+		gocron.CronJob(
 			// optionally include seconds as the first field
 			"* 1 * * * *",
 			true,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 }
 
 func ExampleDailyJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DailyJob(
+		gocron.DailyJob(
 			1,
-			NewAtTimes(
-				NewAtTime(10, 30, 0),
-				NewAtTime(14, 0, 0),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(10, 30, 0),
+				gocron.NewAtTime(14, 0, 0),
 			),
 		),
-		NewTask(
+		gocron.NewTask(
 			func(a, b string) {},
 			"a",
 			"b",
@@ -152,43 +174,43 @@ func ExampleDailyJob() {
 }
 
 func ExampleDurationJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second*5,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 }
 
 func ExampleDurationRandomJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationRandomJob(
+		gocron.DurationRandomJob(
 			time.Second,
 			5*time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 }
 
 func ExampleJob_id() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -197,14 +219,14 @@ func ExampleJob_id() {
 }
 
 func ExampleJob_lastRun() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -213,17 +235,17 @@ func ExampleJob_lastRun() {
 }
 
 func ExampleJob_name() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithName("foobar"),
+		gocron.WithName("foobar"),
 	)
 
 	fmt.Println(j.Name())
@@ -232,14 +254,14 @@ func ExampleJob_name() {
 }
 
 func ExampleJob_nextRun() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -249,14 +271,14 @@ func ExampleJob_nextRun() {
 }
 
 func ExampleJob_nextRuns() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -266,19 +288,19 @@ func ExampleJob_nextRuns() {
 }
 
 func ExampleJob_runNow() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		MonthlyJob(
+		gocron.MonthlyJob(
 			1,
-			NewDaysOfTheMonth(3, -5, -1),
-			NewAtTimes(
-				NewAtTime(10, 30, 0),
-				NewAtTime(11, 15, 0),
+			gocron.NewDaysOfTheMonth(3, -5, -1),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(10, 30, 0),
+				gocron.NewAtTime(11, 15, 0),
 			),
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -288,17 +310,17 @@ func ExampleJob_runNow() {
 }
 
 func ExampleJob_tags() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithTags("foo", "bar"),
+		gocron.WithTags("foo", "bar"),
 	)
 
 	fmt.Println(j.Tags())
@@ -307,77 +329,93 @@ func ExampleJob_tags() {
 }
 
 func ExampleMonthlyJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		MonthlyJob(
+		gocron.MonthlyJob(
 			1,
-			NewDaysOfTheMonth(3, -5, -1),
-			NewAtTimes(
-				NewAtTime(10, 30, 0),
-				NewAtTime(11, 15, 0),
+			gocron.NewDaysOfTheMonth(3, -5, -1),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(10, 30, 0),
+				gocron.NewAtTime(11, 15, 0),
 			),
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 }
 
 func ExampleNewScheduler() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	fmt.Println(s.Jobs())
 }
 
+func ExampleNewTask() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		gocron.DurationJob(time.Second),
+		gocron.NewTask(
+			func(ctx context.Context) {
+				// gocron will pass in a context (either the default Job context, or one
+				// provided via WithContext) to the job and will cancel the context on shutdown.
+				// This allows you to listen for and handle cancellation within your job.
+			},
+		),
+	)
+}
+
 func ExampleOneTimeJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	// run a job once, immediately
 	_, _ = s.NewJob(
-		OneTimeJob(
-			OneTimeJobStartImmediately(),
+		gocron.OneTimeJob(
+			gocron.OneTimeJobStartImmediately(),
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 	// run a job once in 10 seconds
 	_, _ = s.NewJob(
-		OneTimeJob(
-			OneTimeJobStartDateTime(time.Now().Add(10*time.Second)),
+		gocron.OneTimeJob(
+			gocron.OneTimeJobStartDateTime(time.Now().Add(10*time.Second)),
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 	// run job twice - once in 10 seconds and once in 55 minutes
 	n := time.Now()
 	_, _ = s.NewJob(
-		OneTimeJob(
-			OneTimeJobStartDateTimes(
+		gocron.OneTimeJob(
+			gocron.OneTimeJobStartDateTimes(
 				n.Add(10*time.Second),
 				n.Add(55*time.Minute),
 			),
 		),
-		NewTask(func() {}),
+		gocron.NewTask(func() {}),
 	)
 
 	s.Start()
 }
 
 func ExampleScheduler_jobs() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			10*time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -387,14 +425,14 @@ func ExampleScheduler_jobs() {
 }
 
 func ExampleScheduler_newJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, err := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			10*time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -405,26 +443,26 @@ func ExampleScheduler_newJob() {
 }
 
 func ExampleScheduler_removeByTags() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithTags("tag1"),
+		gocron.WithTags("tag1"),
 	)
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithTags("tag2"),
+		gocron.WithTags("tag2"),
 	)
 	fmt.Println(len(s.Jobs()))
 
@@ -437,14 +475,14 @@ func ExampleScheduler_removeByTags() {
 }
 
 func ExampleScheduler_removeJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -460,20 +498,20 @@ func ExampleScheduler_removeJob() {
 }
 
 func ExampleScheduler_shutdown() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 }
 
 func ExampleScheduler_start() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		CronJob(
+		gocron.CronJob(
 			"* * * * *",
 			false,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -482,15 +520,15 @@ func ExampleScheduler_start() {
 }
 
 func ExampleScheduler_stopJobs() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		CronJob(
+		gocron.CronJob(
 			"* * * * *",
 			false,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -501,15 +539,15 @@ func ExampleScheduler_stopJobs() {
 }
 
 func ExampleScheduler_update() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		CronJob(
+		gocron.CronJob(
 			"* * * * *",
 			false,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -520,29 +558,29 @@ func ExampleScheduler_update() {
 
 	j, _ = s.Update(
 		j.ID(),
-		DurationJob(
+		gocron.DurationJob(
 			5*time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
 }
 
 func ExampleWeeklyJob() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		WeeklyJob(
+		gocron.WeeklyJob(
 			2,
-			NewWeekdays(time.Tuesday, time.Wednesday, time.Saturday),
-			NewAtTimes(
-				NewAtTime(1, 30, 0),
-				NewAtTime(12, 0, 30),
+			gocron.NewWeekdays(time.Tuesday, time.Wednesday, time.Saturday),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(1, 30, 0),
+				gocron.NewAtTime(12, 0, 30),
 			),
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
 	)
@@ -550,16 +588,16 @@ func ExampleWeeklyJob() {
 
 func ExampleWithClock() {
 	fakeClock := clockwork.NewFakeClock()
-	s, _ := NewScheduler(
-		WithClock(fakeClock),
+	s, _ := gocron.NewScheduler(
+		gocron.WithClock(fakeClock),
 	)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second*5,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d\n", one, two)
 				wg.Done()
@@ -576,70 +614,149 @@ func ExampleWithClock() {
 	// one, 2
 }
 
+func ExampleWithContext() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func(ctx context.Context) {
+				// gocron will pass in the context provided via WithContext
+				// to the job and will cancel the context on shutdown.
+				// This allows you to listen for and handle cancellation within your job.
+			},
+		),
+		gocron.WithContext(ctx),
+	)
+}
+
+func ExampleWithDisabledDistributedJobLocker() {
+	// var _ gocron.Locker = (*myLocker)(nil)
+	//
+	// type myLocker struct{}
+	//
+	// func (m myLocker) Lock(ctx context.Context, key string) (Lock, error) {
+	//     return &testLock{}, nil
+	// }
+	//
+	// var _ gocron.Lock = (*testLock)(nil)
+	//
+	// type testLock struct{}
+	//
+	// func (t testLock) Unlock(_ context.Context) error {
+	//     return nil
+	// }
+
+	locker := &myLocker{}
+
+	s, _ := gocron.NewScheduler(
+		gocron.WithDistributedLocker(locker),
+	)
+
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+		gocron.WithDisabledDistributedJobLocker(true),
+	)
+}
+
+var _ gocron.Elector = (*myElector)(nil)
+
+type myElector struct{}
+
+func (m myElector) IsLeader(_ context.Context) error {
+	return nil
+}
+
 func ExampleWithDistributedElector() {
-	//var _ gocron.Elector = (*myElector)(nil)
+	// var _ gocron.Elector = (*myElector)(nil)
 	//
-	//type myElector struct{}
+	// type myElector struct{}
 	//
-	//func (m myElector) IsLeader(_ context.Context) error {
-	//	return nil
-	//}
+	// func (m myElector) IsLeader(_ context.Context) error {
+	//     return nil
+	// }
 	//
-	//elector := &myElector{}
-	//
-	//_, _ = gocron.NewScheduler(
-	//	gocron.WithDistributedElector(elector),
-	//)
+	elector := &myElector{}
+
+	_, _ = gocron.NewScheduler(
+		gocron.WithDistributedElector(elector),
+	)
+}
+
+var _ gocron.Locker = (*myLocker)(nil)
+
+type myLocker struct{}
+
+func (m myLocker) Lock(ctx context.Context, key string) (gocron.Lock, error) {
+	return &testLock{}, nil
+}
+
+var _ gocron.Lock = (*testLock)(nil)
+
+type testLock struct{}
+
+func (t testLock) Unlock(_ context.Context) error {
+	return nil
 }
 
 func ExampleWithDistributedLocker() {
-	//var _ gocron.Locker = (*myLocker)(nil)
+	// var _ gocron.Locker = (*myLocker)(nil)
 	//
-	//type myLocker struct{}
+	// type myLocker struct{}
 	//
-	//func (m myLocker) Lock(ctx context.Context, key string) (Lock, error) {
-	//	return &testLock, nil
-	//}
+	// func (m myLocker) Lock(ctx context.Context, key string) (Lock, error) {
+	//     return &testLock{}, nil
+	// }
 	//
-	//var _ Lock = (*testLock)(nil)
+	// var _ gocron.Lock = (*testLock)(nil)
 	//
-	//type testLock struct {
-	//}
+	// type testLock struct{}
 	//
-	//func (t testLock) Unlock(_ context.Context) error {
-	//	return nil
-	//}
-	//
-	//locker := &myLocker{}
-	//
-	//_, _ = gocron.NewScheduler(
-	//	gocron.WithDistributedLocker(locker),
-	//)
+	// func (t testLock) Unlock(_ context.Context) error {
+	//     return nil
+	// }
+
+	locker := &myLocker{}
+
+	_, _ = gocron.NewScheduler(
+		gocron.WithDistributedLocker(locker),
+	)
 }
 
 func ExampleWithEventListeners() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {},
 		),
-		WithEventListeners(
-			AfterJobRuns(
+		gocron.WithEventListeners(
+			gocron.AfterJobRuns(
 				func(jobID uuid.UUID, jobName string) {
 					// do something after the job completes
 				},
 			),
-			AfterJobRunsWithError(
+			gocron.AfterJobRunsWithError(
 				func(jobID uuid.UUID, jobName string, err error) {
 					// do something when the job returns an error
 				},
 			),
-			BeforeJobRuns(
+			gocron.BeforeJobRuns(
 				func(jobID uuid.UUID, jobName string) {
 					// do something immediately before the job is run
 				},
@@ -649,17 +766,17 @@ func ExampleWithEventListeners() {
 }
 
 func ExampleWithGlobalJobOptions() {
-	s, _ := NewScheduler(
-		WithGlobalJobOptions(
-			WithTags("tag1", "tag2", "tag3"),
+	s, _ := gocron.NewScheduler(
+		gocron.WithGlobalJobOptions(
+			gocron.WithTags("tag1", "tag2", "tag3"),
 		),
 	)
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d", one, two)
 			},
@@ -669,22 +786,22 @@ func ExampleWithGlobalJobOptions() {
 	// The job will have the globally applied tags
 	fmt.Println(j.Tags())
 
-	s2, _ := NewScheduler(
-		WithGlobalJobOptions(
-			WithTags("tag1", "tag2", "tag3"),
+	s2, _ := gocron.NewScheduler(
+		gocron.WithGlobalJobOptions(
+			gocron.WithTags("tag1", "tag2", "tag3"),
 		),
 	)
 	j2, _ := s2.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d", one, two)
 			},
 			"one", 2,
 		),
-		WithTags("tag4", "tag5", "tag6"),
+		gocron.WithTags("tag4", "tag5", "tag6"),
 	)
 	// The job will have the tags set specifically on the job
 	// overriding those set globally by the scheduler
@@ -695,20 +812,20 @@ func ExampleWithGlobalJobOptions() {
 }
 
 func ExampleWithIdentifier() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d", one, two)
 			},
 			"one", 2,
 		),
-		WithIdentifier(uuid.MustParse("87b95dfc-3e71-11ef-9454-0242ac120002")),
+		gocron.WithIdentifier(uuid.MustParse("87b95dfc-3e71-11ef-9454-0242ac120002")),
 	)
 	fmt.Println(j.ID())
 	// Output:
@@ -716,29 +833,29 @@ func ExampleWithIdentifier() {
 }
 
 func ExampleWithLimitConcurrentJobs() {
-	_, _ = NewScheduler(
-		WithLimitConcurrentJobs(
+	_, _ = gocron.NewScheduler(
+		gocron.WithLimitConcurrentJobs(
 			1,
-			LimitModeReschedule,
+			gocron.LimitModeReschedule,
 		),
 	)
 }
 
 func ExampleWithLimitedRuns() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Millisecond,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d\n", one, two)
 			},
 			"one", 2,
 		),
-		WithLimitedRuns(1),
+		gocron.WithLimitedRuns(1),
 	)
 	s.Start()
 
@@ -753,15 +870,15 @@ func ExampleWithLimitedRuns() {
 func ExampleWithLocation() {
 	location, _ := time.LoadLocation("Asia/Kolkata")
 
-	_, _ = NewScheduler(
-		WithLocation(location),
+	_, _ = gocron.NewScheduler(
+		gocron.WithLocation(location),
 	)
 }
 
 func ExampleWithLogger() {
-	_, _ = NewScheduler(
-		WithLogger(
-			NewLogger(LogLevelDebug),
+	_, _ = gocron.NewScheduler(
+		gocron.WithLogger(
+			gocron.NewLogger(gocron.LogLevelDebug),
 		),
 	)
 }
@@ -830,20 +947,20 @@ func ExampleWithMonitor() {
 }
 
 func ExampleWithName() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d", one, two)
 			},
 			"one", 2,
 		),
-		WithName("job 1"),
+		gocron.WithName("job 1"),
 	)
 	fmt.Println(j.Name())
 	// Output:
@@ -851,42 +968,42 @@ func ExampleWithName() {
 }
 
 func ExampleWithSingletonMode() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	_, _ = s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func() {
 				// this job will skip half it's executions
 				// and effectively run every 2 seconds
 				time.Sleep(1500 * time.Second)
 			},
 		),
-		WithSingletonMode(LimitModeReschedule),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 	)
 }
 
 func ExampleWithStartAt() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	start := time.Date(9999, 9, 9, 9, 9, 9, 9, time.UTC)
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d", one, two)
 			},
 			"one", 2,
 		),
-		WithStartAt(
-			WithStartDateTime(start),
+		gocron.WithStartAt(
+			gocron.WithStartDateTime(start),
 		),
 	)
 	s.Start()
@@ -900,26 +1017,26 @@ func ExampleWithStartAt() {
 }
 
 func ExampleWithStopTimeout() {
-	_, _ = NewScheduler(
-		WithStopTimeout(time.Second * 5),
+	_, _ = gocron.NewScheduler(
+		gocron.WithStopTimeout(time.Second * 5),
 	)
 }
 
 func ExampleWithTags() {
-	s, _ := NewScheduler()
+	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
 	j, _ := s.NewJob(
-		DurationJob(
+		gocron.DurationJob(
 			time.Second,
 		),
-		NewTask(
+		gocron.NewTask(
 			func(one string, two int) {
 				fmt.Printf("%s, %d", one, two)
 			},
 			"one", 2,
 		),
-		WithTags("tag1", "tag2", "tag3"),
+		gocron.WithTags("tag1", "tag2", "tag3"),
 	)
 	fmt.Println(j.Tags())
 	// Output:
