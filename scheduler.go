@@ -335,7 +335,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		return
 	}
 
-	scheduleFrom := j.lastRun
+	var scheduleFrom time.Time
 	if len(j.nextScheduled) > 0 {
 		// always grab the last element in the slice as that is the furthest
 		// out in the future and the time from which we want to calculate
@@ -362,6 +362,15 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		// in those cases, we want to increment to the next run in the future
 		// and schedule the job for that time.
 		for next.Before(s.now()) {
+			next = j.next(next)
+		}
+	}
+
+	if slices.Contains(j.nextScheduled, next) {
+		// if the next value is a duplicate of what's already in the nextScheduled slice, for example:
+		// - the job is being rescheduled off the same next run value as before
+		// increment to the next, next value
+		for slices.Contains(j.nextScheduled, next) {
 			next = j.next(next)
 		}
 	}

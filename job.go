@@ -864,7 +864,7 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 	}
 	firstPass = false
 
-	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, lastRun.Nanosecond(), lastRun.Location())
+	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, 0, lastRun.Location())
 	return d.nextDay(startNextDay, firstPass)
 }
 
@@ -872,7 +872,7 @@ func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 	for _, at := range d.atTimes {
 		// sub the at time hour/min/sec onto the lastScheduledRun's values
 		// to use in checks to see if we've got our next run time
-		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
 		if firstPass && atDate.After(lastRun) {
 			// checking to see if it is after i.e. greater than,
@@ -918,7 +918,7 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Tim
 			for _, at := range w.atTimes {
 				// sub the at time hour/min/sec onto the lastScheduledRun's values
 				// to use in checks to see if we've got our next run time
-				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
 				if firstPass && atDate.After(lastRun) {
 					// checking to see if it is after i.e. greater than,
@@ -986,7 +986,7 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 			for _, at := range m.atTimes {
 				// sub the day, and the at time hour/min/sec onto the lastScheduledRun's values
 				// to use in checks to see if we've got our next run time
-				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), lastRun.Nanosecond(), lastRun.Location())
+				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
 				if atDate.Month() != lastRun.Month() {
 					// this check handles if we're setting a day not in the current month
