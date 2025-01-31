@@ -5,11 +5,12 @@ import (
 	"context"
 	"reflect"
 	"runtime"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
-	"golang.org/x/exp/slices"
 )
 
 var _ Scheduler = (*scheduler)(nil)
@@ -267,14 +268,7 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 	}
 	slices.SortFunc(outJobs, func(a, b Job) int {
 		aID, bID := a.ID().String(), b.ID().String()
-		switch {
-		case aID < bID:
-			return -1
-		case aID > bID:
-			return 1
-		default:
-			return 0
-		}
+		return strings.Compare(aID, bID)
 	})
 	select {
 	case <-s.shutdownCtx.Done():

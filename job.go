@@ -6,13 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/robfig/cron/v3"
-	"golang.org/x/exp/slices"
 )
 
 // internalJob stores the information needed by the scheduler
@@ -369,11 +369,9 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location, _ t
 		}
 	}
 	daysStart = removeSliceDuplicatesInt(daysStart)
-	slices.Sort(daysStart)
 	ms.days = daysStart
 
 	daysEnd = removeSliceDuplicatesInt(daysEnd)
-	slices.Sort(daysEnd)
 	ms.daysFromEnd = daysEnd
 
 	atTimesDate, err := convertAtTimesToDateTime(m.atTimes, location)
