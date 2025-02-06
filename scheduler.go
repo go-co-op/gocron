@@ -241,7 +241,17 @@ func (s *scheduler) stopScheduler() {
 	for id, j := range s.jobs {
 		<-j.ctx.Done()
 
-		j.ctx, j.cancel = context.WithCancel(s.shutdownCtx)
+		oldCtx := j.ctx
+		if j.parentCtx == nil {
+			j.parentCtx = s.shutdownCtx
+		}
+		j.ctx, j.cancel = context.WithCancel(j.parentCtx)
+
+		// also replace the old context with the new one in the parameters
+		if len(j.parameters) > 0 && j.parameters[0] == oldCtx {
+			j.parameters[0] = j.ctx
+		}
+
 		s.jobs[id] = j
 	}
 	var err error
