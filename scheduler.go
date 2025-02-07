@@ -238,9 +238,20 @@ func (s *scheduler) stopScheduler() {
 	for _, j := range s.jobs {
 		j.stop()
 	}
-	for id, j := range s.jobs {
+	for _, j := range s.jobs {
 		<-j.ctx.Done()
-
+	}
+	var err error
+	if s.started {
+		t := time.NewTimer(s.exec.stopTimeout + 1*time.Second)
+		select {
+		case err = <-s.exec.done:
+			t.Stop()
+		case <-t.C:
+			err = ErrStopExecutorTimedOut
+		}
+	}
+	for id, j := range s.jobs {
 		oldCtx := j.ctx
 		if j.parentCtx == nil {
 			j.parentCtx = s.shutdownCtx
@@ -254,16 +265,7 @@ func (s *scheduler) stopScheduler() {
 
 		s.jobs[id] = j
 	}
-	var err error
-	if s.started {
-		t := time.NewTimer(s.exec.stopTimeout + 1*time.Second)
-		select {
-		case err = <-s.exec.done:
-			t.Stop()
-		case <-t.C:
-			err = ErrStopExecutorTimedOut
-		}
-	}
+
 	s.stopErrCh <- err
 	s.started = false
 	s.logger.Debug("gocron: scheduler stopped")
