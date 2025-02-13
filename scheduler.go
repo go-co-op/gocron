@@ -138,6 +138,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 		jobsIn:                 make(chan jobIn),
 		jobsOutForRescheduling: make(chan uuid.UUID),
+		jobUpdateNextRuns:      make(chan uuid.UUID),
 		jobsOutCompleted:       make(chan uuid.UUID),
 		jobOutRequest:          make(chan jobOutRequest, 1000),
 		done:                   make(chan error),
@@ -176,7 +177,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 			select {
 			case id := <-s.exec.jobsOutForRescheduling:
 				s.selectExecJobsOutForRescheduling(id)
-
+			case id := <-s.exec.jobUpdateNextRuns:
+				s.updateNextScheduled(id)
 			case id := <-s.exec.jobsOutCompleted:
 				s.selectExecJobsOutCompleted(id)
 
@@ -402,6 +404,22 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		}
 	})
 	// update the job with its new next and last run times and timer.
+	s.jobs[id] = j
+}
+
+func (s *scheduler) updateNextScheduled(id uuid.UUID) {
+	j, ok := s.jobs[id]
+	if !ok {
+		return
+	}
+	var newNextScheduled []time.Time
+	for _, t := range j.nextScheduled {
+		if t.Before(s.now()) {
+			continue
+		}
+		newNextScheduled = append(newNextScheduled, t)
+	}
+	j.nextScheduled = newNextScheduled
 	s.jobs[id] = j
 }
 

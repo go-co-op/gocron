@@ -31,6 +31,9 @@ type executor struct {
 	// used to request jobs from the scheduler
 	jobOutRequest chan jobOutRequest
 
+	// sends out job needs to update the next runs
+	jobUpdateNextRuns chan uuid.UUID
+
 	// used by the executor to receive a stop signal from the scheduler
 	stopCh chan struct{}
 	// the timeout value when stopping
@@ -247,6 +250,14 @@ func (e *executor) sendOutForRescheduling(jIn *jobIn) {
 	jIn.shouldSendOut = false
 }
 
+func (e *executor) sendOutForNextRunUpdate(jIn *jobIn) {
+	select {
+	case e.jobUpdateNextRuns <- jIn.id:
+	case <-e.ctx.Done():
+		return
+	}
+}
+
 func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
 	e.logger.Debug("gocron: limitModeRunner starting", "name", name)
 	for {
@@ -376,6 +387,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)
 			e.sendOutForRescheduling(&jIn)
 			e.incrementJobCounter(j, Skip)
+			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
@@ -385,6 +397,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)
 			e.sendOutForRescheduling(&jIn)
 			e.incrementJobCounter(j, Skip)
+			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
 		defer func() { _ = lock.Unlock(j.ctx) }()
