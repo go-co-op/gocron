@@ -1839,7 +1839,7 @@ func TestScheduler_RemoveJob(t *testing.T) {
 			}
 
 			err := s.RemoveJob(id)
-			assert.ErrorIs(t, err, err)
+			assert.ErrorIs(t, err, tt.err)
 			require.NoError(t, s.Shutdown())
 		})
 	}
