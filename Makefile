@@ -16,7 +16,7 @@ test_coverage:
 	@go test -race -v $(GO_FLAGS) -count=1 -coverprofile=coverage.out -covermode=atomic $(GO_PKGS)
 
 test_ci:
-	@TEST_ENV=ci go test -race -v $(GO_FLAGS) -count=1 $(GO_PKGS)
+	@go test -race -v $(GO_FLAGS) -count=1 $(GO_PKGS)
 
 mocks:
 	@go generate ./...

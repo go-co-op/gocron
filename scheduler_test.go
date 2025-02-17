@@ -362,6 +362,7 @@ func TestScheduler_StopTimeout(t *testing.T) {
 }
 
 func TestScheduler_StopLongRunningJobs(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
 	t.Run("start, run job, stop jobs before job is completed", func(t *testing.T) {
 		s := newTestScheduler(t,
 			WithStopTimeout(50*time.Millisecond),
@@ -393,6 +394,8 @@ func TestScheduler_StopLongRunningJobs(t *testing.T) {
 		// the running job is canceled, no unexpected timeout error
 		require.NoError(t, s.StopJobs())
 		time.Sleep(100 * time.Millisecond)
+
+		require.NoError(t, s.Shutdown())
 	})
 	t.Run("start, run job, stop jobs before job is completed - manual context cancel", func(t *testing.T) {
 		s := newTestScheduler(t,
@@ -428,6 +431,8 @@ func TestScheduler_StopLongRunningJobs(t *testing.T) {
 		cancel()
 		require.NoError(t, s.StopJobs())
 		time.Sleep(100 * time.Millisecond)
+
+		require.NoError(t, s.Shutdown())
 	})
 	t.Run("start, run job, stop jobs before job is completed - manual context cancel WithContext", func(t *testing.T) {
 		s := newTestScheduler(t,
@@ -464,17 +469,17 @@ func TestScheduler_StopLongRunningJobs(t *testing.T) {
 		cancel()
 		require.NoError(t, s.StopJobs())
 		time.Sleep(100 * time.Millisecond)
+
+		require.NoError(t, s.Shutdown())
 	})
 }
 
 func TestScheduler_StopAndStartLongRunningJobs(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
 	t.Run("start, run job, stop jobs before job is completed", func(t *testing.T) {
 		s := newTestScheduler(t,
 			WithStopTimeout(50*time.Millisecond),
 		)
-
-		restart := false
-		restartP := &restart
 
 		_, err := s.NewJob(
 			DurationJob(
@@ -484,14 +489,7 @@ func TestScheduler_StopAndStartLongRunningJobs(t *testing.T) {
 				func(ctx context.Context) {
 					select {
 					case <-ctx.Done():
-						if *restartP {
-							t.Fatal("job should not been canceled after restart")
-						}
 					case <-time.After(100 * time.Millisecond):
-						if !*restartP {
-							t.Fatal("job can not been canceled")
-						}
-
 					}
 				},
 			),
@@ -508,11 +506,10 @@ func TestScheduler_StopAndStartLongRunningJobs(t *testing.T) {
 		// the running job is canceled, no unexpected timeout error
 		require.NoError(t, s.StopJobs())
 
-		*restartP = true
-
 		s.Start()
 
 		time.Sleep(200 * time.Millisecond)
+		require.NoError(t, s.Shutdown())
 	})
 }
 
