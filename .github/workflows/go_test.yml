@@ -25,8 +25,8 @@
          with:
            go-version: ${{ matrix.go-version }}
        - name: golangci-lint
-         uses: golangci/golangci-lint-action@v6.5.0
+         uses: golangci/golangci-lint-action@v6.3.2
          with:
-           version: 1.61.0
+           version: v1.61.0
        - name: test
          run: make test_ci
