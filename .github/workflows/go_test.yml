@@ -15,6 +15,7 @@
            - "1.21"
            - "1.22"
            - "1.23"
+           - "1.24"
      name: lint and test
      runs-on: ubuntu-latest
      steps:
@@ -25,8 +26,8 @@
          with:
            go-version: ${{ matrix.go-version }}
        - name: golangci-lint
-         uses: golangci/golangci-lint-action@v6.3.2
+         uses: golangci/golangci-lint-action@v6.5.0
          with:
-           version: v1.61.0
+           version: v1.64.5
        - name: test
          run: make test_ci
