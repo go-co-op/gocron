@@ -106,6 +106,20 @@ type limitRunsTo struct {
 
 // -----------------------------------------------
 // -----------------------------------------------
+// --------------- Custom Cron ------------------
+// -----------------------------------------------
+// -----------------------------------------------
+
+// Cron defines the interface that must be
+// implemented to create a cron.
+
+type Cron interface {
+	IsValid() bool
+	Next(time.Time) time.Time
+}
+
+// -----------------------------------------------
+// -----------------------------------------------
 // --------------- Job Variants ------------------
 // -----------------------------------------------
 // -----------------------------------------------
@@ -116,21 +130,45 @@ type JobDefinition interface {
 	setup(j *internalJob, l *time.Location, now time.Time) error
 }
 
+var _ JobDefinition = (*customCron)(nil)
+
+type customCron struct {
+	crontab string
+	cron    Cron
+}
+
+func (c customCron) setup(j *internalJob, location *time.Location, now time.Time) error {
+	if !c.cron.IsValid() {
+		return ErrCronJobInvalid
+	}
+	j.jobSchedule = &cronJob{cronSchedule: c.cron}
+	return nil
+}
+
+func CustomCronJob(crontab string, cron Cron) JobDefinition {
+	return customCron{
+		crontab: crontab,
+		cron:    cron,
+	}
+}
+
+// default cron job implimentation
 var _ JobDefinition = (*cronJobDefinition)(nil)
 
 type cronJobDefinition struct {
-	crontab     string
-	withSeconds bool
+	crontab      string
+	withSeconds  bool
+	cronSchedule cron.Schedule
 }
 
-func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now time.Time) error {
+func (c *cronJobDefinition) IsValid() bool {
 	var withLocation string
 	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
 		withLocation = c.crontab
 	} else {
 		// since the user didn't provide a timezone default to the location
 		// passed in by the scheduler. Default: time.Local
-		withLocation = fmt.Sprintf("CRON_TZ=%s %s", location.String(), c.crontab)
+		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local, c.crontab)
 	}
 
 	var (
@@ -145,13 +183,24 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now ti
 		cronSchedule, err = cron.ParseStandard(withLocation)
 	}
 	if err != nil {
-		return errors.Join(ErrCronJobParse, err)
+		return false
 	}
-	if cronSchedule.Next(now).IsZero() {
+	if cronSchedule.Next(time.Now()).IsZero() {
+		return false
+	}
+	c.cronSchedule = cronSchedule
+	return true
+}
+
+func (c *cronJobDefinition) Next(lastRun time.Time) time.Time {
+	return c.cronSchedule.Next(lastRun)
+}
+
+func (c *cronJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
+	if !c.IsValid() {
 		return ErrCronJobInvalid
 	}
-
-	j.jobSchedule = &cronJob{cronSchedule: cronSchedule}
+	j.jobSchedule = &cronJob{cronSchedule: c}
 	return nil
 }
 
@@ -162,7 +211,7 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now ti
 // crontab in the form `TZ=America/Chicago * * * * *` or
 // `CRON_TZ=America/Chicago * * * * *`
 func CronJob(crontab string, withSeconds bool) JobDefinition {
-	return cronJobDefinition{
+	return &cronJobDefinition{
 		crontab:     crontab,
 		withSeconds: withSeconds,
 	}
@@ -818,7 +867,7 @@ type jobSchedule interface {
 var _ jobSchedule = (*cronJob)(nil)
 
 type cronJob struct {
-	cronSchedule cron.Schedule
+	cronSchedule Cron
 }
 
 func (j *cronJob) next(lastRun time.Time) time.Time {
