@@ -24,6 +24,7 @@ type internalJob struct {
 	id        uuid.UUID
 	name      string
 	tags      []string
+	cron      Cron
 	jobSchedule
 
 	// as some jobs may queue up, it's possible to
@@ -114,8 +115,8 @@ type limitRunsTo struct {
 // implemented to create a cron.
 
 type Cron interface {
-	IsValid() bool
-	Next(time.Time) time.Time
+	IsValid(string) bool
+	Next(string, time.Time) time.Time
 }
 
 // -----------------------------------------------
@@ -130,45 +131,27 @@ type JobDefinition interface {
 	setup(j *internalJob, l *time.Location, now time.Time) error
 }
 
-var _ JobDefinition = (*customCron)(nil)
+// Default cron implementation using robfig
 
-type customCron struct {
-	crontab string
-	cron    Cron
-}
-
-func (c customCron) setup(j *internalJob, location *time.Location, now time.Time) error {
-	if !c.cron.IsValid() {
-		return ErrCronJobInvalid
-	}
-	j.jobSchedule = &cronJob{cronSchedule: c.cron}
-	return nil
-}
-
-func CustomCronJob(crontab string, cron Cron) JobDefinition {
-	return customCron{
-		crontab: crontab,
-		cron:    cron,
+func newDefaultCronImplementation(withSeconds bool) Cron {
+	return &RobfigCron{
+		withSeconds: withSeconds,
 	}
 }
 
-// default cron job implimentation
-var _ JobDefinition = (*cronJobDefinition)(nil)
-
-type cronJobDefinition struct {
-	crontab      string
-	withSeconds  bool
+type RobfigCron struct {
 	cronSchedule cron.Schedule
+	withSeconds  bool
 }
 
-func (c *cronJobDefinition) IsValid() bool {
+func (r *RobfigCron) IsValid(crontab string) bool {
 	var withLocation string
-	if strings.HasPrefix(c.crontab, "TZ=") || strings.HasPrefix(c.crontab, "CRON_TZ=") {
-		withLocation = c.crontab
+	if strings.HasPrefix(crontab, "TZ=") || strings.HasPrefix(crontab, "CRON_TZ=") {
+		withLocation = crontab
 	} else {
 		// since the user didn't provide a timezone default to the location
 		// passed in by the scheduler. Default: time.Local
-		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local, c.crontab)
+		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local, crontab)
 	}
 
 	var (
@@ -176,7 +159,7 @@ func (c *cronJobDefinition) IsValid() bool {
 		err          error
 	)
 
-	if c.withSeconds {
+	if r.withSeconds {
 		p := cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 		cronSchedule, err = p.Parse(withLocation)
 	} else {
@@ -188,19 +171,32 @@ func (c *cronJobDefinition) IsValid() bool {
 	if cronSchedule.Next(time.Now()).IsZero() {
 		return false
 	}
-	c.cronSchedule = cronSchedule
+	r.cronSchedule = cronSchedule
 	return true
 }
 
-func (c *cronJobDefinition) Next(lastRun time.Time) time.Time {
-	return c.cronSchedule.Next(lastRun)
+func (r *RobfigCron) Next(crontab string, lastRun time.Time) time.Time {
+	return r.cronSchedule.Next(lastRun)
 }
 
-func (c *cronJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
-	if !c.IsValid() {
+// default cron job implimentation
+var _ JobDefinition = (*cronJobDefinition)(nil)
+
+type cronJobDefinition struct {
+	crontab string
+	cron    Cron
+}
+
+func (c cronJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
+	if j.cron != nil {
+		c.cron = j.cron
+	}
+
+	if !c.cron.IsValid(c.crontab) {
 		return ErrCronJobInvalid
 	}
-	j.jobSchedule = &cronJob{cronSchedule: c}
+
+	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron}
 	return nil
 }
 
@@ -211,9 +207,9 @@ func (c *cronJobDefinition) setup(j *internalJob, location *time.Location, _ tim
 // crontab in the form `TZ=America/Chicago * * * * *` or
 // `CRON_TZ=America/Chicago * * * * *`
 func CronJob(crontab string, withSeconds bool) JobDefinition {
-	return &cronJobDefinition{
-		crontab:     crontab,
-		withSeconds: withSeconds,
+	return cronJobDefinition{
+		crontab: crontab,
+		cron:    newDefaultCronImplementation(withSeconds),
 	}
 }
 
@@ -657,6 +653,14 @@ func WithName(name string) JobOption {
 	}
 }
 
+// JobOption to set custom Cron implementation
+func WithCronImplementation(c Cron) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		j.cron = c
+		return nil
+	}
+}
+
 // WithSingletonMode keeps the job from running again if it is already running.
 // This is useful for jobs that should not overlap, and that occasionally
 // (but not consistently) run longer than the interval between job runs.
@@ -867,11 +871,12 @@ type jobSchedule interface {
 var _ jobSchedule = (*cronJob)(nil)
 
 type cronJob struct {
+	crontab      string
 	cronSchedule Cron
 }
 
 func (j *cronJob) next(lastRun time.Time) time.Time {
-	return j.cronSchedule.Next(lastRun)
+	return j.cronSchedule.Next(j.crontab, lastRun)
 }
 
 var _ jobSchedule = (*durationJob)(nil)
