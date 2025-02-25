@@ -879,7 +879,7 @@ type cronJob struct {
 }
 
 func (j *cronJob) next(lastRun time.Time) time.Time {
-	return j.cronSchedule.Next(j.crontab, lastRun)
+	return j.cronSchedule.Next(lastRun)
 }
 
 var _ jobSchedule = (*durationJob)(nil)
