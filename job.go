@@ -115,8 +115,8 @@ type limitRunsTo struct {
 // implemented to provide a custom cron implementation for
 // the job. Pass in the implementation using the JobOption WithCronImplementation.
 type Cron interface {
-	IsValid(string) error
-	Next(string, time.Time) time.Time
+	IsValid(crontab string, location *time.Location, now time.Time) error
+	Next(lastRun time.Time) time.Time
 }
 
 // -----------------------------------------------
