@@ -107,15 +107,15 @@ type limitRunsTo struct {
 
 // -----------------------------------------------
 // -----------------------------------------------
-// --------------- Custom Cron ------------------
+// --------------- Custom Cron -------------------
 // -----------------------------------------------
 // -----------------------------------------------
 
 // Cron defines the interface that must be
-// implemented to create a cron.
-
+// implemented to provide a custom cron implementation for
+// the job. Pass in the implementation using the JobOption WithCronImplementation.
 type Cron interface {
-	IsValid(string) bool
+	IsValid(string) error
 	Next(string, time.Time) time.Time
 }
 
@@ -131,20 +131,20 @@ type JobDefinition interface {
 	setup(j *internalJob, l *time.Location, now time.Time) error
 }
 
-// Default cron implementation using robfig
+// Default cron implementation
 
 func newDefaultCronImplementation(withSeconds bool) Cron {
-	return &RobfigCron{
+	return &defaultCron{
 		withSeconds: withSeconds,
 	}
 }
 
-type RobfigCron struct {
+type defaultCron struct {
 	cronSchedule cron.Schedule
 	withSeconds  bool
 }
 
-func (r *RobfigCron) IsValid(crontab string) bool {
+func (r *defaultCron) IsValid(crontab string) error {
 	var withLocation string
 	if strings.HasPrefix(crontab, "TZ=") || strings.HasPrefix(crontab, "CRON_TZ=") {
 		withLocation = crontab
@@ -166,16 +166,16 @@ func (r *RobfigCron) IsValid(crontab string) bool {
 		cronSchedule, err = cron.ParseStandard(withLocation)
 	}
 	if err != nil {
-		return false
+		return errors.Join(ErrCronJobParse, err)
 	}
 	if cronSchedule.Next(time.Now()).IsZero() {
-		return false
+		return ErrCronJobInvalid
 	}
 	r.cronSchedule = cronSchedule
-	return true
+	return nil
 }
 
-func (r *RobfigCron) Next(crontab string, lastRun time.Time) time.Time {
+func (r *defaultCron) Next(crontab string, lastRun time.Time) time.Time {
 	return r.cronSchedule.Next(lastRun)
 }
 
@@ -192,7 +192,8 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, _ time
 		c.cron = j.cron
 	}
 
-	if !c.cron.IsValid(c.crontab) {
+	if err := c.cron.IsValid(c.crontab); err != nil {
+	    return err
 		return ErrCronJobInvalid
 	}
 
@@ -653,7 +654,8 @@ func WithName(name string) JobOption {
 	}
 }
 
-// JobOption to set custom Cron implementation
+// WithCronImplementation sets the custom Cron implementation for the job.
+// This is only utilized for the CronJob type.
 func WithCronImplementation(c Cron) JobOption {
 	return func(j *internalJob, _ time.Time) error {
 		j.cron = c
