@@ -139,6 +139,8 @@ func newDefaultCronImplementation(withSeconds bool) Cron {
 	}
 }
 
+var _ Cron = (*defaultCron)(nil)
+
 type defaultCron struct {
 	cronSchedule cron.Schedule
 	withSeconds  bool
@@ -168,14 +170,14 @@ func (r *defaultCron) IsValid(crontab string) error {
 	if err != nil {
 		return errors.Join(ErrCronJobParse, err)
 	}
-	if cronSchedule.Next(time.Now()).IsZero() {
+	if cronSchedule.Next(now).IsZero() {
 		return ErrCronJobInvalid
 	}
 	r.cronSchedule = cronSchedule
 	return nil
 }
 
-func (r *defaultCron) Next(crontab string, lastRun time.Time) time.Time {
+func (r *defaultCron) Next(lastRun time.Time) time.Time {
 	return r.cronSchedule.Next(lastRun)
 }
 
@@ -187,14 +189,13 @@ type cronJobDefinition struct {
 	cron    Cron
 }
 
-func (c cronJobDefinition) setup(j *internalJob, location *time.Location, _ time.Time) error {
+func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now time.Time) error {
 	if j.cron != nil {
 		c.cron = j.cron
 	}
 
-	if err := c.cron.IsValid(c.crontab); err != nil {
+	if err := c.cron.IsValid(c.crontab, location, now); err != nil {
 	    return err
-		return ErrCronJobInvalid
 	}
 
 	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron}
