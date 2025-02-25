@@ -146,14 +146,14 @@ type defaultCron struct {
 	withSeconds  bool
 }
 
-func (r *defaultCron) IsValid(crontab string) error {
+func (r *defaultCron) IsValid(crontab string, location *time.Location, now time.Time) error {
 	var withLocation string
 	if strings.HasPrefix(crontab, "TZ=") || strings.HasPrefix(crontab, "CRON_TZ=") {
 		withLocation = crontab
 	} else {
 		// since the user didn't provide a timezone default to the location
 		// passed in by the scheduler. Default: time.Local
-		withLocation = fmt.Sprintf("CRON_TZ=%s %s", time.Local, crontab)
+		withLocation = fmt.Sprintf("CRON_TZ=%s %s", location.String(), crontab)
 	}
 
 	var (
