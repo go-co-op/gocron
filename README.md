@@ -169,21 +169,32 @@ We appreciate the support for free and open source software!
 
 This project is supported by:
 
-[Jetbrains](https://www.jetbrains.com/?from=gocron)
+[JetBrains](https://www.jetbrains.com/?from=gocron)
 
-![JetBrains logo](https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png)
-
+<a href="https://www.jetbrains.com/?from=gocron">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="assets/jetbrains-mono-white.png" />
+   <source media="(prefers-color-scheme: light)" srcset="https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png" />
+   <img alt="JetBrains logo" src="https://resources.jetbrains.com/storage/products/company/brand/logos/jetbrains.png" />
+ </picture>
+</a>
 
 [Sentry](https://sentry.io/welcome/)
 
-<p align="left">
-  <p align="left">
-    <a href="https://sentry.io/?utm_source=github&utm_medium=logo" target="_blank">
-      <img src="https://sentry-brand.storage.googleapis.com/sentry-wordmark-dark-280x84.png" alt="Sentry" width="280" height="84" />
-    </a>
-  </p>
-</p>
+<a href="https://sentry.io/?utm_source=github&utm_medium=logo">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="assets/sentry-wordmark-light-280x84.png" />
+   <source media="(prefers-color-scheme: light)" srcset="https://sentry-brand.storage.googleapis.com/sentry-wordmark-dark-280x84.png" />
+   <img alt="Sentry logo" src="https://sentry-brand.storage.googleapis.com/sentry-wordmark-dark-280x84.png" />
+ </picture>
+</a>
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date)](https://star-history.com/#go-co-op/gocron&Date)
+<a href="https://www.star-history.com/#go-co-op/gocron&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date" />
+ </picture>
+</a>
