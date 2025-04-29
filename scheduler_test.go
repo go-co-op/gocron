@@ -1626,10 +1626,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			func(t *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLeaderCount int
-				for {
-					if time.Now().After(timeout) {
-						break
-					}
+				for !time.Now().After(timeout) {
 					select {
 					case <-notLeader:
 						notLeaderCount++
@@ -1650,10 +1647,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			func(_ *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLockedCount int
-				for {
-					if time.Now().After(timeout) {
-						break
-					}
+				for !time.Now().After(timeout) {
 					select {
 					case <-notLocked:
 						notLockedCount++
@@ -1675,10 +1669,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			func(_ *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLockedCount int
-				for {
-					if time.Now().After(timeout) {
-						break
-					}
+				for !time.Now().After(timeout) {
 					select {
 					case <-notLocked:
 						notLockedCount++
@@ -1702,10 +1693,7 @@ func TestScheduler_WithDistributed(t *testing.T) {
 			func(_ *testing.T) {
 				timeout := time.Now().Add(1 * time.Second)
 				var notLockedCount int
-				for {
-					if time.Now().After(timeout) {
-						break
-					}
+				for !time.Now().After(timeout) {
 					select {
 					case <-notLocked:
 						notLockedCount++

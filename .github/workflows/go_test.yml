@@ -12,8 +12,6 @@
      strategy:
        matrix:
          go-version:
-           - "1.21"
-           - "1.22"
            - "1.23"
            - "1.24"
      name: lint and test
@@ -28,6 +26,6 @@
        - name: golangci-lint
          uses: golangci/golangci-lint-action@v7.0.0
          with:
-           version: v1.64.5
+           version: v2.1.5
        - name: test
          run: make test_ci

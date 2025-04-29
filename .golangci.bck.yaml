@@ -1,0 +1,42 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+issues:
+  max-same-issues: 100
+  include:
+    - EXC0012
+    - EXC0014
+  exclude-dirs:
+    - local
+  exclude-rules:
+    - path: example_test.go
+      linters:
+        - revive
+      text: "seems to be unused"
+  fix: true
+
+linters:
+  enable:
+    - bodyclose
+    - copyloopvar
+    - gofumpt
+    - goimports
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - revive
+    - staticcheck
+    - typecheck
+    - unused
+    - whitespace
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  path-prefix: ""
+  sort-results: true
