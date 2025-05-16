@@ -18,6 +18,21 @@ type Elector interface {
 // locker implementation handles time splay between schedulers.
 // The lock key passed is the job's name - which, if not set, defaults to the
 // go function's name, e.g. "pkg.myJob" for func myJob() {} in pkg
+//
+// Notes: The locker and scheduler do not handle synchronization of run times across
+// schedulers.
+//
+//  1. If you are using duration based jobs (DurationJob), you can utilize the JobOption
+//     WithStartAt to set a start time for the job to the nearest time rounded to your
+//     duration. For example, if you have a job that runs every 5 minutes, you can set
+//     the start time to the nearest 5 minute e.g. 12:05, 12:10.
+//
+//  2. For all jobs, the implementation is still vulnerable to clockskew between scheduler
+//     instances. This may result in a single scheduler instance running the majority of the
+//     jobs.
+//
+// For distributed jobs, consider utilizing the Elector option if these notes are not acceptable
+// to your use case.
 type Locker interface {
 	// Lock if an error is returned by lock, the job will not be scheduled.
 	Lock(ctx context.Context, key string) (Lock, error)

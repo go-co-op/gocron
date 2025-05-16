@@ -121,6 +121,8 @@ other instances checking to see if a new leader needs to be elected.
 - [**Locker**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithDistributedLocker):
 A locker can be used to lock each run of a job to a single instance of gocron.
 Locker can be at job or scheduler, if it is defined both at job and scheduler then locker of job will take precedence.
+  - See Notes in the doc for [Locker](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Locker) for
+    details and limitations of the locker design.
   - Implementations: [go-co-op lockers](https://github.com/go-co-op?q=-lock&type=all&language=&sort=)
     (don't see what you need? request on slack to get a repo created to contribute it!)
 
