@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
@@ -448,6 +449,7 @@ func (e *executor) callJobWithRecover(j internalJob) (err error) {
 		if recoverData := recover(); recoverData != nil {
 			_ = callJobFuncWithParams(j.afterJobRunsWithPanic, j.id, j.name, recoverData)
 
+			e.logger.Error("gocron: panic occurred", "jobID", j.id, "jobName", j.name, "stack", string(debug.Stack()))
 			// if panic is occurred, we should return an error
 			err = fmt.Errorf("%w from %v", ErrPanicRecovered, recoverData)
 		}
