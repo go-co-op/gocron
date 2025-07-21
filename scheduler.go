@@ -736,16 +736,19 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 
 	if err := s.verifyParameterType(taskFunc, tsk); err != nil {
+		j.cancel()
 		return nil, err
 	}
 
 	if err := definition.setup(&j, s.location, s.exec.clock.Now()); err != nil {
+		j.cancel()
 		return nil, err
 	}
 
 	newJobCtx, newJobCancel := context.WithCancel(context.Background())
 	select {
 	case <-s.shutdownCtx.Done():
+		newJobCancel()
 	case s.newJobCh <- newJobIn{
 		ctx:    newJobCtx,
 		cancel: newJobCancel,
@@ -756,6 +759,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	select {
 	case <-newJobCtx.Done():
 	case <-s.shutdownCtx.Done():
+		newJobCancel()
 	}
 
 	out := s.jobFromInternalJob(j)
