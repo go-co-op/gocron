@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: verify example_test.go
         run: |
           grep "^func [a-z-A-Z]" example_test.go | sort -c
