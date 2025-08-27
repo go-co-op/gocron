@@ -90,7 +90,7 @@ type scheduler struct {
 	// used to send all the jobs out when a request is made by the client
 	allJobsOutRequest chan allJobsOutRequest
 	// used to send a jobs out when a request is made by the client
-	jobOutRequestCh chan jobOutRequest
+	jobOutRequestCh chan *jobOutRequest
 	// used to run a job on-demand when requested by the client
 	runJobRequestCh chan runJobRequest
 	// new jobs are received here
@@ -140,7 +140,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobsOutForRescheduling: make(chan uuid.UUID),
 		jobUpdateNextRuns:      make(chan uuid.UUID),
 		jobsOutCompleted:       make(chan uuid.UUID),
-		jobOutRequest:          make(chan jobOutRequest, 1000),
+		jobOutRequest:          make(chan *jobOutRequest, 100),
 		done:                   make(chan error, 1),
 	}
 
@@ -159,7 +159,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		startedCh:          make(chan struct{}),
 		stopCh:             make(chan struct{}),
 		stopErrCh:          make(chan error, 1),
-		jobOutRequestCh:    make(chan jobOutRequest),
+		jobOutRequestCh:    make(chan *jobOutRequest),
 		runJobRequestCh:    make(chan runJobRequest),
 		allJobsOutRequest:  make(chan allJobsOutRequest),
 	}
@@ -461,7 +461,7 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 	s.jobs[id] = j
 }
 
-func (s *scheduler) selectJobOutRequest(out jobOutRequest) {
+func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 	if j, ok := s.jobs[out.id]; ok {
 		select {
 		case out.outChan <- j:

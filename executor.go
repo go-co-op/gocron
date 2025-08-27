@@ -29,7 +29,7 @@ type executor struct {
 	// sends out jobs once completed
 	jobsOutCompleted chan uuid.UUID
 	// used to request jobs from the scheduler
-	jobOutRequest chan jobOutRequest
+	jobOutRequest chan *jobOutRequest
 
 	// sends out job needs to update the next runs
 	jobUpdateNextRuns chan uuid.UUID

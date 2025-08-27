@@ -1136,7 +1136,7 @@ type job struct {
 	id            uuid.UUID
 	name          string
 	tags          []string
-	jobOutRequest chan jobOutRequest
+	jobOutRequest chan *jobOutRequest
 	runJobRequest chan runJobRequest
 }
 

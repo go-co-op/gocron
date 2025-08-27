@@ -35,16 +35,16 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 	return nil
 }
 
-func requestJob(id uuid.UUID, ch chan jobOutRequest) *internalJob {
+func requestJob(id uuid.UUID, ch chan *jobOutRequest) *internalJob {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	return requestJobCtx(ctx, id, ch)
 }
 
-func requestJobCtx(ctx context.Context, id uuid.UUID, ch chan jobOutRequest) *internalJob {
+func requestJobCtx(ctx context.Context, id uuid.UUID, ch chan *jobOutRequest) *internalJob {
 	resp := make(chan internalJob, 1)
 	select {
-	case ch <- jobOutRequest{
+	case ch <- &jobOutRequest{
 		id:      id,
 		outChan: resp,
 	}:

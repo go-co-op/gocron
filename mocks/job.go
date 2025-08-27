@@ -5,6 +5,7 @@
 //
 //	mockgen -destination=mocks/job.go -package=gocronmocks . Job
 //
+
 // Package gocronmocks is a generated GoMock package.
 package gocronmocks
 
@@ -20,6 +21,7 @@ import (
 type MockJob struct {
 	ctrl     *gomock.Controller
 	recorder *MockJobMockRecorder
+	isgomock struct{}
 }
 
 // MockJobMockRecorder is the mock recorder for MockJob.
