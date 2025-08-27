@@ -1506,7 +1506,7 @@ func TestScheduler_OneTimeJob_DoesNotCleanupNext(t *testing.T) {
 
 					clock.Advance(oneSecondAfterNextRun.Sub(schedulerStartTime))
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(1), runs.Load())
+						return uint32(1) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
@@ -2458,7 +2458,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(1), runs.Load())
+						return uint32(1) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
@@ -2493,7 +2493,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(1), runs.Load())
+						return uint32(1) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
@@ -2524,7 +2524,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(1), runs.Load())
+						return uint32(1) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
@@ -2541,7 +2541,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(2), runs.Load())
+						return uint32(2) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
@@ -2577,7 +2577,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(1), runs.Load())
+						return uint32(1) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
@@ -2594,7 +2594,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 					// advance and eventually run
 					clock.Advance(2 * time.Millisecond)
 					require.Eventually(t, func() bool {
-						return assert.Equal(t, uint32(2), runs.Load())
+						return uint32(2) == runs.Load()
 					}, 3*time.Second, 100*time.Millisecond)
 
 					// last was run
