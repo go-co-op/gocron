@@ -140,7 +140,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobsOutForRescheduling: make(chan uuid.UUID),
 		jobUpdateNextRuns:      make(chan uuid.UUID),
 		jobsOutCompleted:       make(chan uuid.UUID),
-		jobOutRequest:          make(chan *jobOutRequest, 1000),
+		jobOutRequest:          make(chan *jobOutRequest, 100),
 		done:                   make(chan error, 1),
 	}
 
