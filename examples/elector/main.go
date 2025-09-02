@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 	"time"
 
@@ -22,7 +22,7 @@ func (m myElector) IsLeader(_ context.Context) error {
 		return nil
 	}
 	log.Printf("node %d is not leader", m.num)
-	return fmt.Errorf("not leader")
+	return errors.New("not leader")
 }
 
 func main() {

@@ -2,6 +2,7 @@ package gocron_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -58,7 +59,7 @@ var _ gocron.Locker = new(errorLocker)
 type errorLocker struct{}
 
 func (e errorLocker) Lock(_ context.Context, _ string) (gocron.Lock, error) {
-	return nil, fmt.Errorf("locked")
+	return nil, errors.New("locked")
 }
 
 func ExampleAfterLockError() {
@@ -120,7 +121,7 @@ func ExampleBeforeJobRunsSkipIfBeforeFuncErrors() {
 		gocron.WithEventListeners(
 			gocron.BeforeJobRunsSkipIfBeforeFuncErrors(
 				func(jobID uuid.UUID, jobName string) error {
-					return fmt.Errorf("error")
+					return errors.New("error")
 				},
 			),
 		),
