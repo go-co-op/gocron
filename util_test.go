@@ -1,7 +1,7 @@
 package gocron
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 	"time"
 
@@ -64,10 +64,10 @@ func TestCallJobFuncWithParams(t *testing.T) {
 		{
 			"function that returns an error",
 			func() error {
-				return fmt.Errorf("test error")
+				return errors.New("test error")
 			},
 			nil,
-			fmt.Errorf("test error"),
+			errors.New("test error"),
 		},
 		{
 			"function that returns no error",

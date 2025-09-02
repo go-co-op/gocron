@@ -3,7 +3,6 @@ package gocron
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -1561,7 +1560,7 @@ type testElector struct {
 func (t *testElector) IsLeader(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("done")
+		return errors.New("done")
 	default:
 	}
 
@@ -1569,7 +1568,7 @@ func (t *testElector) IsLeader(ctx context.Context) error {
 	defer t.mu.Unlock()
 	if t.leaderElected {
 		t.notLeader <- struct{}{}
-		return fmt.Errorf("already elected leader")
+		return errors.New("already elected leader")
 	}
 	t.leaderElected = true
 	return nil
@@ -1588,7 +1587,7 @@ func (t *testLocker) Lock(_ context.Context, _ string) (Lock, error) {
 	defer t.mu.Unlock()
 	if t.jobLocked {
 		t.notLocked <- struct{}{}
-		return nil, fmt.Errorf("job already locked")
+		return nil, errors.New("job already locked")
 	}
 	t.jobLocked = true
 	return &testLock{}, nil
@@ -1952,7 +1951,7 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
 	listenerRunCh := make(chan error, 1)
-	testErr := fmt.Errorf("test error")
+	testErr := errors.New("test error")
 	tests := []struct {
 		name      string
 		tsk       Task
