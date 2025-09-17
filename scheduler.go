@@ -297,6 +297,7 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 		case run.outChan <- ErrJobNotFound:
 		default:
 		}
+		return
 	}
 	select {
 	case <-s.shutdownCtx.Done():
