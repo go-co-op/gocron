@@ -618,20 +618,22 @@ func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicSta
 	if err := s.verifyNonVariadic(taskFunc, tsk, variadicStart); err != nil {
 		return err
 	}
-	parameterType := taskFunc.Type().In(variadicStart).Elem().Kind()
-	if parameterType == reflect.Interface {
+	parameterType := taskFunc.Type().In(variadicStart)
+	parameterTypeKind := parameterType.Elem().Kind()
+	if parameterTypeKind == reflect.Interface {
 		return s.verifyInterfaceVariadic(taskFunc, tsk, variadicStart)
 	}
-	if parameterType == reflect.Pointer {
-		parameterType = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(variadicStart))).Kind()
+	if parameterTypeKind == reflect.Pointer {
+		parameterTypeKind = reflect.Indirect(reflect.ValueOf(parameterType)).Kind()
 	}
 
 	for i := variadicStart; i < len(tsk.parameters); i++ {
-		argumentType := reflect.TypeOf(tsk.parameters[i]).Kind()
-		if argumentType == reflect.Interface || argumentType == reflect.Pointer {
-			argumentType = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
+		argumentType := reflect.TypeOf(tsk.parameters[i])
+		argumentTypeKind := argumentType.Kind()
+		if argumentTypeKind == reflect.Interface || argumentTypeKind == reflect.Pointer {
+			argumentTypeKind = argumentType.Elem().Kind()
 		}
-		if argumentType != parameterType {
+		if argumentTypeKind != parameterTypeKind {
 			return ErrNewJobWrongTypeOfParameters
 		}
 	}
@@ -640,13 +642,15 @@ func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicSta
 
 func (s *scheduler) verifyNonVariadic(taskFunc reflect.Value, tsk task, length int) error {
 	for i := 0; i < length; i++ {
-		t1 := reflect.TypeOf(tsk.parameters[i]).Kind()
+		argumentType := reflect.TypeOf(tsk.parameters[i])
+		t1 := argumentType.Kind()
 		if t1 == reflect.Interface || t1 == reflect.Pointer {
-			t1 = reflect.TypeOf(tsk.parameters[i]).Elem().Kind()
+			t1 = argumentType.Elem().Kind()
 		}
-		t2 := reflect.New(taskFunc.Type().In(i)).Elem().Kind()
+		parameterType := taskFunc.Type().In(i)
+		t2 := reflect.New(parameterType).Elem().Kind()
 		if t2 == reflect.Interface || t2 == reflect.Pointer {
-			t2 = reflect.Indirect(reflect.ValueOf(taskFunc.Type().In(i))).Kind()
+			t2 = reflect.Indirect(reflect.ValueOf(parameterType)).Kind()
 		}
 		if t1 != t2 {
 			return ErrNewJobWrongTypeOfParameters
@@ -656,17 +660,20 @@ func (s *scheduler) verifyNonVariadic(taskFunc reflect.Value, tsk task, length i
 }
 
 func (s *scheduler) verifyParameterType(taskFunc reflect.Value, tsk task) error {
-	isVariadic := taskFunc.Type().IsVariadic()
+	taskFuncType := taskFunc.Type()
+	isVariadic := taskFuncType.IsVariadic()
 	if isVariadic {
-		variadicStart := taskFunc.Type().NumIn() - 1
+		variadicStart := taskFuncType.NumIn() - 1
 		return s.verifyVariadic(taskFunc, tsk, variadicStart)
 	}
-	expectedParameterLength := taskFunc.Type().NumIn()
+	expectedParameterLength := taskFuncType.NumIn()
 	if len(tsk.parameters) != expectedParameterLength {
 		return ErrNewJobWrongNumberOfParameters
 	}
 	return s.verifyNonVariadic(taskFunc, tsk, expectedParameterLength)
 }
+
+var contextType = reflect.TypeFor[context.Context]()
 
 func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskWrapper Task, options []JobOption) (Job, error) {
 	j := internalJob{}
@@ -725,7 +732,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 
 	if !taskFunc.IsZero() && taskFunc.Type().NumIn() > 0 {
 		// if the first parameter is a context.Context and params have no context.Context, add current ctx to the params
-		if taskFunc.Type().In(0) == reflect.TypeOf((*context.Context)(nil)).Elem() {
+		if taskFunc.Type().In(0) == contextType {
 			if len(tsk.parameters) == 0 {
 				tsk.parameters = []any{j.ctx}
 				j.parameters = []any{j.ctx}
