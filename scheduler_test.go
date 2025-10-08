@@ -705,6 +705,12 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrDurationJobIntervalZero,
 		},
 		{
+			"duration job time interval is negative",
+			DurationJob(-1 * time.Second),
+			nil,
+			ErrDurationJobIntervalNegative,
+		},
+		{
 			"random with bad min/max",
 			DurationRandomJob(
 				time.Second*5,
@@ -712,6 +718,24 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			),
 			nil,
 			ErrDurationRandomJobMinMax,
+		},
+		{
+			"random with negative min",
+			DurationRandomJob(
+				-time.Second,
+				time.Second,
+			),
+			nil,
+			ErrDurationRandomJobPositive,
+		},
+		{
+			"random with negative max",
+			DurationRandomJob(
+				-2*time.Second,
+				-time.Second,
+			),
+			nil,
+			ErrDurationRandomJobPositive,
 		},
 		{
 			"daily job at times nil",

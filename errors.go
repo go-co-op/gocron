@@ -14,6 +14,8 @@ var (
 	ErrDailyJobZeroInterval          = errors.New("gocron: DailyJob: interval must be greater than 0")
 	ErrDailyJobMinutesSeconds        = errors.New("gocron: DailyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
 	ErrDurationJobIntervalZero       = errors.New("gocron: DurationJob: time interval is 0")
+	ErrDurationJobIntervalNegative   = errors.New("gocron: DurationJob: time interval must be greater than 0")
+	ErrDurationRandomJobPositive     = errors.New("gocron: DurationRandomJob: minimum and maximum durations must be greater than 0")
 	ErrDurationRandomJobMinMax       = errors.New("gocron: DurationRandomJob: minimum duration must be less than maximum duration")
 	ErrEventListenerFuncNil          = errors.New("gocron: eventListenerFunc must not be nil")
 	ErrJobNotFound                   = errors.New("gocron: job not found")

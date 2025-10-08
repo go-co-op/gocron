@@ -225,6 +225,9 @@ func (d durationJobDefinition) setup(j *internalJob, _ *time.Location, _ time.Ti
 	if d.duration == 0 {
 		return ErrDurationJobIntervalZero
 	}
+	if d.duration < 0 {
+		return ErrDurationJobIntervalNegative
+	}
 	j.jobSchedule = &durationJob{duration: d.duration}
 	return nil
 }
@@ -246,6 +249,10 @@ type durationRandomJobDefinition struct {
 func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location, _ time.Time) error {
 	if d.min >= d.max {
 		return ErrDurationRandomJobMinMax
+	}
+
+	if d.min <= 0 || d.max <= 0 {
+		return ErrDurationRandomJobPositive
 	}
 
 	j.jobSchedule = &durationRandomJob{
