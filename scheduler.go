@@ -233,6 +233,12 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 func (s *scheduler) stopScheduler() {
 	s.logger.Debug("gocron: stopping scheduler")
+	if !s.started {
+		s.logger.Debug("gocron: scheduler already stopped")
+		s.stopErrCh <- nil
+		return
+	}
+
 	if s.started {
 		s.exec.stopCh <- struct{}{}
 	}
@@ -820,6 +826,9 @@ func (s *scheduler) StopJobs() error {
 }
 
 func (s *scheduler) Shutdown() error {
+	if !s.started {
+		return nil
+	}
 	s.shutdownCancel()
 
 	t := time.NewTimer(s.exec.stopTimeout + 2*time.Second)
