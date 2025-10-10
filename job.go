@@ -718,6 +718,26 @@ func WithStartDateTime(start time.Time) StartAtOption {
 	}
 }
 
+// WithStartDateTimePast sets the first date & time at which the job should run
+// from a time in the past. This is useful when you want to backdate
+// the start time of a job to a time in the past, for example
+// if you want to start a job from a specific date in the past
+// and have it run on its schedule from then.
+// The start time can be in the past, but not zero.
+// If the start time is in the future, it behaves the same as WithStartDateTime.
+func WithStartDateTimePast(start time.Time) StartAtOption {
+	return func(j *internalJob, _ time.Time) error {
+		if start.IsZero() {
+			return ErrWithStartDateTimePastZero
+		}
+		if !j.stopTime.IsZero() && j.stopTime.Before(start) {
+			return ErrStartTimeLaterThanEndTime
+		}
+		j.startTime = start
+		return nil
+	}
+}
+
 // WithStopAt sets the option for stopping the job from running
 // after the specified time.
 func WithStopAt(option StopAtOption) JobOption {

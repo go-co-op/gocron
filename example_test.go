@@ -1046,6 +1046,90 @@ func ExampleWithStartAt() {
 	// 9999-09-09 09:09:09.000000009 +0000 UTC
 }
 
+func ExampleWithStartDateTime() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	start := time.Date(9999, 9, 9, 9, 9, 9, 9, time.UTC)
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		gocron.WithStartAt(
+			gocron.WithStartDateTime(start),
+		),
+	)
+	s.Start()
+
+	next, _ := j.NextRun()
+	fmt.Println(next)
+
+	_ = s.StopJobs()
+	// Output:
+	// 9999-09-09 09:09:09.000000009 +0000 UTC
+}
+
+func ExampleWithStartDateTimePast() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	start := time.Now().Add(-time.Minute)
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		gocron.WithStartAt(
+			gocron.WithStartDateTimePast(start),
+		),
+	)
+	s.Start()
+
+	time.Sleep(100 * time.Millisecond)
+
+	_, _ = j.NextRun()
+
+	_ = s.StopJobs()
+}
+
+func ExampleWithStartImmediately() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func(one string, two int) {
+				fmt.Printf("%s, %d", one, two)
+			},
+			"one", 2,
+		),
+		gocron.WithStartAt(
+			gocron.WithStartImmediately(),
+		),
+	)
+	s.Start()
+
+	_, _ = j.NextRun()
+
+	_ = s.StopJobs()
+}
+
 func ExampleWithStopTimeout() {
 	_, _ = gocron.NewScheduler(
 		gocron.WithStopTimeout(time.Second * 5),

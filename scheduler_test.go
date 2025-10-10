@@ -1005,6 +1005,14 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrWithStartDateTimePast,
 		},
 		{
+			"WithStartDateTimePast is zero",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithStartAt(WithStartDateTimePast(time.Time{}))},
+			ErrWithStartDateTimePastZero,
+		},
+		{
 			"WithStartDateTime is later than the end",
 			DurationJob(
 				time.Second,

@@ -54,6 +54,7 @@ var (
 	ErrWithMonitorNil                = errors.New("gocron: WithMonitor: monitor must not be nil")
 	ErrWithNameEmpty                 = errors.New("gocron: WithName: name must not be empty")
 	ErrWithStartDateTimePast         = errors.New("gocron: WithStartDateTime: start must not be in the past")
+	ErrWithStartDateTimePastZero     = errors.New("gocron: WithStartDateTime: start must not be zero")
 	ErrWithStopDateTimePast          = errors.New("gocron: WithStopDateTime: end must not be in the past")
 	ErrStartTimeLaterThanEndTime     = errors.New("gocron: WithStartDateTime: start must not be later than end")
 	ErrStopTimeEarlierThanStartTime  = errors.New("gocron: WithStopDateTime: end must not be earlier than start")
