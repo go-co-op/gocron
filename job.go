@@ -701,7 +701,7 @@ func WithSingletonMode(mode LimitMode) JobOption {
 // Note: This option only makes sense with interval-based jobs (DurationJob, DurationRandomJob).
 // For time-based jobs (CronJob, DailyJob, etc.) that run at specific times, this option
 // will be ignored as those jobs are inherently scheduled at fixed times.
-// 
+//
 // Example:
 //
 //	s.NewJob(

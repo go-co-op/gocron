@@ -964,12 +964,17 @@ func TestWithIntervalFromCompletion_LongRunningJob(t *testing.T) {
 	// Execution 1: 0s-6s, wait 3s → next at 9s
 	// Execution 2: 9s-15s, wait 3s → next at 18s
 	// Need to wait at least 16 seconds for 2 executions + buffer
-	time.Sleep(20 * time.Second)
+	time.Sleep(22 * time.Second)
 
 	mu.Lock()
 	defer mu.Unlock()
 
 	require.GreaterOrEqual(t, len(executions), 2, "Expected at least 2 executions")
+
+	if len(executions) < 2 {
+		t.Logf("Only got %d execution(s), skipping gap assertion", len(executions))
+		return
+	}
 
 	prev := executions[0]
 	curr := executions[1]

@@ -347,7 +347,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	}
 
 	var scheduleFrom time.Time
-	
+
 	// If intervalFromCompletion is enabled, calculate the next run time
 	// from when the job completed (lastRun) rather than when it was scheduled.
 	if j.intervalFromCompletion {
