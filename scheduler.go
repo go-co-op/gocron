@@ -347,16 +347,32 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	}
 
 	var scheduleFrom time.Time
-	if len(j.nextScheduled) > 0 {
-		// always grab the last element in the slice as that is the furthest
-		// out in the future and the time from which we want to calculate
-		// the subsequent next run time.
-		slices.SortStableFunc(j.nextScheduled, ascendingTime)
-		scheduleFrom = j.nextScheduled[len(j.nextScheduled)-1]
-	}
+	
+	// If intervalFromCompletion is enabled, calculate the next run time
+	// from when the job completed (lastRun) rather than when it was scheduled.
+	if j.intervalFromCompletion {
+		// Use the completion time (lastRun is set when the job completes)
+		scheduleFrom = j.lastRun
+		if scheduleFrom.IsZero() {
+			// For the first run, use the start time or current time
+			scheduleFrom = j.startTime
+			if scheduleFrom.IsZero() {
+				scheduleFrom = s.now()
+			}
+		}
+	} else {
+		// Default behavior: use the scheduled time
+		if len(j.nextScheduled) > 0 {
+			// always grab the last element in the slice as that is the furthest
+			// out in the future and the time from which we want to calculate
+			// the subsequent next run time.
+			slices.SortStableFunc(j.nextScheduled, ascendingTime)
+			scheduleFrom = j.nextScheduled[len(j.nextScheduled)-1]
+		}
 
-	if scheduleFrom.IsZero() {
-		scheduleFrom = j.startTime
+		if scheduleFrom.IsZero() {
+			scheduleFrom = j.startTime
+		}
 	}
 
 	next := j.next(scheduleFrom)

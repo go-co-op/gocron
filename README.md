@@ -103,6 +103,15 @@ Jobs can be run every x months on specific days of the month and at specific tim
 - [**One time**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#OneTimeJob):
 Jobs can be run at specific time(s) (either once or many times).
 
+### Interval Timing
+Jobs can be scheduled with different interval timing modes.
+- [**Interval from scheduled time (default)**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#DurationJob):
+By default, jobs calculate their next run time from when they were scheduled to start, resulting in fixed intervals 
+regardless of execution time. Good for cron-like scheduling at predictable times.
+- [**Interval from completion time**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithIntervalFromCompletion):
+Jobs can calculate their next run time from when they complete, ensuring consistent rest periods between executions.
+Ideal for rate-limited APIs, resource-intensive jobs, and scenarios where execution time varies.
+
 ### Concurrency Limits
 Jobs can be limited individually or across the entire scheduler.
 - [**Per job limiting with singleton mode**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#WithSingletonMode):

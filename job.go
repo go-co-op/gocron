@@ -31,16 +31,17 @@ type internalJob struct {
 	// have multiple nextScheduled times
 	nextScheduled []time.Time
 
-	lastRun            time.Time
-	function           any
-	parameters         []any
-	timer              clockwork.Timer
-	singletonMode      bool
-	singletonLimitMode LimitMode
-	limitRunsTo        *limitRunsTo
-	startTime          time.Time
-	startImmediately   bool
-	stopTime           time.Time
+	lastRun                time.Time
+	function               any
+	parameters             []any
+	timer                  clockwork.Timer
+	singletonMode          bool
+	singletonLimitMode     LimitMode
+	limitRunsTo            *limitRunsTo
+	startTime              time.Time
+	startImmediately       bool
+	stopTime               time.Time
+	intervalFromCompletion bool
 	// event listeners
 	afterJobRuns                        func(jobID uuid.UUID, jobName string)
 	beforeJobRuns                       func(jobID uuid.UUID, jobName string)
@@ -678,6 +679,45 @@ func WithSingletonMode(mode LimitMode) JobOption {
 	return func(j *internalJob, _ time.Time) error {
 		j.singletonMode = true
 		j.singletonLimitMode = mode
+		return nil
+	}
+}
+
+// WithIntervalFromCompletion configures the job to calculate the next run time
+// from the job's completion time rather than its scheduled start time.
+// This ensures consistent rest periods between job executions regardless of
+// how long each execution takes.
+//
+// By default (without this option), a job scheduled to run every N time units
+// will start N time units after its previous scheduled start time. For example,
+// if a job is scheduled to run every 5 minutes starting at 09:00 and takes 2 minutes
+// to complete, the next run will start at 09:05 (5 minutes from 09:00), giving
+// only 3 minutes of rest between completion and the next start.
+//
+// With this option enabled, the next run will start N time units after the job
+// completes. Using the same example, if the job completes at 09:02, the next run
+// will start at 09:07 (5 minutes from 09:02), ensuring a full 5 minutes of rest.
+//
+// Note: This option only makes sense with interval-based jobs (DurationJob, DurationRandomJob).
+// For time-based jobs (CronJob, DailyJob, etc.) that run at specific times, this option
+// will be ignored as those jobs are inherently scheduled at fixed times.
+// 
+// Example:
+//
+//	s.NewJob(
+//	    gocron.DurationJob(5*time.Minute),
+//	    gocron.NewTask(func() {
+//	        // Job that takes variable time to complete
+//	        doWork()
+//	    }),
+//	    gocron.WithIntervalFromCompletion(),
+//	)
+//
+// In this example, no matter how long doWork() takes, there will always be
+// exactly 5 minutes between when it completes and when it starts again.
+func WithIntervalFromCompletion() JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		j.intervalFromCompletion = true
 		return nil
 	}
 }

@@ -419,10 +419,14 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		return
 	}
 
-	e.sendOutForRescheduling(&jIn)
-	select {
-	case e.jobsOutCompleted <- j.id:
-	case <-e.ctx.Done():
+	// For intervalFromCompletion, we need to reschedule AFTER the job completes,
+	// not before. For regular jobs, we reschedule before execution (existing behavior).
+	if !j.intervalFromCompletion {
+		e.sendOutForRescheduling(&jIn)
+		select {
+		case e.jobsOutCompleted <- j.id:
+		case <-e.ctx.Done():
+		}
 	}
 
 	startTime := time.Now()
@@ -440,6 +444,15 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
 		e.incrementJobCounter(j, Success)
 		e.recordJobTimingWithStatus(startTime, time.Now(), j, Success, nil)
+	}
+
+	// For intervalFromCompletion, reschedule AFTER the job completes
+	if j.intervalFromCompletion {
+		select {
+		case e.jobsOutCompleted <- j.id:
+		case <-e.ctx.Done():
+		}
+		e.sendOutForRescheduling(&jIn)
 	}
 }
 

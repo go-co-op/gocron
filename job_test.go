@@ -2,6 +2,8 @@ package gocron
 
 import (
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -786,4 +788,380 @@ func TestNewDaysOfTheMonth(t *testing.T) {
 	}
 
 	assert.Equal(t, domInts, domIntsAgain)
+}
+
+func TestWithIntervalFromCompletion_BasicFunctionality(t *testing.T) {
+	t.Run("interval calculated from completion time", func(t *testing.T) {
+		s, err := NewScheduler()
+		require.NoError(t, err)
+		defer func() { _ = s.Shutdown() }()
+
+		var mu sync.Mutex
+		executions := []struct {
+			startTime    time.Time
+			completeTime time.Time
+		}{}
+
+		jobExecutionTime := 2 * time.Second
+		scheduledInterval := 5 * time.Second
+
+		_, err = s.NewJob(
+			DurationJob(scheduledInterval),
+			NewTask(func() {
+				start := time.Now()
+				time.Sleep(jobExecutionTime)
+				complete := time.Now()
+
+				mu.Lock()
+				executions = append(executions, struct {
+					startTime    time.Time
+					completeTime time.Time
+				}{start, complete})
+				mu.Unlock()
+			}),
+			WithIntervalFromCompletion(),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		// Wait for at least 3 executions
+		// With intervalFromCompletion:
+		// Execution 1: 0s-2s
+		// Wait: 5s (from 2s to 7s)
+		// Execution 2: 7s-9s
+		// Wait: 5s (from 9s to 14s)
+		// Execution 3: 14s-16s
+		time.Sleep(18 * time.Second)
+
+		mu.Lock()
+		executionCount := len(executions)
+		mu.Unlock()
+
+		require.GreaterOrEqual(t, executionCount, 2,
+			"Expected at least 2 executions")
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		for i := 1; i < len(executions); i++ {
+			prev := executions[i-1]
+			curr := executions[i]
+
+			completionToStartGap := curr.startTime.Sub(prev.completeTime)
+
+			assert.InDelta(t, scheduledInterval.Seconds(), completionToStartGap.Seconds(), 0.5,
+				"Gap from completion to start should match the interval")
+		}
+	})
+}
+
+func TestWithIntervalFromCompletion_VariableExecutionTime(t *testing.T) {
+	s, err := NewScheduler()
+	require.NoError(t, err)
+	defer func() { _ = s.Shutdown() }()
+
+	var mu sync.Mutex
+	executions := []struct {
+		startTime    time.Time
+		completeTime time.Time
+		executionDur time.Duration
+	}{}
+
+	executionTimes := []time.Duration{
+		1 * time.Second,
+		3 * time.Second,
+		500 * time.Millisecond,
+	}
+	currentExecution := atomic.Int32{}
+	scheduledInterval := 4 * time.Second
+
+	_, err = s.NewJob(
+		DurationJob(scheduledInterval),
+		NewTask(func() {
+			idx := int(currentExecution.Add(1)) - 1
+			if idx >= len(executionTimes) {
+				return
+			}
+
+			start := time.Now()
+			executionTime := executionTimes[idx]
+			time.Sleep(executionTime)
+			complete := time.Now()
+
+			mu.Lock()
+			executions = append(executions, struct {
+				startTime    time.Time
+				completeTime time.Time
+				executionDur time.Duration
+			}{start, complete, executionTime})
+			mu.Unlock()
+		}),
+		WithIntervalFromCompletion(),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	// Wait for all 3 executions
+	// Execution 1: 0s-1s, wait 4s → next at 5s
+	// Execution 2: 5s-8s, wait 4s → next at 12s
+	// Execution 3: 12s-12.5s
+	time.Sleep(15 * time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.GreaterOrEqual(t, len(executions), 2, "Expected at least 2 executions")
+
+	for i := 1; i < len(executions); i++ {
+		prev := executions[i-1]
+		curr := executions[i]
+
+		restPeriod := curr.startTime.Sub(prev.completeTime)
+
+		assert.InDelta(t, scheduledInterval.Seconds(), restPeriod.Seconds(), 0.5,
+			"Rest period should be consistent regardless of execution time")
+	}
+}
+
+func TestWithIntervalFromCompletion_LongRunningJob(t *testing.T) {
+	s, err := NewScheduler()
+	require.NoError(t, err)
+	defer func() { _ = s.Shutdown() }()
+
+	var mu sync.Mutex
+	executions := []struct {
+		startTime    time.Time
+		completeTime time.Time
+	}{}
+
+	jobExecutionTime := 6 * time.Second
+	scheduledInterval := 3 * time.Second
+
+	_, err = s.NewJob(
+		DurationJob(scheduledInterval),
+		NewTask(func() {
+			start := time.Now()
+			time.Sleep(jobExecutionTime)
+			complete := time.Now()
+
+			mu.Lock()
+			executions = append(executions, struct {
+				startTime    time.Time
+				completeTime time.Time
+			}{start, complete})
+			mu.Unlock()
+		}),
+		WithIntervalFromCompletion(),
+		WithSingletonMode(LimitModeReschedule),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	// Wait for 2 executions
+	// Execution 1: 0s-6s, wait 3s → next at 9s
+	// Execution 2: 9s-15s, wait 3s → next at 18s
+	// Need to wait at least 16 seconds for 2 executions + buffer
+	time.Sleep(20 * time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.GreaterOrEqual(t, len(executions), 2, "Expected at least 2 executions")
+
+	prev := executions[0]
+	curr := executions[1]
+
+	completionGap := curr.startTime.Sub(prev.completeTime)
+
+	assert.InDelta(t, scheduledInterval.Seconds(), completionGap.Seconds(), 0.5,
+		"Gap should be the full interval even when execution time exceeds interval")
+}
+
+func TestWithIntervalFromCompletion_ComparedToDefault(t *testing.T) {
+	jobExecutionTime := 2 * time.Second
+	scheduledInterval := 5 * time.Second
+
+	t.Run("default behavior - interval from scheduled time", func(t *testing.T) {
+		s, err := NewScheduler()
+		require.NoError(t, err)
+		defer func() { _ = s.Shutdown() }()
+
+		var mu sync.Mutex
+		executions := []struct {
+			startTime    time.Time
+			completeTime time.Time
+		}{}
+
+		_, err = s.NewJob(
+			DurationJob(scheduledInterval),
+			NewTask(func() {
+				start := time.Now()
+				time.Sleep(jobExecutionTime)
+				complete := time.Now()
+
+				mu.Lock()
+				executions = append(executions, struct {
+					startTime    time.Time
+					completeTime time.Time
+				}{start, complete})
+				mu.Unlock()
+			}),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+		time.Sleep(13 * time.Second)
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		require.GreaterOrEqual(t, len(executions), 2, "Expected at least 2 executions")
+
+		prev := executions[0]
+		curr := executions[1]
+		completionGap := curr.startTime.Sub(prev.completeTime)
+
+		expectedGap := scheduledInterval - jobExecutionTime
+		assert.InDelta(t, expectedGap.Seconds(), completionGap.Seconds(), 0.5,
+			"Default behavior: gap should be interval minus execution time")
+	})
+
+	t.Run("with intervalFromCompletion - interval from completion time", func(t *testing.T) {
+		s, err := NewScheduler()
+		require.NoError(t, err)
+		defer func() { _ = s.Shutdown() }()
+
+		var mu sync.Mutex
+		executions := []struct {
+			startTime    time.Time
+			completeTime time.Time
+		}{}
+
+		_, err = s.NewJob(
+			DurationJob(scheduledInterval),
+			NewTask(func() {
+				start := time.Now()
+				time.Sleep(jobExecutionTime)
+				complete := time.Now()
+
+				mu.Lock()
+				executions = append(executions, struct {
+					startTime    time.Time
+					completeTime time.Time
+				}{start, complete})
+				mu.Unlock()
+			}),
+			WithIntervalFromCompletion(),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+		time.Sleep(15 * time.Second)
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		require.GreaterOrEqual(t, len(executions), 2, "Expected at least 2 executions")
+
+		prev := executions[0]
+		curr := executions[1]
+		completionGap := curr.startTime.Sub(prev.completeTime)
+
+		assert.InDelta(t, scheduledInterval.Seconds(), completionGap.Seconds(), 0.5,
+			"With intervalFromCompletion: gap should be the full interval")
+	})
+}
+
+func TestWithIntervalFromCompletion_DurationRandomJob(t *testing.T) {
+	s, err := NewScheduler()
+	require.NoError(t, err)
+	defer func() { _ = s.Shutdown() }()
+
+	var mu sync.Mutex
+	executions := []struct {
+		startTime    time.Time
+		completeTime time.Time
+	}{}
+
+	jobExecutionTime := 1 * time.Second
+	minInterval := 3 * time.Second
+	maxInterval := 4 * time.Second
+
+	_, err = s.NewJob(
+		DurationRandomJob(minInterval, maxInterval),
+		NewTask(func() {
+			start := time.Now()
+			time.Sleep(jobExecutionTime)
+			complete := time.Now()
+
+			mu.Lock()
+			executions = append(executions, struct {
+				startTime    time.Time
+				completeTime time.Time
+			}{start, complete})
+			mu.Unlock()
+		}),
+		WithIntervalFromCompletion(),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	time.Sleep(15 * time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.GreaterOrEqual(t, len(executions), 2, "Expected at least 2 executions")
+
+	for i := 1; i < len(executions); i++ {
+		prev := executions[i-1]
+		curr := executions[i]
+
+		restPeriod := curr.startTime.Sub(prev.completeTime)
+		assert.GreaterOrEqual(t, restPeriod.Seconds(), minInterval.Seconds()-0.5,
+			"Rest period should be at least minInterval")
+		assert.LessOrEqual(t, restPeriod.Seconds(), maxInterval.Seconds()+0.5,
+			"Rest period should be at most maxInterval")
+	}
+}
+
+func TestWithIntervalFromCompletion_FirstRun(t *testing.T) {
+	s, err := NewScheduler()
+	require.NoError(t, err)
+	defer func() { _ = s.Shutdown() }()
+
+	var mu sync.Mutex
+	var firstRunTime time.Time
+
+	_, err = s.NewJob(
+		DurationJob(5*time.Second),
+		NewTask(func() {
+			mu.Lock()
+			if firstRunTime.IsZero() {
+				firstRunTime = time.Now()
+			}
+			mu.Unlock()
+		}),
+		WithIntervalFromCompletion(),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	startTime := time.Now()
+	s.Start()
+
+	time.Sleep(1 * time.Second)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.False(t, firstRunTime.IsZero(), "Job should have run at least once")
+
+	timeSinceStart := firstRunTime.Sub(startTime)
+	assert.Less(t, timeSinceStart.Seconds(), 1.0,
+		"First run should happen quickly with WithStartImmediately")
 }

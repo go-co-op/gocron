@@ -1016,6 +1016,31 @@ func ExampleWithSingletonMode() {
 	)
 }
 
+func ExampleWithIntervalFromCompletion() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		gocron.DurationJob(
+			5*time.Minute,
+		),
+		gocron.NewTask(
+			func() {
+				time.Sleep(30 * time.Second)
+			},
+		),
+		gocron.WithIntervalFromCompletion(),
+	)
+
+	// Without WithIntervalFromCompletion (default behavior):
+	// If the job starts at 00:00 and completes at 00:00:30,
+	// the next job starts at 00:05:00 (only 4m30s rest).
+	
+	// With WithIntervalFromCompletion:
+	// If the job starts at 00:00 and completes at 00:00:30,
+	// the next job starts at 00:05:30 (full 5m rest).
+}
+
 func ExampleWithStartAt() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
