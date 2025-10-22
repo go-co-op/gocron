@@ -74,6 +74,12 @@ func main() {
 - [Go doc examples](https://pkg.go.dev/github.com/go-co-op/gocron/v2#pkg-examples)
 - [Examples directory](examples)
 
+## Articles & Blog Posts
+
+Community articles and tutorials about using gocron:
+
+- [Building a dynamic, highly available scheduler in Go](https://tech.efg.gg/posts/2025/highly-available-scheduler-in-go/) - A deep dive into building a highly available scheduler using gocron, MongoDB change streams, and leader election patterns for the FACEIT Watch platform.
+
 ## Concepts
 
 - **Job**: The job encapsulates a "task", which is made up of a go function and any function parameters. The Job then
