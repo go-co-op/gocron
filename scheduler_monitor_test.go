@@ -106,7 +106,7 @@ func TestSchedulerMonitor_StartStopOrder(t *testing.T) {
 
 	s.Start()
 	time.Sleep(10 * time.Millisecond)
-	s.Shutdown()
+	require.NoError(t, s.Shutdown())
 	time.Sleep(10 * time.Millisecond)
 
 	mu.Lock()
