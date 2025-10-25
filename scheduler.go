@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -100,6 +101,11 @@ type scheduler struct {
 	removeJobCh chan uuid.UUID
 	// requests from the client to remove jobs by tags are received here
 	removeJobsByTagsCh chan []string
+
+	// scheduler monitor from which metrics can be collected
+	schedulerMonitor SchedulerMonitor
+	// mutex to protect access to the scheduler monitor
+	schedulerMonitorMu sync.RWMutex
 }
 
 type newJobIn struct {
@@ -815,8 +821,13 @@ func (s *scheduler) RemoveJob(id uuid.UUID) error {
 func (s *scheduler) Start() {
 	select {
 	case <-s.shutdownCtx.Done():
+		// Scheduler already shut down, don't notify
+		return
 	case s.startCh <- struct{}{}:
-		<-s.startedCh
+		<-s.startedCh // Wait for scheduler to actually start
+
+		// Scheduler has started
+		s.notifySchedulerStarted()
 	}
 }
 
@@ -849,6 +860,9 @@ func (s *scheduler) Shutdown() error {
 	select {
 	case err := <-s.stopErrCh:
 		t.Stop()
+
+		// notify monitor that scheduler stopped
+		s.notifySchedulerStopped()
 		return err
 	case <-t.C:
 		return ErrStopSchedulerTimedOut
@@ -1052,5 +1066,36 @@ func WithMonitorStatus(monitor MonitorStatus) SchedulerOption {
 		}
 		s.exec.monitorStatus = monitor
 		return nil
+	}
+}
+
+// WithSchedulerMonitor sets a monitor that will be called with scheduler-level events.
+func WithSchedulerMonitor(monitor SchedulerMonitor) SchedulerOption {
+	return func(s *scheduler) error {
+		if monitor == nil {
+			return ErrSchedulerMonitorNil
+		}
+		s.schedulerMonitorMu.Lock()
+		defer s.schedulerMonitorMu.Unlock()
+		s.schedulerMonitor = monitor
+		return nil
+	}
+}
+
+// notifySchedulerStarted notifies the monitor that scheduler has started
+func (s *scheduler) notifySchedulerStarted() {
+	s.schedulerMonitorMu.RLock()
+	defer s.schedulerMonitorMu.RUnlock()
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.SchedulerStarted()
+	}
+}
+
+// notifySchedulerStopped notifies the monitor that scheduler has stopped
+func (s *scheduler) notifySchedulerStopped() {
+	s.schedulerMonitorMu.RLock()
+	defer s.schedulerMonitorMu.RUnlock()
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.SchedulerStopped()
 	}
 }
