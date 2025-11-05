@@ -59,6 +59,7 @@ var (
 	ErrStartTimeLaterThanEndTime     = errors.New("gocron: WithStartDateTime: start must not be later than end")
 	ErrStopTimeEarlierThanStartTime  = errors.New("gocron: WithStopDateTime: end must not be earlier than start")
 	ErrWithStopTimeoutZeroOrNegative = errors.New("gocron: WithStopTimeout: timeout must be greater than 0")
+	ErrWithLimitedRunsZero           = errors.New("gocron: WithLimitedRuns: limit must be greater than 0")
 )
 
 // internal errors

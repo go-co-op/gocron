@@ -643,6 +643,9 @@ func WithEventListeners(eventListeners ...EventListener) JobOption {
 // Upon reaching the limit, the job is removed from the scheduler.
 func WithLimitedRuns(limit uint) JobOption {
 	return func(j *internalJob, _ time.Time) error {
+		if limit == 0 {
+			return ErrWithLimitedRunsZero
+		}
 		j.limitRunsTo = &limitRunsTo{
 			limit:    limit,
 			runCount: 0,
