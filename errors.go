@@ -61,6 +61,7 @@ var (
 	ErrStopTimeEarlierThanStartTime  = errors.New("gocron: WithStopDateTime: end must not be earlier than start")
 	ErrWithStopTimeoutZeroOrNegative = errors.New("gocron: WithStopTimeout: timeout must be greater than 0")
 	ErrWithSchedulerMonitorNil       = errors.New("gocron: WithSchedulerMonitor: scheduler monitor cannot be nil")
+	ErrWithLimitedRunsZero           = errors.New("gocron: WithLimitedRuns: limit must be greater than 0")
 )
 
 // internal errors

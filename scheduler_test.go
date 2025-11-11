@@ -1056,6 +1056,14 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			[]JobOption{WithIdentifier(uuid.Nil)},
 			ErrWithIdentifierNil,
 		},
+		{
+			"WithLimitedRuns is zero",
+			DurationJob(
+				time.Second,
+			),
+			[]JobOption{WithLimitedRuns(0)},
+			ErrWithLimitedRunsZero,
+		},
 	}
 
 	for _, tt := range tests {

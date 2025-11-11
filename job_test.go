@@ -44,6 +44,9 @@ func TestDurationJob_next(t *testing.T) {
 }
 
 func TestDailyJob_next(t *testing.T) {
+	americaChicago, err := time.LoadLocation("America/Chicago")
+	require.NoError(t, err)
+
 	tests := []struct {
 		name                      string
 		interval                  uint
@@ -84,6 +87,16 @@ func TestDailyJob_next(t *testing.T) {
 			time.Date(2000, 1, 3, 5, 30, 0, 0, time.UTC),
 			41 * time.Hour,
 		},
+		{
+			"daily at time with daylight savings time",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, americaChicago),
+			},
+			time.Date(2023, 3, 11, 5, 30, 0, 0, americaChicago),
+			time.Date(2023, 3, 12, 5, 30, 0, 0, americaChicago),
+			23 * time.Hour,
+		},
 	}
 
 	for _, tt := range tests {
@@ -101,6 +114,9 @@ func TestDailyJob_next(t *testing.T) {
 }
 
 func TestWeeklyJob_next(t *testing.T) {
+	americaChicago, err := time.LoadLocation("America/Chicago")
+	require.NoError(t, err)
+
 	tests := []struct {
 		name                      string
 		interval                  uint
@@ -131,6 +147,17 @@ func TestWeeklyJob_next(t *testing.T) {
 			time.Date(2000, 1, 6, 5, 30, 0, 0, time.UTC),
 			time.Date(2000, 1, 10, 5, 30, 0, 0, time.UTC),
 			4 * 24 * time.Hour,
+		},
+		{
+			"last run before daylight savings time, next run after",
+			1,
+			[]time.Weekday{time.Saturday},
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, americaChicago),
+			},
+			time.Date(2023, 3, 11, 5, 30, 0, 0, americaChicago),
+			time.Date(2023, 3, 18, 5, 30, 0, 0, americaChicago),
+			7*24*time.Hour - time.Hour,
 		},
 	}
 
