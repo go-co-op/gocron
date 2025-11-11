@@ -56,6 +56,8 @@ type executor struct {
 	monitor Monitor
 	// monitorStatus for reporting metrics
 	monitorStatus MonitorStatus
+	// reference to parent scheduler for lifecycle notifications
+	scheduler *scheduler
 }
 
 type jobIn struct {
@@ -416,16 +418,34 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
 
+	// Notify job started
+	if e.scheduler != nil {
+		out := e.scheduler.jobFromInternalJob(j)
+		var jobIface Job = out
+		e.scheduler.notifyJobStarted(&jobIface)
+	}
+
 	err := callJobFuncWithParams(j.beforeJobRunsSkipIfBeforeFuncErrors, j.id, j.name)
 	if err != nil {
 		e.sendOutForRescheduling(&jIn)
-
 		select {
 		case e.jobsOutCompleted <- j.id:
 		case <-e.ctx.Done():
 		}
-
+		// Notify job failed (before actual run)
+		if e.scheduler != nil {
+			out := e.scheduler.jobFromInternalJob(j)
+			var jobIface Job = out
+			e.scheduler.notifyJobFailed(&jobIface, err)
+		}
 		return
+	}
+
+	// Notify job running
+	if e.scheduler != nil {
+		out := e.scheduler.jobFromInternalJob(j)
+		var jobIface Job = out
+		e.scheduler.notifyJobRunning(&jobIface)
 	}
 
 	// For intervalFromCompletion, we need to reschedule AFTER the job completes,
@@ -449,10 +469,22 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		_ = callJobFuncWithParams(j.afterJobRunsWithError, j.id, j.name, err)
 		e.incrementJobCounter(j, Fail)
 		e.recordJobTimingWithStatus(startTime, time.Now(), j, Fail, err)
+		// Notify job failed
+		if e.scheduler != nil {
+			out := e.scheduler.jobFromInternalJob(j)
+			var jobIface Job = out
+			e.scheduler.notifyJobFailed(&jobIface, err)
+		}
 	} else {
 		_ = callJobFuncWithParams(j.afterJobRuns, j.id, j.name)
 		e.incrementJobCounter(j, Success)
 		e.recordJobTimingWithStatus(startTime, time.Now(), j, Success, nil)
+		// Notify job completed
+		if e.scheduler != nil {
+			out := e.scheduler.jobFromInternalJob(j)
+			var jobIface Job = out
+			e.scheduler.notifyJobCompleted(&jobIface)
+		}
 	}
 
 	// For intervalFromCompletion, reschedule AFTER the job completes

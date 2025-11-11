@@ -48,6 +48,7 @@ var (
 	ErrWithDistributedLockerNil      = errors.New("gocron: WithDistributedLocker: locker must not be nil")
 	ErrWithDistributedJobLockerNil   = errors.New("gocron: WithDistributedJobLocker: locker must not be nil")
 	ErrWithIdentifierNil             = errors.New("gocron: WithIdentifier: identifier must not be nil")
+	ErrSchedulerMonitorNil           = errors.New("gocron: WithSchedulerMonitor: monitor must not be nil")
 	ErrWithLimitConcurrentJobsZero   = errors.New("gocron: WithLimitConcurrentJobs: limit must be greater than 0")
 	ErrWithLocationNil               = errors.New("gocron: WithLocation: location must not be nil")
 	ErrWithLoggerNil                 = errors.New("gocron: WithLogger: logger must not be nil")
@@ -59,7 +60,7 @@ var (
 	ErrStartTimeLaterThanEndTime     = errors.New("gocron: WithStartDateTime: start must not be later than end")
 	ErrStopTimeEarlierThanStartTime  = errors.New("gocron: WithStopDateTime: end must not be earlier than start")
 	ErrWithStopTimeoutZeroOrNegative = errors.New("gocron: WithStopTimeout: timeout must be greater than 0")
-	ErrWithSchedulerMonitorNil           = errors.New("gocron: WithSchedulerMonitor: scheduler monitor cannot be nil")
+	ErrWithSchedulerMonitorNil       = errors.New("gocron: WithSchedulerMonitor: scheduler monitor cannot be nil")
 )
 
 // internal errors

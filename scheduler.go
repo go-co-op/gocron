@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -104,8 +103,6 @@ type scheduler struct {
 
 	// scheduler monitor from which metrics can be collected
 	schedulerMonitor SchedulerMonitor
-	// mutex to protect access to the scheduler monitor
-	schedulerMonitorMu sync.RWMutex
 }
 
 type newJobIn struct {
@@ -154,7 +151,6 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 	s := &scheduler{
 		shutdownCtx:    schCtx,
 		shutdownCancel: cancel,
-		exec:           exec,
 		jobs:           make(map[uuid.UUID]internalJob),
 		location:       time.Local,
 		logger:         &noOpLogger{},
@@ -170,6 +166,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		runJobRequestCh:    make(chan runJobRequest),
 		allJobsOutRequest:  make(chan allJobsOutRequest),
 	}
+	exec.scheduler = s
+	s.exec = exec
 
 	for _, option := range options {
 		err := option(s)
@@ -328,6 +326,11 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 	j, ok := s.jobs[id]
 	if !ok {
 		return
+	}
+	if s.schedulerMonitor != nil {
+		out := s.jobFromInternalJob(j)
+		var job Job = &out
+		s.notifyJobUnregistered(&job)
 	}
 	j.stop()
 	delete(s.jobs, id)
@@ -537,6 +540,11 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 	for _, j := range s.jobs {
 		for _, tag := range tags {
 			if slices.Contains(j.tags, tag) {
+				if s.schedulerMonitor != nil {
+					out := s.jobFromInternalJob(j)
+					var job Job = &out
+					s.notifyJobUnregistered(&job)
+				}
 				j.stop()
 				delete(s.jobs, j.id)
 				break
@@ -697,7 +705,7 @@ func (s *scheduler) verifyParameterType(taskFunc reflect.Value, tsk task) error 
 	return s.verifyNonVariadic(taskFunc, tsk, expectedParameterLength)
 }
 
-var contextType = reflect.TypeFor[context.Context]()
+var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 
 func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskWrapper Task, options []JobOption) (Job, error) {
 	j := internalJob{}
@@ -795,6 +803,10 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 
 	out := s.jobFromInternalJob(j)
+	if s.schedulerMonitor != nil {
+		var job Job = out
+		s.notifyJobRegistered(&job)
+	}
 	return &out, nil
 }
 
@@ -862,7 +874,7 @@ func (s *scheduler) Shutdown() error {
 		t.Stop()
 
 		// notify monitor that scheduler stopped
-		s.notifySchedulerStopped()
+		s.notifySchedulerShutdown()
 		return err
 	case <-t.C:
 		return ErrStopSchedulerTimedOut
@@ -1075,8 +1087,6 @@ func WithSchedulerMonitor(monitor SchedulerMonitor) SchedulerOption {
 		if monitor == nil {
 			return ErrSchedulerMonitorNil
 		}
-		s.schedulerMonitorMu.Lock()
-		defer s.schedulerMonitorMu.Unlock()
 		s.schedulerMonitor = monitor
 		return nil
 	}
@@ -1084,18 +1094,56 @@ func WithSchedulerMonitor(monitor SchedulerMonitor) SchedulerOption {
 
 // notifySchedulerStarted notifies the monitor that scheduler has started
 func (s *scheduler) notifySchedulerStarted() {
-	s.schedulerMonitorMu.RLock()
-	defer s.schedulerMonitorMu.RUnlock()
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.SchedulerStarted()
 	}
 }
 
-// notifySchedulerStopped notifies the monitor that scheduler has stopped
-func (s *scheduler) notifySchedulerStopped() {
-	s.schedulerMonitorMu.RLock()
-	defer s.schedulerMonitorMu.RUnlock()
+// notifySchedulerShutdown notifies the monitor that scheduler has stopped
+func (s *scheduler) notifySchedulerShutdown() {
 	if s.schedulerMonitor != nil {
-		s.schedulerMonitor.SchedulerStopped()
+		s.schedulerMonitor.SchedulerShutdown()
+	}
+}
+
+// notifyJobRegistered notifies the monitor that a job has been registered
+func (s *scheduler) notifyJobRegistered(job *Job) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobRegistered(job)
+	}
+}
+
+// notifyJobUnregistered notifies the monitor that a job has been unregistered
+func (s *scheduler) notifyJobUnregistered(job *Job) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobUnregistered(job)
+	}
+}
+
+// notifyJobStarted notifies the monitor that a job has started
+func (s *scheduler) notifyJobStarted(job *Job) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobStarted(job)
+	}
+}
+
+// notifyJobRunning notifies the monitor that a job is running.
+func (s *scheduler) notifyJobRunning(job *Job) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobRunning(job)
+	}
+}
+
+// notifyJobCompleted notifies the monitor that a job has completed.
+func (s *scheduler) notifyJobCompleted(job *Job) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobCompleted(job)
+	}
+}
+
+// notifyJobFailed notifies the monitor that a job has failed.
+func (s *scheduler) notifyJobFailed(job *Job, err error) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobFailed(job, err)
 	}
 }
