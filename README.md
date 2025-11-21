@@ -169,12 +169,52 @@ The Logger interface can be implemented with your desired logging library.
 The provided NewLogger uses the standard library's log package.
 
 ### Metrics
-Metrics may be collected from the execution of each job.
+Metrics may be collected from the execution of each job and scheduler lifecycle events.
 - [**Monitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor):
 - [**MonitorStatus**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonitorStatus) (includes status and error (if any) of the Job)
 A monitor can be used to collect metrics for each job from a scheduler.
   - Implementations: [go-co-op monitors](https://github.com/go-co-op?q=-monitor&type=all&language=&sort=)
     (don't see what you need? request on slack to get a repo created to contribute it!)
+- [**SchedulerMonitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#SchedulerMonitor):
+A scheduler monitor provides comprehensive observability into scheduler and job lifecycle events.
+
+  **Available Metrics:**
+  - **Scheduler Lifecycle**: `SchedulerStarted`, `SchedulerStopped`, `SchedulerShutdown`
+  - **Job Management**: `JobRegistered`, `JobUnregistered` - track jobs added/removed from scheduler
+  - **Job Execution**: `JobStarted`, `JobRunning`, `JobCompleted`, `JobFailed` - monitor job execution flow
+  - **Performance**: `JobExecutionTime`, `JobSchedulingDelay` - measure job duration and scheduling lag
+  - **Concurrency**: `ConcurrencyLimitReached` - detect when singleton or limit mode constraints are hit
+
+  **Derived Metrics** (calculable from events):
+  - Error rate: `JobFailed / (JobCompleted + JobFailed)`
+  - Average execution time: from `JobExecutionTime` events
+  - Active jobs: `JobRegistered - JobUnregistered`
+  - Current queue depth: `JobStarted - (JobCompleted + JobFailed)`
+
+  **Example - Prometheus Integration:**
+  ```go
+  type PrometheusMonitor struct {
+      jobsCompleted   prometheus.Counter
+      jobsFailed      prometheus.Counter
+      executionTime   prometheus.Histogram
+      schedulingDelay prometheus.Histogram
+  }
+
+  func (p *PrometheusMonitor) JobExecutionTime(job gocron.Job, duration time.Duration) {
+      p.executionTime.Observe(duration.Seconds())
+  }
+
+  func (p *PrometheusMonitor) JobSchedulingDelay(job gocron.Job, scheduled, actual time.Time) {
+      if delay := actual.Sub(scheduled); delay > 0 {
+          p.schedulingDelay.Observe(delay.Seconds())
+      }
+  }
+
+  // Initialize scheduler with monitor
+  s, _ := gocron.NewScheduler(gocron.WithSchedulerMonitor(monitor))
+  ```
+
+  **Use Cases:** Prometheus metrics, custom dashboards, alerting systems, performance monitoring
 
 ### Testing
 The gocron library is set up to enable testing.
