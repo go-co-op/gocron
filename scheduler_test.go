@@ -2876,3 +2876,34 @@ func TestScheduler_WithMonitor(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_WithStartAtDateTimePast(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	// Monday
+	testTime := time.Date(2024, time.January, 1, 9, 0, 0, 0, time.UTC)
+
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s := newTestScheduler(t, WithClock(fakeClock))
+	j, err := s.NewJob(
+		WeeklyJob(2, NewWeekdays(time.Sunday), NewAtTimes(NewAtTime(10, 0, 0))),
+		NewTask(func() {}),
+		WithStartAt(
+			// The start time is in the past (Dec 30, 2023 9am) which is a Saturday
+			WithStartDateTimePast(testTime.Add(-time.Hour*24*2)),
+		),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	nextRun, err := j.NextRun()
+	require.NoError(t, err)
+
+	require.NoError(t, s.Shutdown())
+
+	// Because the start time was in the past - we expect it to schedule 2 intervals ahead, pasing the first available Sunday
+	// which was in the past Dec 31, 2023, so the next is Jan 7, 2024
+	assert.Equal(t, time.Date(2024, time.January, 7, 10, 0, 0, 0, time.UTC), nextRun)
+}

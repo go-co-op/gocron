@@ -508,6 +508,12 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 				next = j.next(s.now())
 			}
 
+			if next.Before(s.now()) {
+				for next.Before(s.now()) {
+					next = j.next(next)
+				}
+			}
+
 			id := j.id
 			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
@@ -558,6 +564,11 @@ func (s *scheduler) selectStart() {
 		} else {
 			if next.IsZero() {
 				next = j.next(s.now())
+			}
+			if next.Before(s.now()) {
+				for next.Before(s.now()) {
+					next = j.next(next)
+				}
 			}
 
 			jobID := id
