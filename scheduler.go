@@ -277,6 +277,9 @@ func (s *scheduler) stopScheduler() {
 	s.stopErrCh <- err
 	s.started.Store(false)
 	s.logger.Debug("gocron: scheduler stopped")
+
+	// Notify monitor that scheduler has stopped
+	s.notifySchedulerStopped()
 }
 
 func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
@@ -329,8 +332,7 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 	}
 	if s.schedulerMonitor != nil {
 		out := s.jobFromInternalJob(j)
-		var job Job = &out
-		s.notifyJobUnregistered(&job)
+		s.notifyJobUnregistered(out)
 	}
 	j.stop()
 	delete(s.jobs, id)
@@ -542,8 +544,7 @@ func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 			if slices.Contains(j.tags, tag) {
 				if s.schedulerMonitor != nil {
 					out := s.jobFromInternalJob(j)
-					var job Job = &out
-					s.notifyJobUnregistered(&job)
+					s.notifyJobUnregistered(out)
 				}
 				j.stop()
 				delete(s.jobs, j.id)
@@ -804,8 +805,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 
 	out := s.jobFromInternalJob(j)
 	if s.schedulerMonitor != nil {
-		var job Job = out
-		s.notifyJobRegistered(&job)
+		s.notifyJobRegistered(out)
 	}
 	return &out, nil
 }
@@ -1107,43 +1107,71 @@ func (s *scheduler) notifySchedulerShutdown() {
 }
 
 // notifyJobRegistered notifies the monitor that a job has been registered
-func (s *scheduler) notifyJobRegistered(job *Job) {
+func (s *scheduler) notifyJobRegistered(job Job) {
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.JobRegistered(job)
 	}
 }
 
 // notifyJobUnregistered notifies the monitor that a job has been unregistered
-func (s *scheduler) notifyJobUnregistered(job *Job) {
+func (s *scheduler) notifyJobUnregistered(job Job) {
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.JobUnregistered(job)
 	}
 }
 
 // notifyJobStarted notifies the monitor that a job has started
-func (s *scheduler) notifyJobStarted(job *Job) {
+func (s *scheduler) notifyJobStarted(job Job) {
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.JobStarted(job)
 	}
 }
 
 // notifyJobRunning notifies the monitor that a job is running.
-func (s *scheduler) notifyJobRunning(job *Job) {
+func (s *scheduler) notifyJobRunning(job Job) {
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.JobRunning(job)
 	}
 }
 
 // notifyJobCompleted notifies the monitor that a job has completed.
-func (s *scheduler) notifyJobCompleted(job *Job) {
+func (s *scheduler) notifyJobCompleted(job Job) {
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.JobCompleted(job)
 	}
 }
 
 // notifyJobFailed notifies the monitor that a job has failed.
-func (s *scheduler) notifyJobFailed(job *Job, err error) {
+func (s *scheduler) notifyJobFailed(job Job, err error) {
 	if s.schedulerMonitor != nil {
 		s.schedulerMonitor.JobFailed(job, err)
+	}
+}
+
+// notifySchedulerStopped notifies the monitor that the scheduler has stopped
+func (s *scheduler) notifySchedulerStopped() {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.SchedulerStopped()
+	}
+}
+
+// notifyJobExecutionTime notifies the monitor of a job's execution time
+func (s *scheduler) notifyJobExecutionTime(job Job, duration time.Duration) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobExecutionTime(job, duration)
+	}
+}
+
+// notifyJobSchedulingDelay notifies the monitor of scheduling delay
+func (s *scheduler) notifyJobSchedulingDelay(job Job, scheduledTime time.Time, actualStartTime time.Time) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.JobSchedulingDelay(job, scheduledTime, actualStartTime)
+	}
+}
+
+// notifyConcurrencyLimitReached notifies the monitor that a concurrency limit was reached
+func (s *scheduler) notifyConcurrencyLimitReached(limitType string, job Job) {
+	if s.schedulerMonitor != nil {
+		s.schedulerMonitor.ConcurrencyLimitReached(limitType, job)
 	}
 }

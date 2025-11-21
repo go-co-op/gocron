@@ -14,23 +14,29 @@ import (
 // testSchedulerMonitor is a test implementation of SchedulerMonitor
 // that tracks scheduler lifecycle events
 type testSchedulerMonitor struct {
-	mu                sync.RWMutex
-	startedCount      int64
-	shutdownCount     int64
-	jobRegCount       int64
-	jobUnregCount     int64
-	jobStartCount     int64
-	jobRunningCount   int64
-	jobCompletedCount int64
-	jobFailedCount    int64
-	startedCalls      []time.Time
-	shutdownCalls     []time.Time
-	jobRegCalls       []Job
-	jobUnregCalls     []Job
-	jobStartCalls     []Job
-	jobRunningCalls   []Job
-	jobCompletedCalls []Job
-	jobFailedCalls    struct {
+	mu                    sync.RWMutex
+	startedCount          int64
+	stoppedCount          int64
+	shutdownCount         int64
+	jobRegCount           int64
+	jobUnregCount         int64
+	jobStartCount         int64
+	jobRunningCount       int64
+	jobCompletedCount     int64
+	jobFailedCount        int64
+	concurrencyLimitCount int64
+	startedCalls          []time.Time
+	stoppedCalls          []time.Time
+	shutdownCalls         []time.Time
+	jobRegCalls           []Job
+	jobUnregCalls         []Job
+	jobStartCalls         []Job
+	jobRunningCalls       []Job
+	jobCompletedCalls     []Job
+	jobExecutionTimes     []time.Duration
+	jobSchedulingDelays   []time.Duration
+	concurrencyLimitCalls []string
+	jobFailedCalls        struct {
 		jobs []Job
 		errs []error
 	}
@@ -38,13 +44,17 @@ type testSchedulerMonitor struct {
 
 func newTestSchedulerMonitor() *testSchedulerMonitor {
 	return &testSchedulerMonitor{
-		startedCalls:      make([]time.Time, 0),
-		shutdownCalls:     make([]time.Time, 0),
-		jobRegCalls:       make([]Job, 0),
-		jobUnregCalls:     make([]Job, 0),
-		jobStartCalls:     make([]Job, 0),
-		jobRunningCalls:   make([]Job, 0),
-		jobCompletedCalls: make([]Job, 0),
+		startedCalls:          make([]time.Time, 0),
+		stoppedCalls:          make([]time.Time, 0),
+		shutdownCalls:         make([]time.Time, 0),
+		jobRegCalls:           make([]Job, 0),
+		jobUnregCalls:         make([]Job, 0),
+		jobStartCalls:         make([]Job, 0),
+		jobRunningCalls:       make([]Job, 0),
+		jobCompletedCalls:     make([]Job, 0),
+		jobExecutionTimes:     make([]time.Duration, 0),
+		jobSchedulingDelays:   make([]time.Duration, 0),
+		concurrencyLimitCalls: make([]string, 0),
 		jobFailedCalls: struct {
 			jobs []Job
 			errs []error
@@ -60,6 +70,13 @@ func (t *testSchedulerMonitor) SchedulerStarted() {
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.startedCount, 1)
 	t.startedCalls = append(t.startedCalls, time.Now())
+}
+
+func (t *testSchedulerMonitor) SchedulerStopped() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	atomic.AddInt64(&t.stoppedCount, 1)
+	t.stoppedCalls = append(t.stoppedCalls, time.Now())
 }
 
 func (t *testSchedulerMonitor) SchedulerShutdown() {
@@ -89,56 +106,78 @@ func (t *testSchedulerMonitor) getShutdownCalls() []time.Time {
 	return append([]time.Time{}, t.shutdownCalls...)
 }
 
-func (t *testSchedulerMonitor) JobRegistered(job *Job) {
+func (t *testSchedulerMonitor) JobRegistered(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.jobRegCount, 1)
-	t.jobRegCalls = append(t.jobRegCalls, *job)
+	t.jobRegCalls = append(t.jobRegCalls, job)
 }
 
-func (t *testSchedulerMonitor) JobUnregistered(job *Job) {
+func (t *testSchedulerMonitor) JobUnregistered(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.jobUnregCount, 1)
-	t.jobUnregCalls = append(t.jobUnregCalls, *job)
+	t.jobUnregCalls = append(t.jobUnregCalls, job)
 }
 
-func (t *testSchedulerMonitor) JobStarted(job *Job) {
+func (t *testSchedulerMonitor) JobStarted(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.jobStartCount, 1)
-	t.jobStartCalls = append(t.jobStartCalls, *job)
+	t.jobStartCalls = append(t.jobStartCalls, job)
 }
 
-func (t *testSchedulerMonitor) JobRunning(job *Job) {
+func (t *testSchedulerMonitor) JobRunning(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.jobRunningCount, 1)
-	t.jobRunningCalls = append(t.jobRunningCalls, *job)
+	t.jobRunningCalls = append(t.jobRunningCalls, job)
 }
 
-func (t *testSchedulerMonitor) JobCompleted(job *Job) {
+func (t *testSchedulerMonitor) JobCompleted(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.jobCompletedCount, 1)
-	t.jobCompletedCalls = append(t.jobCompletedCalls, *job)
+	t.jobCompletedCalls = append(t.jobCompletedCalls, job)
 }
 
-func (t *testSchedulerMonitor) JobFailed(job *Job, err error) {
+func (t *testSchedulerMonitor) JobFailed(job Job, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	atomic.AddInt64(&t.jobFailedCount, 1)
-	t.jobFailedCalls.jobs = append(t.jobFailedCalls.jobs, *job)
+	t.jobFailedCalls.jobs = append(t.jobFailedCalls.jobs, job)
 	t.jobFailedCalls.errs = append(t.jobFailedCalls.errs, err)
+}
+
+func (t *testSchedulerMonitor) JobExecutionTime(_ Job, duration time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.jobExecutionTimes = append(t.jobExecutionTimes, duration)
+}
+
+func (t *testSchedulerMonitor) JobSchedulingDelay(_ Job, scheduledTime time.Time, actualStartTime time.Time) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delay := actualStartTime.Sub(scheduledTime)
+	if delay > 0 {
+		t.jobSchedulingDelays = append(t.jobSchedulingDelays, delay)
+	}
+}
+
+func (t *testSchedulerMonitor) ConcurrencyLimitReached(limitType string, _ Job) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	atomic.AddInt64(&t.concurrencyLimitCount, 1)
+	t.concurrencyLimitCalls = append(t.concurrencyLimitCalls, limitType)
 }
 
 func (t *testSchedulerMonitor) getJobRegCount() int64 {
 	return atomic.LoadInt64(&t.jobRegCount)
 }
 
-// func (t *testSchedulerMonitor) getJobUnregCount() int64 {
-// 	return atomic.LoadInt64(&t.jobUnregCount)
-// }
+func (t *testSchedulerMonitor) getJobUnregCount() int64 {
+	return atomic.LoadInt64(&t.jobUnregCount)
+}
 
 func (t *testSchedulerMonitor) getJobStartCount() int64 {
 	return atomic.LoadInt64(&t.jobStartCount)
@@ -404,7 +443,7 @@ func TestSchedulerMonitor_IntegrationWithJobs(t *testing.T) {
 
 	// Test successful job
 	jobRunCount := atomic.Int32{}
-	_, err := s.NewJob(
+	j, err := s.NewJob(
 		DurationJob(50*time.Millisecond),
 		NewTask(func() {
 			jobRunCount.Add(1)
@@ -445,6 +484,12 @@ func TestSchedulerMonitor_IntegrationWithJobs(t *testing.T) {
 	assert.NotEmpty(t, failedJobs, "Should have recorded failed jobs")
 	assert.NotEmpty(t, errors, "Should have recorded job errors")
 	assert.Contains(t, errors[0].Error(), "test error", "Should record the correct error")
+
+	// Test unregistration
+	err = s.RemoveJob(j.ID())
+	require.NoError(t, err)
+	time.Sleep(50 * time.Millisecond) // Wait for async removal
+	assert.Equal(t, int64(1), monitor.getJobUnregCount(), "Should have unregistered 1 job")
 
 	// Shutdown
 	err = s.Shutdown()
