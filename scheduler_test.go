@@ -599,10 +599,12 @@ func TestScheduler_Start(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
+		time.Sleep(100 * time.Millisecond)
 		s.Start()
+		time.Sleep(100 * time.Millisecond)
 		s.Start()
 
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(800 * time.Millisecond)
 
 		require.NoError(t, s.Shutdown())
 
