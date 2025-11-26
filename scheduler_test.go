@@ -585,6 +585,7 @@ func TestScheduler_Start(t *testing.T) {
 		s := newTestScheduler(t)
 
 		var counter int
+		var mu sync.Mutex
 
 		_, err := s.NewJob(
 			DurationJob(
@@ -592,19 +593,19 @@ func TestScheduler_Start(t *testing.T) {
 			),
 			NewTask(
 				func() {
+					mu.Lock()
 					counter++
+					mu.Unlock()
 				},
 			),
 		)
 		require.NoError(t, err)
 
 		s.Start()
-		time.Sleep(100 * time.Millisecond)
 		s.Start()
-		time.Sleep(100 * time.Millisecond)
 		s.Start()
 
-		time.Sleep(800 * time.Millisecond)
+		time.Sleep(1000 * time.Millisecond)
 
 		require.NoError(t, s.Shutdown())
 
