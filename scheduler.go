@@ -824,6 +824,11 @@ func (s *scheduler) RemoveJob(id uuid.UUID) error {
 }
 
 func (s *scheduler) Start() {
+	if s.started.Load() {
+		s.logger.Warn("gocron: scheduler already started")
+		return
+	}
+
 	select {
 	case <-s.shutdownCtx.Done():
 	case s.startCh <- struct{}{}:

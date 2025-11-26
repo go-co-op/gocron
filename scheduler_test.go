@@ -578,6 +578,38 @@ func TestScheduler_Shutdown(t *testing.T) {
 	})
 }
 
+func TestScheduler_Start(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	t.Run("calling start multiple times is a no-op", func(t *testing.T) {
+		s := newTestScheduler(t)
+
+		var counter int
+
+		_, err := s.NewJob(
+			DurationJob(
+				100*time.Millisecond,
+			),
+			NewTask(
+				func() {
+					counter++
+				},
+			),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+		s.Start()
+		s.Start()
+
+		time.Sleep(1000 * time.Millisecond)
+
+		require.NoError(t, s.Shutdown())
+
+		assert.Contains(t, []int{9, 10}, counter)
+	})
+}
+
 func TestScheduler_NewJob(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	tests := []struct {
