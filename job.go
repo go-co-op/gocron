@@ -1022,16 +1022,14 @@ type weeklyJob struct {
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
-	firstPass := true
-	next := w.nextWeekDayAtTime(lastRun, firstPass)
+	next := w.nextWeekDayAtTime(lastRun, true)
 	if !next.IsZero() {
 		return next
 	}
-	firstPass = false
 
 	startOfTheNextIntervalWeek := (lastRun.Day() - int(lastRun.Weekday())) + int(w.interval*7)
 	from := time.Date(lastRun.Year(), lastRun.Month(), startOfTheNextIntervalWeek, 0, 0, 0, 0, lastRun.Location())
-	return w.nextWeekDayAtTime(from, firstPass)
+	return w.nextWeekDayAtTime(from, false)
 }
 
 func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Time {

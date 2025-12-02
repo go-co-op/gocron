@@ -519,6 +519,12 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 				next = j.next(s.now())
 			}
 
+			if next.Before(s.now()) {
+				for next.Before(s.now()) {
+					next = j.next(next)
+				}
+			}
+
 			id := j.id
 			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
@@ -573,6 +579,11 @@ func (s *scheduler) selectStart() {
 		} else {
 			if next.IsZero() {
 				next = j.next(s.now())
+			}
+			if next.Before(s.now()) {
+				for next.Before(s.now()) {
+					next = j.next(next)
+				}
 			}
 
 			jobID := id
@@ -831,6 +842,11 @@ func (s *scheduler) RemoveJob(id uuid.UUID) error {
 }
 
 func (s *scheduler) Start() {
+	if s.started.Load() {
+		s.logger.Warn("gocron: scheduler already started")
+		return
+	}
+
 	select {
 	case <-s.shutdownCtx.Done():
 		// Scheduler already shut down, don't notify
