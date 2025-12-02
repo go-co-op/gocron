@@ -157,11 +157,14 @@ func (e *executor) start() {
 							// all runners are busy, reschedule the work for later
 							// which means we just skip it here and do nothing
 							// TODO when metrics are added, this should increment a rescheduled metric
-							ctx2, cancel2 := context.WithCancel(executorCtx)
-							job := requestJobCtx(ctx2, jIn.id, e.jobOutRequest)
-							cancel2()
-							if job != nil && e.scheduler != nil {
-								e.scheduler.notifyConcurrencyLimitReached("limit", e.scheduler.jobFromInternalJob(*job))
+							// Notify concurrency limit reached if monitor is configured
+							if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
+								ctx2, cancel2 := context.WithCancel(executorCtx)
+								job := requestJobCtx(ctx2, jIn.id, e.jobOutRequest)
+								cancel2()
+								if job != nil {
+									e.scheduler.notifyConcurrencyLimitReached("limit", e.scheduler.jobFromInternalJob(*job))
+								}
 							}
 							e.sendOutForRescheduling(&jIn)
 						}
@@ -217,8 +220,8 @@ func (e *executor) start() {
 								// which means we just skip it here and do nothing
 								e.incrementJobCounter(*j, SingletonRescheduled)
 								e.sendOutForRescheduling(&jIn)
-								// Notify concurrency limit reached
-								if e.scheduler != nil {
+								// Notify concurrency limit reached if monitor is configured
+								if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 									e.scheduler.notifyConcurrencyLimitReached("singleton", e.scheduler.jobFromInternalJob(*j))
 								}
 							}
@@ -430,7 +433,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 
 	//  Notify job started
 	actualStartTime := time.Now()
-	if e.scheduler != nil {
+	if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 		jobObj := e.scheduler.jobFromInternalJob(j)
 		e.scheduler.notifyJobStarted(jobObj)
 		// Notify scheduling delay if job had a scheduled time
@@ -447,14 +450,14 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		case <-e.ctx.Done():
 		}
 		// Notify job failed (before actual run)
-		if e.scheduler != nil {
+		if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 			e.scheduler.notifyJobFailed(e.scheduler.jobFromInternalJob(j), err)
 		}
 		return
 	}
 
 	// Notify job running
-	if e.scheduler != nil {
+	if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 		e.scheduler.notifyJobRunning(e.scheduler.jobFromInternalJob(j))
 	}
 
@@ -481,7 +484,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		endTime := time.Now()
 		e.recordJobTimingWithStatus(startTime, endTime, j, Fail, err)
 		// Notify job failed
-		if e.scheduler != nil {
+		if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 			jobObj := e.scheduler.jobFromInternalJob(j)
 			e.scheduler.notifyJobFailed(jobObj, err)
 			e.scheduler.notifyJobExecutionTime(jobObj, endTime.Sub(startTime))
@@ -492,7 +495,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		endTime := time.Now()
 		e.recordJobTimingWithStatus(startTime, endTime, j, Success, nil)
 		// Notify job completed
-		if e.scheduler != nil {
+		if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 			jobObj := e.scheduler.jobFromInternalJob(j)
 			e.scheduler.notifyJobCompleted(jobObj)
 			e.scheduler.notifyJobExecutionTime(jobObj, endTime.Sub(startTime))
