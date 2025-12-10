@@ -140,6 +140,15 @@ func newDefaultCronImplementation(withSeconds bool) Cron {
 	}
 }
 
+// NewDefaultCron returns the default cron implementation for use outside the
+// scheduling of a job. For example, validating crontab syntax before passing to the
+// NewJob function.
+func NewDefaultCron(cronStatementsIncludeSeconds bool) Cron {
+	return &defaultCron{
+		withSeconds: cronStatementsIncludeSeconds,
+	}
+}
+
 var _ Cron = (*defaultCron)(nil)
 
 type defaultCron struct {

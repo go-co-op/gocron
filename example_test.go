@@ -348,6 +348,14 @@ func ExampleMonthlyJob() {
 	)
 }
 
+func ExampleNewDefaultCron() {
+	c := gocron.NewDefaultCron(true)
+	err := c.IsValid("* * * * * *", time.Local, time.Now())
+	if err != nil {
+		panic(err)
+	}
+}
+
 func ExampleNewScheduler() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
