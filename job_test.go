@@ -630,12 +630,10 @@ func TestJob_NextRuns(t *testing.T) {
 				),
 			),
 			func(t *testing.T, iteration int, previousRun, nextRun time.Time) {
+				// With the fix for NextRun accuracy, the immediate run (Jan 1) is removed
+				// from nextScheduled after it completes. So all intervals should be 14 days
+				// (2 weeks as configured).
 				diff := time.Hour * 14 * 24
-				if iteration == 1 {
-					// because the job is run immediately, the first run is on
-					// Saturday 1/1/2000. The following run is then on Tuesday 1/11/2000
-					diff = time.Hour * 10 * 24
-				}
 				assert.Equal(t, previousRun.Add(diff).Day(), nextRun.Day())
 			},
 		},
