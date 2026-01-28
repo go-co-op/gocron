@@ -1195,3 +1195,103 @@ func TestWithIntervalFromCompletion_FirstRun(t *testing.T) {
 	assert.Less(t, timeSinceStart.Seconds(), 1.0,
 		"First run should happen quickly with WithStartImmediately")
 }
+
+func TestJob_NextRun_MultipleJobsSimultaneously(t *testing.T) {
+	// This test reproduces the bug where multiple jobs completing simultaneously
+	// would cause NextRun() to return stale values due to race conditions in
+	// nextScheduled cleanup.
+
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC),
+	)
+
+	jobsCompleted := make(chan struct{}, 4)
+
+	// Create multiple jobs with different intervals that will complete around the same time
+	job1, err := s.NewJob(
+		DurationJob(1*time.Minute),
+		NewTask(func() {
+			jobsCompleted <- struct{}{}
+		}),
+		WithName("job1"),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	job2, err := s.NewJob(
+		DurationJob(2*time.Minute),
+		NewTask(func() {
+			jobsCompleted <- struct{}{}
+		}),
+		WithName("job2"),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	job3, err := s.NewJob(
+		DurationJob(3*time.Minute),
+		NewTask(func() {
+			jobsCompleted <- struct{}{}
+		}),
+		WithName("job3"),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	job4, err := s.NewJob(
+		DurationJob(4*time.Minute),
+		NewTask(func() {
+			jobsCompleted <- struct{}{}
+		}),
+		WithName("job4"),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	// Wait for all 4 jobs to complete their immediate run
+	for i := 0; i < 4; i++ {
+		<-jobsCompleted
+	}
+
+	// Give the scheduler time to process the completions and reschedule
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify that NextRun() returns the correct next scheduled time for each job
+	// and not a stale value from the just-completed run
+
+	nextRun1, err := job1.NextRun()
+	require.NoError(t, err)
+	assert.Equal(t, testTime.Add(1*time.Minute), nextRun1, "job1 NextRun should be 1 minute from start")
+
+	nextRun2, err := job2.NextRun()
+	require.NoError(t, err)
+	assert.Equal(t, testTime.Add(2*time.Minute), nextRun2, "job2 NextRun should be 2 minutes from start")
+
+	nextRun3, err := job3.NextRun()
+	require.NoError(t, err)
+	assert.Equal(t, testTime.Add(3*time.Minute), nextRun3, "job3 NextRun should be 3 minutes from start")
+
+	nextRun4, err := job4.NextRun()
+	require.NoError(t, err)
+	assert.Equal(t, testTime.Add(4*time.Minute), nextRun4, "job4 NextRun should be 4 minutes from start")
+
+	// Advance time to trigger job1's next run
+	fakeClock.Advance(1 * time.Minute)
+
+	// Wait for job1 to complete
+	<-jobsCompleted
+	time.Sleep(50 * time.Millisecond)
+
+	// After job1's second run, it should be scheduled for +2 minutes from start
+	nextRun1, err = job1.NextRun()
+	require.NoError(t, err)
+	assert.Equal(t, testTime.Add(2*time.Minute), nextRun1, "job1 NextRun should be 2 minutes from start after first interval")
+
+	require.NoError(t, s.Shutdown())
+}
