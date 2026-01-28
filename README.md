@@ -171,10 +171,14 @@ The provided NewLogger uses the standard library's log package.
 ### Metrics
 Metrics may be collected from the execution of each job and scheduler lifecycle events.
 - [**Monitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor):
-- [**MonitorStatus**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonitorStatus) (includes status and error (if any) of the Job)
 A monitor can be used to collect metrics for each job from a scheduler.
   - Implementations: There are currently no open source implementations of the Monitor interface available.
     We'd love for you to be the first to contribute one! Check out the [Monitor interface documentation](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor)
+    to get started, or reach out on [Slack](https://gophers.slack.com/archives/CQ7T0T1FW) if you'd like to discuss your implementation.
+- [**MonitorStatus**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonitorStatus):
+Extends Monitor with status and error tracking for each job.
+  - Implementations: There are currently no open source implementations of the MonitorStatus interface available.
+    We'd love for you to be the first to contribute one! Check out the [MonitorStatus interface documentation](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonitorStatus)
     to get started, or reach out on [Slack](https://gophers.slack.com/archives/CQ7T0T1FW) if you'd like to discuss your implementation.
 - [**SchedulerMonitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#SchedulerMonitor):
 A scheduler monitor provides comprehensive observability into scheduler and job lifecycle events.
@@ -216,6 +220,10 @@ A scheduler monitor provides comprehensive observability into scheduler and job 
   ```
 
   **Use Cases:** Prometheus metrics, custom dashboards, alerting systems, performance monitoring
+
+  - Implementations: There are currently no open source implementations of the SchedulerMonitor interface available.
+    We'd love for you to be the first to contribute one! Check out the [SchedulerMonitor interface documentation](https://pkg.go.dev/github.com/go-co-op/gocron/v2#SchedulerMonitor)
+    to get started, or reach out on [Slack](https://gophers.slack.com/archives/CQ7T0T1FW) if you'd like to discuss your implementation.
 
 ### Testing
 The gocron library is set up to enable testing.
