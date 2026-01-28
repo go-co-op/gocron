@@ -173,8 +173,8 @@ Metrics may be collected from the execution of each job and scheduler lifecycle 
 - [**Monitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor):
 - [**MonitorStatus**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#MonitorStatus) (includes status and error (if any) of the Job)
 A monitor can be used to collect metrics for each job from a scheduler.
-  - **Implementations:** There are currently no open source implementations of the Monitor interface available. 
-    We'd love for you to be the first to contribute one! Check out the [Monitor interface documentation](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor) 
+  - Implementations: There are currently no open source implementations of the Monitor interface available.
+    We'd love for you to be the first to contribute one! Check out the [Monitor interface documentation](https://pkg.go.dev/github.com/go-co-op/gocron/v2#Monitor)
     to get started, or reach out on [Slack](https://gophers.slack.com/archives/CQ7T0T1FW) if you'd like to discuss your implementation.
 - [**SchedulerMonitor**](https://pkg.go.dev/github.com/go-co-op/gocron/v2#SchedulerMonitor):
 A scheduler monitor provides comprehensive observability into scheduler and job lifecycle events.
