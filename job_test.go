@@ -609,14 +609,14 @@ func TestJob_NextRuns(t *testing.T) {
 	tests := []struct {
 		name      string
 		jd        JobDefinition
-		assertion func(t *testing.T, iteration int, previousRun, nextRun time.Time)
+		assertion func(t *testing.T, previousRun, nextRun time.Time)
 	}{
 		{
 			"simple - milliseconds",
 			DurationJob(
 				100 * time.Millisecond,
 			),
-			func(t *testing.T, _ int, previousRun, nextRun time.Time) {
+			func(t *testing.T, previousRun, nextRun time.Time) {
 				assert.Equal(t, previousRun.UnixMilli()+100, nextRun.UnixMilli())
 			},
 		},
@@ -629,7 +629,7 @@ func TestJob_NextRuns(t *testing.T) {
 					NewAtTime(0, 0, 0),
 				),
 			),
-			func(t *testing.T, iteration int, previousRun, nextRun time.Time) {
+			func(t *testing.T, previousRun, nextRun time.Time) {
 				// With the fix for NextRun accuracy, the immediate run (Jan 1) is removed
 				// from nextScheduled after it completes. So all intervals should be 14 days
 				// (2 weeks as configured).
@@ -670,7 +670,7 @@ func TestJob_NextRuns(t *testing.T) {
 					// skipping because there is no previous run
 					continue
 				}
-				tt.assertion(t, i, nextRuns[i-1], nextRuns[i])
+				tt.assertion(t, nextRuns[i-1], nextRuns[i])
 			}
 
 			assert.NoError(t, s.Shutdown())
