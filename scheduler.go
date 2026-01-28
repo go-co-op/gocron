@@ -443,11 +443,11 @@ func (s *scheduler) updateNextScheduled(id uuid.UUID) {
 		return
 	}
 	var newNextScheduled []time.Time
+	now := s.now()
 	for _, t := range j.nextScheduled {
-		if t.Before(s.now()) {
-			continue
+		if t.After(now) { // Changed to match selectExecJobsOutCompleted
+			newNextScheduled = append(newNextScheduled, t)
 		}
-		newNextScheduled = append(newNextScheduled, t)
 	}
 	j.nextScheduled = newNextScheduled
 	s.jobs[id] = j
