@@ -1295,3 +1295,91 @@ func TestJob_NextRun_MultipleJobsSimultaneously(t *testing.T) {
 
 	require.NoError(t, s.Shutdown())
 }
+
+func TestJob_NextRun_ConcurrentCompletions(t *testing.T) {
+	// This test verifies that when multiple jobs complete at exactly the same time,
+	// their NextRun() values are correctly updated without race conditions.
+
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC), // Set scheduler to use UTC to match our test time
+	)
+
+	var wg sync.WaitGroup
+	jobCompletionBarrier := make(chan struct{})
+
+	// Create jobs that will all complete at the same instant
+	createJob := func(name string, interval time.Duration) Job {
+		job, err := s.NewJob(
+			DurationJob(interval),
+			NewTask(func() {
+				wg.Done()
+				<-jobCompletionBarrier // Wait until all jobs are ready to complete
+			}),
+			WithName(name),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+		return job
+	}
+
+	wg.Add(4)
+	job1 := createJob("concurrent-job1", 1*time.Minute)
+	job2 := createJob("concurrent-job2", 2*time.Minute)
+	job3 := createJob("concurrent-job3", 3*time.Minute)
+	job4 := createJob("concurrent-job4", 4*time.Minute)
+
+	s.Start()
+
+	wg.Wait()
+	close(jobCompletionBarrier)
+
+	// Give the scheduler time to process all completions
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify NextRun() for all jobs concurrently to stress test the race condition
+	var testWg sync.WaitGroup
+	testWg.Add(4)
+
+	go func() {
+		defer testWg.Done()
+		for i := 0; i < 10; i++ {
+			nextRun, err := job1.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, testTime.Add(1*time.Minute), nextRun)
+		}
+	}()
+
+	go func() {
+		defer testWg.Done()
+		for i := 0; i < 10; i++ {
+			nextRun, err := job2.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, testTime.Add(2*time.Minute), nextRun)
+		}
+	}()
+
+	go func() {
+		defer testWg.Done()
+		for i := 0; i < 10; i++ {
+			nextRun, err := job3.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, testTime.Add(3*time.Minute), nextRun)
+		}
+	}()
+
+	go func() {
+		defer testWg.Done()
+		for i := 0; i < 10; i++ {
+			nextRun, err := job4.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, testTime.Add(4*time.Minute), nextRun)
+		}
+	}()
+
+	testWg.Wait()
+	require.NoError(t, s.Shutdown())
+}
