@@ -460,13 +460,13 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 	}
 
 	// if the job has nextScheduled time in the past,
-	// we need to remove any that are in the past.
+	// we need to remove any that are in the past or at the current time (just executed).
 	var newNextScheduled []time.Time
+	now := s.now()
 	for _, t := range j.nextScheduled {
-		if t.Before(s.now()) {
-			continue
+		if t.After(now) {
+			newNextScheduled = append(newNextScheduled, t)
 		}
-		newNextScheduled = append(newNextScheduled, t)
 	}
 	j.nextScheduled = newNextScheduled
 
