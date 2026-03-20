@@ -267,7 +267,6 @@ func ExampleJob_nextRun() {
 		),
 	)
 
-	// NextRun is only available after the scheduler has been started.
 	s.Start()
 
 	nextRun, _ := j.NextRun()
@@ -287,7 +286,6 @@ func ExampleJob_nextRuns() {
 		),
 	)
 
-	// NextRuns is only available after the scheduler has been started.
 	s.Start()
 
 	nextRuns, _ := j.NextRuns(5)
