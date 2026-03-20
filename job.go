@@ -1190,8 +1190,12 @@ type Job interface {
 	// Name returns the name defined on the job.
 	Name() string
 	// NextRun returns the time of the job's next scheduled run.
+	// This value is only available once the scheduler has been started
+	// with Scheduler.Start(). Before that, it returns the zero time value.
 	NextRun() (time.Time, error)
 	// NextRuns returns the requested number of calculated next run values.
+	// These values are only available once the scheduler has been started
+	// with Scheduler.Start(). Before that, it returns nil.
 	NextRuns(int) ([]time.Time, error)
 	// RunNow runs the job once, now. This does not alter
 	// the existing run schedule, and will respect all job
