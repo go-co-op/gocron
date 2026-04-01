@@ -3,6 +3,7 @@ package gocron
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"runtime"
 	"slices"
@@ -38,6 +39,8 @@ type Scheduler interface {
 	// to a Close or Cleanup method and is often deferred after
 	// starting the scheduler.
 	Shutdown() error
+	// ShutdownWithContext behaves like Shutdown but respects the provided context's deadline.
+	ShutdownWithContext(context.Context) error
 	// Start begins scheduling jobs for execution based
 	// on each job's definition. Job's added to an already
 	// running scheduler will be scheduled immediately based
@@ -47,6 +50,8 @@ type Scheduler interface {
 	// This can be useful in situations where jobs need to be
 	// paused globally and then restarted with Start().
 	StopJobs() error
+	// StopJobsWithContext behaves like StopJobs but respects the provided context's deadline.
+	StopJobsWithContext(context.Context) error
 	// Update replaces the existing Job's JobDefinition with the provided
 	// JobDefinition. The Job's Job.ID() remains the same.
 	Update(uuid.UUID, JobDefinition, Task, ...JobOption) (Job, error)
@@ -860,23 +865,45 @@ func (s *scheduler) Start() {
 }
 
 func (s *scheduler) StopJobs() error {
+	ctx, cancel := context.WithTimeout(context.Background(), s.exec.stopTimeout+2*time.Second)
+	defer cancel()
+
+	err := s.StopJobsWithContext(ctx)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrStopSchedulerTimedOut
+	}
+	return err
+}
+
+func (s *scheduler) StopJobsWithContext(ctx context.Context) error {
 	select {
 	case <-s.shutdownCtx.Done():
 		return nil
 	case s.stopCh <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 
-	t := time.NewTimer(s.exec.stopTimeout + 2*time.Second)
 	select {
 	case err := <-s.stopErrCh:
-		t.Stop()
 		return err
-	case <-t.C:
-		return ErrStopSchedulerTimedOut
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
 func (s *scheduler) Shutdown() error {
+	ctx, cancel := context.WithTimeout(context.Background(), s.exec.stopTimeout+2*time.Second)
+	defer cancel()
+
+	err := s.ShutdownWithContext(ctx)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrStopSchedulerTimedOut
+	}
+	return err
+}
+
+func (s *scheduler) ShutdownWithContext(ctx context.Context) error {
 	s.logger.Debug("scheduler shutting down")
 
 	s.shutdownCancel()
@@ -884,16 +911,13 @@ func (s *scheduler) Shutdown() error {
 		return nil
 	}
 
-	t := time.NewTimer(s.exec.stopTimeout + 2*time.Second)
 	select {
 	case err := <-s.stopErrCh:
-		t.Stop()
-
 		// notify monitor that scheduler stopped
 		s.notifySchedulerShutdown()
 		return err
-	case <-t.C:
-		return ErrStopSchedulerTimedOut
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

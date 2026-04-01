@@ -63,6 +63,8 @@ func main() {
 
 	// when you're done, shut it down
 	err = s.Shutdown()
+	// or for context-aware teardown: 
+	// err = s.ShutdownWithContext(ctx)
 	if err != nil {
 		// handle error
 	}

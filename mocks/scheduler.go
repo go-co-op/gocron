@@ -10,6 +10,7 @@
 package gocronmocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	v2 "github.com/go-co-op/gocron/v2"
@@ -133,6 +134,20 @@ func (mr *MockSchedulerMockRecorder) Shutdown() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Shutdown", reflect.TypeOf((*MockScheduler)(nil).Shutdown))
 }
 
+// ShutdownWithContext mocks base method.
+func (m *MockScheduler) ShutdownWithContext(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ShutdownWithContext", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ShutdownWithContext indicates an expected call of ShutdownWithContext.
+func (mr *MockSchedulerMockRecorder) ShutdownWithContext(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ShutdownWithContext", reflect.TypeOf((*MockScheduler)(nil).ShutdownWithContext), arg0)
+}
+
 // Start mocks base method.
 func (m *MockScheduler) Start() {
 	m.ctrl.T.Helper()
@@ -157,6 +172,20 @@ func (m *MockScheduler) StopJobs() error {
 func (mr *MockSchedulerMockRecorder) StopJobs() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopJobs", reflect.TypeOf((*MockScheduler)(nil).StopJobs))
+}
+
+// StopJobsWithContext mocks base method.
+func (m *MockScheduler) StopJobsWithContext(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopJobsWithContext", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StopJobsWithContext indicates an expected call of StopJobsWithContext.
+func (mr *MockSchedulerMockRecorder) StopJobsWithContext(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopJobsWithContext", reflect.TypeOf((*MockScheduler)(nil).StopJobsWithContext), arg0)
 }
 
 // Update mocks base method.
