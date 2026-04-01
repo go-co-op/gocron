@@ -517,6 +517,15 @@ func ExampleScheduler_shutdown() {
 	defer func() { _ = s.Shutdown() }()
 }
 
+func ExampleScheduler_shutdownWithContext() {
+	s, _ := gocron.NewScheduler()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	defer func() { _ = s.ShutdownWithContext(ctx) }()
+}
+
 func ExampleScheduler_start() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
@@ -551,6 +560,28 @@ func ExampleScheduler_stopJobs() {
 	s.Start()
 
 	_ = s.StopJobs()
+}
+
+func ExampleScheduler_stopJobsWithContext() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	_, _ = s.NewJob(
+		gocron.CronJob(
+			"* * * * *",
+			false,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	s.Start()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_ = s.StopJobsWithContext(ctx)
 }
 
 func ExampleScheduler_update() {

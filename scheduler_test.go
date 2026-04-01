@@ -578,6 +578,66 @@ func TestScheduler_Shutdown(t *testing.T) {
 	})
 }
 
+func TestScheduler_ShutdownWithContext(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	t.Run("clean shutdown completes before context deadline", func(t *testing.T) {
+		s := newTestScheduler(t, WithStopTimeout(time.Second))
+
+		s.Start()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		require.NoError(t, s.ShutdownWithContext(ctx))
+	})
+
+	t.Run("shutdown times out if jobs block longer than context deadline", func(t *testing.T) {
+		s := newTestScheduler(t, WithStopTimeout(time.Second))
+
+		testCtx, testCancel := context.WithCancel(context.Background())
+		defer testCancel()
+
+		_, err := s.NewJob(
+			DurationJob(10*time.Millisecond),
+			NewTask(func() {
+				<-testCtx.Done() // Block job intentionally
+			}),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+		time.Sleep(50 * time.Millisecond) // Let job start
+
+		// We give 50ms for shutdown context, this should timeout because the job is blocking until testCtx is done
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		err = s.ShutdownWithContext(ctx)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+
+		testCancel() // Unblock job so test can clean up gracefully
+		time.Sleep(50 * time.Millisecond)
+	})
+}
+
+func TestScheduler_StopJobsWithContext(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	t.Run("clean stop completes before context deadline", func(t *testing.T) {
+		s := newTestScheduler(t, WithStopTimeout(time.Second))
+
+		s.Start()
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		defer cancel()
+
+		require.NoError(t, s.StopJobsWithContext(ctx))
+		require.NoError(t, s.Shutdown()) // clean up
+	})
+}
+
 func TestScheduler_Start(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
