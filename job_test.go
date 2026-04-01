@@ -63,6 +63,18 @@ func TestCronJob_next_DST(t *testing.T) {
 			time.Date(2026, 11, 2, 1, 30, 0, 0, americaNewYork), // 01:30 EST next day
 		},
 		{
+			// DST spring-forward: March 8 2026, 02:00 EST → 03:00 EDT.
+			// 2:30 AM does not exist on this day.  The underlying cron
+			// library correctly skips the non-existent time and schedules
+			// the next occurrence on March 9.  This matches standard Unix
+			// cron behavior — no "make-up" run should happen at a different
+			// time on the same day.
+			"spring forward - cron job correctly skips non-existent time",
+			"30 2 * * *",
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork), // March 7 02:30 EST
+			time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork), // March 9 02:30 EDT (skips March 8)
+		},
+		{
 			// Normal day - should schedule for the next day at the same time.
 			"normal day - cron job next day",
 			"30 1 * * *",
@@ -74,6 +86,8 @@ func TestCronJob_next_DST(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cronImpl := newDefaultCronImplementation(false)
+			// IsValid needs a "now" before the first expected match so the
+			// parsed schedule can find at least one future occurrence.
 			err := cronImpl.IsValid(tt.crontab, americaNewYork, tt.lastRun.Add(-time.Hour))
 			require.NoError(t, err)
 
