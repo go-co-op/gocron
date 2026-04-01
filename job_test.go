@@ -43,6 +43,47 @@ func TestDurationJob_next(t *testing.T) {
 	}
 }
 
+func TestCronJob_next_DST(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		crontab         string
+		lastRun         time.Time
+		expectedNextRun time.Time
+	}{
+		{
+			// DST fall-back: Nov 1 2026, 02:00 EDT → 01:00 EST.
+			// A job scheduled at "30 1 * * *" runs at 01:30 EDT;
+			// next must be the following day, not 01:30 EST (duplicate).
+			"fall back - cron job should not run twice",
+			"30 1 * * *",
+			time.Date(2026, 11, 1, 1, 30, 0, 0, americaNewYork), // 01:30 EDT
+			time.Date(2026, 11, 2, 1, 30, 0, 0, americaNewYork), // 01:30 EST next day
+		},
+		{
+			// Normal day - should schedule for the next day at the same time.
+			"normal day - cron job next day",
+			"30 1 * * *",
+			time.Date(2026, 6, 15, 1, 30, 0, 0, americaNewYork),
+			time.Date(2026, 6, 16, 1, 30, 0, 0, americaNewYork),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cronImpl := newDefaultCronImplementation(false)
+			err := cronImpl.IsValid(tt.crontab, americaNewYork, tt.lastRun.Add(-time.Hour))
+			require.NoError(t, err)
+
+			j := cronJob{crontab: tt.crontab, cronSchedule: cronImpl}
+			next := j.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+		})
+	}
+}
+
 func TestDailyJob_next(t *testing.T) {
 	americaChicago, err := time.LoadLocation("America/Chicago")
 	require.NoError(t, err)

@@ -958,7 +958,28 @@ type cronJob struct {
 }
 
 func (j *cronJob) next(lastRun time.Time) time.Time {
-	return j.cronSchedule.Next(lastRun)
+	next := j.cronSchedule.Next(lastRun)
+	if next.IsZero() {
+		return next
+	}
+
+	// Handle DST fall-back: during a "fall back" transition the same
+	// wall-clock time occurs twice (e.g. 01:30 EDT then 01:30 EST).
+	// The underlying cron library may return the second occurrence as the
+	// next match after the first, which would cause a duplicate execution
+	// on the same calendar day.  Because cron.Next always advances at
+	// least one second in absolute time, identical wall-clock date+time
+	// can only happen during a DST fall-back.  Skip ahead when detected.
+	if lastRun.Year() == next.Year() &&
+		lastRun.Month() == next.Month() &&
+		lastRun.Day() == next.Day() &&
+		lastRun.Hour() == next.Hour() &&
+		lastRun.Minute() == next.Minute() &&
+		lastRun.Second() == next.Second() {
+		return j.cronSchedule.Next(next)
+	}
+
+	return next
 }
 
 var _ jobSchedule = (*durationJob)(nil)
