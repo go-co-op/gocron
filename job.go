@@ -15,6 +15,29 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+// DSTPolicy defines the behavior when a scheduled wall-clock time falls
+// within a Daylight Saving Time spring-forward gap (i.e., the time does
+// not exist because clocks jumped forward).
+type DSTPolicy int
+
+const (
+	// DSTDefault preserves the existing behavior for each job type:
+	// CronJob skips to the next valid occurrence; DailyJob, WeeklyJob,
+	// and MonthlyJob run at the clock-adjusted time after the transition.
+	DSTDefault DSTPolicy = iota
+
+	// DSTSkip causes the scheduler to skip any occurrence whose
+	// wall-clock time falls within a DST spring-forward gap.
+	// The job will wait for its next regularly scheduled occurrence.
+	DSTSkip
+
+	// DSTRunAfterTransition causes the scheduler to run the job at
+	// the clock-adjusted time immediately following the DST
+	// spring-forward transition when its scheduled wall-clock time
+	// does not exist.
+	DSTRunAfterTransition
+)
+
 // internalJob stores the information needed by the scheduler
 // to manage scheduling, starting and stopping the job
 type internalJob struct {
@@ -26,6 +49,7 @@ type internalJob struct {
 	tags      []string
 	cron      Cron
 	jobSchedule
+	dstPolicy DSTPolicy
 
 	// as some jobs may queue up, it's possible to
 	// have multiple nextScheduled times
@@ -208,7 +232,7 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now ti
 		return err
 	}
 
-	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron}
+	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron, dstPolicy: j.dstPolicy}
 	return nil
 }
 
@@ -328,8 +352,9 @@ func (d dailyJobDefinition) setup(j *internalJob, location *time.Location, _ tim
 	}
 
 	ds := dailyJob{
-		interval: d.interval,
-		atTimes:  atTimesDate,
+		interval:  d.interval,
+		atTimes:   atTimesDate,
+		dstPolicy: j.dstPolicy,
 	}
 	j.jobSchedule = ds
 	return nil
@@ -371,6 +396,7 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ ti
 		return ErrWeeklyJobMinutesSeconds
 	}
 	ws.atTimes = atTimesDate
+	ws.dstPolicy = j.dstPolicy
 
 	j.jobSchedule = ws
 	return nil
@@ -450,6 +476,7 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location, _ t
 		return ErrMonthlyJobMinutesSeconds
 	}
 	ms.atTimes = atTimesDate
+	ms.dstPolicy = j.dstPolicy
 
 	j.jobSchedule = ms
 	return nil
@@ -680,6 +707,22 @@ func WithName(name string) JobOption {
 func WithCronImplementation(c Cron) JobOption {
 	return func(j *internalJob, _ time.Time) error {
 		j.cron = c
+		return nil
+	}
+}
+
+// WithDSTPolicy configures how a job handles Daylight Saving Time
+// spring-forward gaps. When a job's scheduled wall-clock time falls
+// within a DST gap (e.g., 2:30 AM when clocks jump from 2:00 AM to
+// 3:00 AM), this policy determines whether the job is skipped or
+// run at the adjusted time after the transition.
+//
+// This option is relevant for CronJob, DailyJob, WeeklyJob, and
+// MonthlyJob. Duration-based jobs (DurationJob, DurationRandomJob)
+// are not affected by DST gaps as they schedule based on elapsed time.
+func WithDSTPolicy(policy DSTPolicy) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		j.dstPolicy = policy
 		return nil
 	}
 }
@@ -950,11 +993,25 @@ type jobSchedule interface {
 	next(lastRun time.Time) time.Time
 }
 
+// dstRunAfterTransitionTime computes the post-DST-transition equivalent
+// of a time that was normalized by time.Date into the pre-transition period.
+// When Go's time.Date encounters a non-existent wall-clock time during a
+// DST spring-forward gap, it normalizes the time backwards. This function
+// adjusts the normalized time forward to the post-transition equivalent by
+// adding back the difference between the requested and actual wall-clock values.
+func dstRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin, requestedSec int) time.Time {
+	offset := time.Duration(requestedHour-normalized.Hour())*time.Hour +
+		time.Duration(requestedMin-normalized.Minute())*time.Minute +
+		time.Duration(requestedSec-normalized.Second())*time.Second
+	return normalized.Add(offset)
+}
+
 var _ jobSchedule = (*cronJob)(nil)
 
 type cronJob struct {
 	crontab      string
 	cronSchedule Cron
+	dstPolicy    DSTPolicy
 }
 
 func (j *cronJob) next(lastRun time.Time) time.Time {
@@ -977,6 +1034,26 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 		lastRun.Minute() == next.Minute() &&
 		lastRun.Second() == next.Second() {
 		return j.cronSchedule.Next(next)
+	}
+
+	// Handle DST spring-forward with RunAfterTransition policy:
+	// The cron library skips non-existent times during a DST gap.
+	// When the policy is DSTRunAfterTransition, check for intermediate days
+	// between lastRun and next where the target wall-clock time falls in a
+	// DST gap. If found, return the clock-adjusted (normalized) time for
+	// that day instead of skipping.
+	if j.dstPolicy == DSTRunAfterTransition {
+		loc := lastRun.Location()
+		for day := lastRun.AddDate(0, 0, 1); day.Before(next); day = day.AddDate(0, 0, 1) {
+			candidate := time.Date(day.Year(), day.Month(), day.Day(),
+				next.Hour(), next.Minute(), next.Second(), 0, loc)
+			if candidate.Hour() != next.Hour() || candidate.Minute() != next.Minute() || candidate.Second() != next.Second() {
+				candidate = dstRunAfterTransitionTime(candidate, next.Hour(), next.Minute(), next.Second())
+				if candidate.After(lastRun) && candidate.Before(next) {
+					return candidate
+				}
+			}
+		}
 	}
 
 	return next
@@ -1007,8 +1084,9 @@ func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 var _ jobSchedule = (*dailyJob)(nil)
 
 type dailyJob struct {
-	interval uint
-	atTimes  []time.Time
+	interval  uint
+	atTimes   []time.Time
+	dstPolicy DSTPolicy
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
@@ -1020,7 +1098,22 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 	firstPass = false
 
 	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, 0, lastRun.Location())
-	return d.nextDay(startNextDay, firstPass)
+	next = d.nextDay(startNextDay, firstPass)
+	if !next.IsZero() {
+		return next
+	}
+
+	// When DSTSkip causes all at-times on the next interval day to be
+	// skipped (because they fall in a DST gap), advance to subsequent
+	// interval days until we find a valid next run.
+	if d.dstPolicy == DSTSkip {
+		for next.IsZero() {
+			startNextDay = time.Date(startNextDay.Year(), startNextDay.Month(), startNextDay.Day()+int(d.interval), 0, 0, 0, 0, lastRun.Location())
+			next = d.nextDay(startNextDay, false)
+		}
+	}
+
+	return next
 }
 
 func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
@@ -1028,6 +1121,18 @@ func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 		// sub the at time hour/min/sec onto the lastScheduledRun's values
 		// to use in checks to see if we've got our next run time
 		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+
+		// DST spring-forward gap detection: time.Date normalizes a
+		// non-existent wall-clock time, causing the hour/min/sec to
+		// differ from what was requested.
+		if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
+			switch d.dstPolicy {
+			case DSTSkip:
+				continue
+			case DSTRunAfterTransition:
+				atDate = dstRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
+			}
+		}
 
 		if firstPass && atDate.After(lastRun) {
 			// checking to see if it is after i.e. greater than,
@@ -1049,6 +1154,7 @@ type weeklyJob struct {
 	interval   uint
 	daysOfWeek []time.Weekday
 	atTimes    []time.Time
+	dstPolicy  DSTPolicy
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
@@ -1059,7 +1165,21 @@ func (w weeklyJob) next(lastRun time.Time) time.Time {
 
 	startOfTheNextIntervalWeek := (lastRun.Day() - int(lastRun.Weekday())) + int(w.interval*7)
 	from := time.Date(lastRun.Year(), lastRun.Month(), startOfTheNextIntervalWeek, 0, 0, 0, 0, lastRun.Location())
-	return w.nextWeekDayAtTime(from, false)
+	next = w.nextWeekDayAtTime(from, false)
+	if !next.IsZero() {
+		return next
+	}
+
+	// When DSTSkip causes all at-times in the next interval week to be
+	// skipped, advance to subsequent interval weeks until we find a valid run.
+	if w.dstPolicy == DSTSkip {
+		for next.IsZero() {
+			from = time.Date(from.Year(), from.Month(), from.Day()+int(w.interval*7), 0, 0, 0, 0, lastRun.Location())
+			next = w.nextWeekDayAtTime(from, false)
+		}
+	}
+
+	return next
 }
 
 func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Time {
@@ -1072,6 +1192,16 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Tim
 				// sub the at time hour/min/sec onto the lastScheduledRun's values
 				// to use in checks to see if we've got our next run time
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+
+				// DST spring-forward gap detection
+				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
+					switch w.dstPolicy {
+					case DSTSkip:
+						continue
+					case DSTRunAfterTransition:
+						atDate = dstRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
+					}
+				}
 
 				if firstPass && atDate.After(lastRun) {
 					// checking to see if it is after i.e. greater than,
@@ -1096,6 +1226,7 @@ type monthlyJob struct {
 	days        []int
 	daysFromEnd []int
 	atTimes     []time.Time
+	dstPolicy   DSTPolicy
 }
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
@@ -1145,6 +1276,16 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 					// this check handles if we're setting a day not in the current month
 					// e.g. setting day 31 in Feb results in March 2nd
 					continue
+				}
+
+				// DST spring-forward gap detection
+				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
+					switch m.dstPolicy {
+					case DSTSkip:
+						continue
+					case DSTRunAfterTransition:
+						atDate = dstRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
+					}
 				}
 
 				if firstPass && atDate.After(lastRun) {

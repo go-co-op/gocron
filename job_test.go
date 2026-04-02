@@ -98,6 +98,316 @@ func TestCronJob_next_DST(t *testing.T) {
 	}
 }
 
+func TestDSTPolicy_CronJob(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		crontab         string
+		dstPolicy       DSTPolicy
+		lastRun         time.Time
+		expectedNextRun time.Time
+	}{
+		{
+			// Default behavior: cron library skips March 8 (2:30 doesn't exist)
+			"default - spring forward skips to next day",
+			"30 2 * * *",
+			DSTDefault,
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTSkip: same as default for cron - skips to next day
+			"skip - spring forward skips to next day",
+			"30 2 * * *",
+			DSTSkip,
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTRunAfterTransition: run at DST-adjusted time on March 8
+			// 2:30 AM doesn't exist; time.Date normalizes to 3:30 AM EDT
+			"run after transition - spring forward runs at adjusted time",
+			"30 2 * * *",
+			DSTRunAfterTransition,
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork),
+		},
+		{
+			// Normal day with RunAfterTransition - no change
+			"run after transition - normal day unchanged",
+			"30 2 * * *",
+			DSTRunAfterTransition,
+			time.Date(2026, 6, 15, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 6, 16, 2, 30, 0, 0, americaNewYork),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cronImpl := newDefaultCronImplementation(false)
+			err := cronImpl.IsValid(tt.crontab, americaNewYork, tt.lastRun.Add(-time.Hour))
+			require.NoError(t, err)
+
+			j := cronJob{crontab: tt.crontab, cronSchedule: cronImpl, dstPolicy: tt.dstPolicy}
+			next := j.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+		})
+	}
+}
+
+func TestDSTPolicy_DailyJob(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		interval        uint
+		atTimes         []time.Time
+		dstPolicy       DSTPolicy
+		lastRun         time.Time
+		expectedNextRun time.Time
+	}{
+		{
+			// Default behavior: time.Date normalizes 2:30 backwards into
+			// the pre-transition period. The job runs at the Go-normalized time.
+			"default - spring forward runs at normalized time",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTDefault,
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork),
+			// Go normalizes 2:30 AM → 1:30 AM EST on the DST day
+			time.Date(2026, 3, 8, 1, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTRunAfterTransition: run at post-transition time (3:30 AM EDT)
+			"run after transition - spring forward runs at adjusted time",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTRunAfterTransition,
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTSkip: skip March 8 entirely, run on March 9
+			"skip - spring forward skips to next day",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 3, 7, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTSkip with interval=2: skip DST day, advance to next interval
+			"skip with interval 2 - spring forward advances to next interval",
+			2,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 3, 6, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 10, 2, 30, 0, 0, americaNewYork),
+		},
+		{
+			// Normal day with DSTSkip - no change
+			"skip - normal day unchanged",
+			1,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 6, 15, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 6, 16, 2, 30, 0, 0, americaNewYork),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := dailyJob{
+				interval:  tt.interval,
+				atTimes:   tt.atTimes,
+				dstPolicy: tt.dstPolicy,
+			}
+
+			next := d.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+		})
+	}
+}
+
+func TestDSTPolicy_WeeklyJob(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	// March 8, 2026 is a Sunday - DST spring-forward day
+	tests := []struct {
+		name            string
+		interval        uint
+		daysOfWeek      []time.Weekday
+		atTimes         []time.Time
+		dstPolicy       DSTPolicy
+		lastRun         time.Time
+		expectedNextRun time.Time
+	}{
+		{
+			// Default behavior for weekly job on DST day: time.Date normalizes backwards
+			"default - spring forward runs at normalized time",
+			1,
+			[]time.Weekday{time.Sunday},
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTDefault,
+			time.Date(2026, 3, 1, 2, 30, 0, 0, americaNewYork),
+			// Go normalizes 2:30 AM → 1:30 AM EST on March 8 (DST day)
+			time.Date(2026, 3, 8, 1, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTRunAfterTransition: run at post-transition time
+			"run after transition - spring forward runs at adjusted time",
+			1,
+			[]time.Weekday{time.Sunday},
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTRunAfterTransition,
+			time.Date(2026, 3, 1, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTSkip: skip March 8 (DST Sunday), run on March 15
+			"skip - spring forward skips to next week",
+			1,
+			[]time.Weekday{time.Sunday},
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 3, 1, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 15, 2, 30, 0, 0, americaNewYork),
+		},
+		{
+			// Normal week with DSTSkip - no change
+			"skip - normal week unchanged",
+			1,
+			[]time.Weekday{time.Sunday},
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 6, 14, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 6, 21, 2, 30, 0, 0, americaNewYork),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := weeklyJob{
+				interval:   tt.interval,
+				daysOfWeek: tt.daysOfWeek,
+				atTimes:    tt.atTimes,
+				dstPolicy:  tt.dstPolicy,
+			}
+
+			next := w.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+		})
+	}
+}
+
+func TestDSTPolicy_MonthlyJob(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	// March 8, 2026 is DST spring-forward day
+	tests := []struct {
+		name            string
+		interval        uint
+		days            []int
+		daysFromEnd     []int
+		atTimes         []time.Time
+		dstPolicy       DSTPolicy
+		lastRun         time.Time
+		expectedNextRun time.Time
+	}{
+		{
+			// Default behavior for monthly job on DST day: time.Date normalizes backwards
+			"default - spring forward runs at normalized time",
+			1,
+			[]int{8},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTDefault,
+			time.Date(2026, 2, 8, 2, 30, 0, 0, americaNewYork),
+			// Go normalizes 2:30 AM → 1:30 AM EST on March 8 (DST day)
+			time.Date(2026, 3, 8, 1, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTRunAfterTransition: run at post-transition time
+			"run after transition - spring forward runs at adjusted time",
+			1,
+			[]int{8},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTRunAfterTransition,
+			time.Date(2026, 2, 8, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork),
+		},
+		{
+			// DSTSkip: skip March 8 (DST day), run on April 8
+			"skip - spring forward skips to next month",
+			1,
+			[]int{8},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 2, 8, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 4, 8, 2, 30, 0, 0, americaNewYork),
+		},
+		{
+			// Normal month with DSTSkip - no change
+			"skip - normal month unchanged",
+			1,
+			[]int{8},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 2, 30, 0, 0, americaNewYork),
+			},
+			DSTSkip,
+			time.Date(2026, 5, 8, 2, 30, 0, 0, americaNewYork),
+			time.Date(2026, 6, 8, 2, 30, 0, 0, americaNewYork),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := monthlyJob{
+				interval:    tt.interval,
+				days:        tt.days,
+				daysFromEnd: tt.daysFromEnd,
+				atTimes:     tt.atTimes,
+				dstPolicy:   tt.dstPolicy,
+			}
+
+			next := m.next(tt.lastRun)
+			assert.Equal(t, tt.expectedNextRun, next)
+		})
+	}
+}
+
 func TestDailyJob_next(t *testing.T) {
 	americaChicago, err := time.LoadLocation("America/Chicago")
 	require.NoError(t, err)
