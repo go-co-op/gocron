@@ -2,12 +2,12 @@
 package gocron
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"reflect"
 	"runtime"
 	"slices"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -295,8 +295,8 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 		counter++
 	}
 	slices.SortFunc(outJobs, func(a, b Job) int {
-		aID, bID := a.ID().String(), b.ID().String()
-		return strings.Compare(aID, bID)
+		aID, bID := a.ID(), b.ID()
+		return bytes.Compare(aID[:], bID[:])
 	})
 	select {
 	case <-s.shutdownCtx.Done():
