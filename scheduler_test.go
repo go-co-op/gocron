@@ -3002,3 +3002,35 @@ func TestScheduler_WithStartAtDateTimePast(t *testing.T) {
 	// which was in the past Dec 31, 2023, so the next is Jan 7, 2024
 	assert.Equal(t, time.Date(2024, time.January, 7, 10, 0, 0, 0, time.UTC), nextRun)
 }
+
+func BenchmarkSchedulerJobs(b *testing.B) {
+	cases := []struct {
+		name string
+		n    int
+	}{
+		{"10", 10},
+		{"100", 100},
+		{"500", 500},
+	}
+	for _, tc := range cases {
+		tc := tc
+		b.Run(tc.name, func(b *testing.B) {
+			s, err := NewScheduler(WithLogger(NewLogger(LogLevelError)))
+			if err != nil {
+				b.Fatal(err)
+			}
+			for i := 0; i < tc.n; i++ {
+				_, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}))
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			s.Start()
+			b.Cleanup(func() { _ = s.Shutdown() })
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_ = s.Jobs()
+			}
+		})
+	}
+}
