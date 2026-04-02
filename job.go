@@ -999,10 +999,26 @@ type jobSchedule interface {
 // DST spring-forward gap, it normalizes the time backwards. This function
 // adjusts the normalized time forward to the post-transition equivalent by
 // adding back the difference between the requested and actual wall-clock values.
+// dstRunAfterTransitionTime computes the post-DST-transition equivalent
+// of a time that was normalized by time.Date into the pre-transition period.
+// When Go's time.Date encounters a non-existent wall-clock time during a
+// DST spring-forward gap, it normalizes the time backwards. This function
+// adjusts the normalized time forward to the post-transition equivalent by
+// adding back the difference between the requested and actual wall-clock values.
+//
+// This function should only be called when a DST spring-forward gap has been
+// detected (i.e., the normalized time's wall-clock values differ from the
+// requested values, with the normalized time being earlier).
 func dstRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin, requestedSec int) time.Time {
 	offset := time.Duration(requestedHour-normalized.Hour())*time.Hour +
 		time.Duration(requestedMin-normalized.Minute())*time.Minute +
 		time.Duration(requestedSec-normalized.Second())*time.Second
+	if offset <= 0 {
+		// Safety guard: if the offset is not positive, the normalized time
+		// was not in a spring-forward gap (e.g., fall-back scenario). Return
+		// the normalized time unchanged to preserve existing behavior.
+		return normalized
+	}
 	return normalized.Add(offset)
 }
 
