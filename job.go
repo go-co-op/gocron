@@ -15,27 +15,27 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// DSTPolicy defines the behavior when a scheduled wall-clock time falls
+// DaylightSavingsTimePolicy defines the behavior when a scheduled wall-clock time falls
 // within a Daylight Saving Time spring-forward gap (i.e., the time does
 // not exist because clocks jumped forward).
-type DSTPolicy int
+type DaylightSavingsTimePolicy int
 
 const (
-	// DSTDefault preserves the existing behavior for each job type:
+	// DaylightSavingsTimeDefault preserves the existing behavior for each job type:
 	// CronJob skips to the next valid occurrence; DailyJob, WeeklyJob,
 	// and MonthlyJob run at the clock-adjusted time after the transition.
-	DSTDefault DSTPolicy = iota
+	DaylightSavingsTimeDefault DaylightSavingsTimePolicy = iota
 
-	// DSTSkip causes the scheduler to skip any occurrence whose
-	// wall-clock time falls within a DST spring-forward gap.
+	// DaylightSavingsTimeSkip causes the scheduler to skip any occurrence whose
+	// wall-clock time falls within a Daylight Saving Time spring-forward gap.
 	// The job will wait for its next regularly scheduled occurrence.
-	DSTSkip
+	DaylightSavingsTimeSkip
 
-	// DSTRunAfterTransition causes the scheduler to run the job at
-	// the clock-adjusted time immediately following the DST
+	// DaylightSavingsTimeRunAfterTransition causes the scheduler to run the job at
+	// the clock-adjusted time immediately following the Daylight Saving Time
 	// spring-forward transition when its scheduled wall-clock time
 	// does not exist.
-	DSTRunAfterTransition
+	DaylightSavingsTimeRunAfterTransition
 )
 
 // internalJob stores the information needed by the scheduler
@@ -49,7 +49,7 @@ type internalJob struct {
 	tags      []string
 	cron      Cron
 	jobSchedule
-	dstPolicy DSTPolicy
+	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 
 	// as some jobs may queue up, it's possible to
 	// have multiple nextScheduled times
@@ -232,7 +232,7 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now ti
 		return err
 	}
 
-	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron, dstPolicy: j.dstPolicy}
+	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron, daylightSavingsTimePolicy: j.daylightSavingsTimePolicy}
 	return nil
 }
 
@@ -352,9 +352,9 @@ func (d dailyJobDefinition) setup(j *internalJob, location *time.Location, _ tim
 	}
 
 	ds := dailyJob{
-		interval:  d.interval,
-		atTimes:   atTimesDate,
-		dstPolicy: j.dstPolicy,
+		interval:                  d.interval,
+		atTimes:                   atTimesDate,
+		daylightSavingsTimePolicy: j.daylightSavingsTimePolicy,
 	}
 	j.jobSchedule = ds
 	return nil
@@ -396,7 +396,7 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ ti
 		return ErrWeeklyJobMinutesSeconds
 	}
 	ws.atTimes = atTimesDate
-	ws.dstPolicy = j.dstPolicy
+	ws.daylightSavingsTimePolicy = j.daylightSavingsTimePolicy
 
 	j.jobSchedule = ws
 	return nil
@@ -476,7 +476,7 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location, _ t
 		return ErrMonthlyJobMinutesSeconds
 	}
 	ms.atTimes = atTimesDate
-	ms.dstPolicy = j.dstPolicy
+	ms.daylightSavingsTimePolicy = j.daylightSavingsTimePolicy
 
 	j.jobSchedule = ms
 	return nil
@@ -711,18 +711,18 @@ func WithCronImplementation(c Cron) JobOption {
 	}
 }
 
-// WithDSTPolicy configures how a job handles Daylight Saving Time
+// WithDaylightSavingsTimePolicy configures how a job handles Daylight Saving Time
 // spring-forward gaps. When a job's scheduled wall-clock time falls
-// within a DST gap (e.g., 2:30 AM when clocks jump from 2:00 AM to
+// within a Daylight Saving Time gap (e.g., 2:30 AM when clocks jump from 2:00 AM to
 // 3:00 AM), this policy determines whether the job is skipped or
 // run at the adjusted time after the transition.
 //
 // This option is relevant for CronJob, DailyJob, WeeklyJob, and
 // MonthlyJob. Duration-based jobs (DurationJob, DurationRandomJob)
-// are not affected by DST gaps as they schedule based on elapsed time.
-func WithDSTPolicy(policy DSTPolicy) JobOption {
+// are not affected by Daylight Saving Time gaps as they schedule based on elapsed time.
+func WithDaylightSavingsTimePolicy(policy DaylightSavingsTimePolicy) JobOption {
 	return func(j *internalJob, _ time.Time) error {
-		j.dstPolicy = policy
+		j.daylightSavingsTimePolicy = policy
 		return nil
 	}
 }
@@ -993,23 +993,18 @@ type jobSchedule interface {
 	next(lastRun time.Time) time.Time
 }
 
-// dstRunAfterTransitionTime computes the post-DST-transition equivalent
+// daylightSavingsTimeRunAfterTransitionTime computes the post-transition equivalent
 // of a time that was normalized by time.Date into the pre-transition period.
 // When Go's time.Date encounters a non-existent wall-clock time during a
-// DST spring-forward gap, it normalizes the time backwards. This function
-// adjusts the normalized time forward to the post-transition equivalent by
-// adding back the difference between the requested and actual wall-clock values.
-// dstRunAfterTransitionTime computes the post-DST-transition equivalent
-// of a time that was normalized by time.Date into the pre-transition period.
-// When Go's time.Date encounters a non-existent wall-clock time during a
-// DST spring-forward gap, it normalizes the time backwards. This function
-// adjusts the normalized time forward to the post-transition equivalent by
-// adding back the difference between the requested and actual wall-clock values.
+// Daylight Saving Time spring-forward gap, it normalizes the time backwards.
+// This function adjusts the normalized time forward to the post-transition
+// equivalent by adding back the difference between the requested and actual
+// wall-clock values.
 //
-// This function should only be called when a DST spring-forward gap has been
-// detected (i.e., the normalized time's wall-clock values differ from the
-// requested values, with the normalized time being earlier).
-func dstRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin, requestedSec int) time.Time {
+// This function should only be called when a Daylight Saving Time spring-forward
+// gap has been detected (i.e., the normalized time's wall-clock values differ from
+// the requested values, with the normalized time being earlier).
+func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin, requestedSec int) time.Time {
 	offset := time.Duration(requestedHour-normalized.Hour())*time.Hour +
 		time.Duration(requestedMin-normalized.Minute())*time.Minute +
 		time.Duration(requestedSec-normalized.Second())*time.Second
@@ -1025,9 +1020,9 @@ func dstRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin
 var _ jobSchedule = (*cronJob)(nil)
 
 type cronJob struct {
-	crontab      string
-	cronSchedule Cron
-	dstPolicy    DSTPolicy
+	crontab                   string
+	cronSchedule              Cron
+	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 }
 
 func (j *cronJob) next(lastRun time.Time) time.Time {
@@ -1036,13 +1031,13 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 		return next
 	}
 
-	// Handle DST fall-back: during a "fall back" transition the same
+	// Handle Daylight Saving Time fall-back: during a "fall back" transition the same
 	// wall-clock time occurs twice (e.g. 01:30 EDT then 01:30 EST).
 	// The underlying cron library may return the second occurrence as the
 	// next match after the first, which would cause a duplicate execution
 	// on the same calendar day.  Because cron.Next always advances at
 	// least one second in absolute time, identical wall-clock date+time
-	// can only happen during a DST fall-back.  Skip ahead when detected.
+	// can only happen during a Daylight Saving Time fall-back.  Skip ahead when detected.
 	if lastRun.Year() == next.Year() &&
 		lastRun.Month() == next.Month() &&
 		lastRun.Day() == next.Day() &&
@@ -1052,19 +1047,19 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 		return j.cronSchedule.Next(next)
 	}
 
-	// Handle DST spring-forward with RunAfterTransition policy:
-	// The cron library skips non-existent times during a DST gap.
-	// When the policy is DSTRunAfterTransition, check for intermediate days
-	// between lastRun and next where the target wall-clock time falls in a
-	// DST gap. If found, return the clock-adjusted (normalized) time for
-	// that day instead of skipping.
-	if j.dstPolicy == DSTRunAfterTransition {
+	// Handle Daylight Saving Time spring-forward with RunAfterTransition policy:
+	// The cron library skips non-existent times during a Daylight Saving Time gap.
+	// When the policy is DaylightSavingsTimeRunAfterTransition, check for intermediate
+	// days between lastRun and next where the target wall-clock time falls in a
+	// Daylight Saving Time gap. If found, return the clock-adjusted (normalized)
+	// time for that day instead of skipping.
+	if j.daylightSavingsTimePolicy == DaylightSavingsTimeRunAfterTransition {
 		loc := lastRun.Location()
 		for day := lastRun.AddDate(0, 0, 1); day.Before(next); day = day.AddDate(0, 0, 1) {
 			candidate := time.Date(day.Year(), day.Month(), day.Day(),
 				next.Hour(), next.Minute(), next.Second(), 0, loc)
 			if candidate.Hour() != next.Hour() || candidate.Minute() != next.Minute() || candidate.Second() != next.Second() {
-				candidate = dstRunAfterTransitionTime(candidate, next.Hour(), next.Minute(), next.Second())
+				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, next.Hour(), next.Minute(), next.Second())
 				if candidate.After(lastRun) && candidate.Before(next) {
 					return candidate
 				}
@@ -1100,9 +1095,9 @@ func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 var _ jobSchedule = (*dailyJob)(nil)
 
 type dailyJob struct {
-	interval  uint
-	atTimes   []time.Time
-	dstPolicy DSTPolicy
+	interval                  uint
+	atTimes                   []time.Time
+	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
@@ -1119,10 +1114,10 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 		return next
 	}
 
-	// When DSTSkip causes all at-times on the next interval day to be
-	// skipped (because they fall in a DST gap), advance to subsequent
+	// When DaylightSavingsTimeSkip causes all at-times on the next interval day to be
+	// skipped (because they fall in a Daylight Saving Time gap), advance to subsequent
 	// interval days until we find a valid next run.
-	if d.dstPolicy == DSTSkip {
+	if d.daylightSavingsTimePolicy == DaylightSavingsTimeSkip {
 		for next.IsZero() {
 			startNextDay = time.Date(startNextDay.Year(), startNextDay.Month(), startNextDay.Day()+int(d.interval), 0, 0, 0, 0, lastRun.Location())
 			next = d.nextDay(startNextDay, false)
@@ -1138,15 +1133,15 @@ func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 		// to use in checks to see if we've got our next run time
 		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
-		// DST spring-forward gap detection: time.Date normalizes a
+		// Daylight Saving Time spring-forward gap detection: time.Date normalizes a
 		// non-existent wall-clock time, causing the hour/min/sec to
 		// differ from what was requested.
 		if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-			switch d.dstPolicy {
-			case DSTSkip:
+			switch d.daylightSavingsTimePolicy {
+			case DaylightSavingsTimeSkip:
 				continue
-			case DSTRunAfterTransition:
-				atDate = dstRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
+			case DaylightSavingsTimeRunAfterTransition:
+				atDate = daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
 			}
 		}
 
@@ -1167,10 +1162,10 @@ func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 var _ jobSchedule = (*weeklyJob)(nil)
 
 type weeklyJob struct {
-	interval   uint
-	daysOfWeek []time.Weekday
-	atTimes    []time.Time
-	dstPolicy  DSTPolicy
+	interval                  uint
+	daysOfWeek                []time.Weekday
+	atTimes                   []time.Time
+	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
@@ -1186,9 +1181,9 @@ func (w weeklyJob) next(lastRun time.Time) time.Time {
 		return next
 	}
 
-	// When DSTSkip causes all at-times in the next interval week to be
+	// When DaylightSavingsTimeSkip causes all at-times in the next interval week to be
 	// skipped, advance to subsequent interval weeks until we find a valid run.
-	if w.dstPolicy == DSTSkip {
+	if w.daylightSavingsTimePolicy == DaylightSavingsTimeSkip {
 		for next.IsZero() {
 			from = time.Date(from.Year(), from.Month(), from.Day()+int(w.interval*7), 0, 0, 0, 0, lastRun.Location())
 			next = w.nextWeekDayAtTime(from, false)
@@ -1209,13 +1204,13 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Tim
 				// to use in checks to see if we've got our next run time
 				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
-				// DST spring-forward gap detection
+				// Daylight Saving Time spring-forward gap detection
 				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					switch w.dstPolicy {
-					case DSTSkip:
+					switch w.daylightSavingsTimePolicy {
+					case DaylightSavingsTimeSkip:
 						continue
-					case DSTRunAfterTransition:
-						atDate = dstRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
+					case DaylightSavingsTimeRunAfterTransition:
+						atDate = daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
 					}
 				}
 
@@ -1238,11 +1233,11 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Tim
 var _ jobSchedule = (*monthlyJob)(nil)
 
 type monthlyJob struct {
-	interval    uint
-	days        []int
-	daysFromEnd []int
-	atTimes     []time.Time
-	dstPolicy   DSTPolicy
+	interval                  uint
+	days                      []int
+	daysFromEnd               []int
+	atTimes                   []time.Time
+	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 }
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
@@ -1294,13 +1289,13 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 					continue
 				}
 
-				// DST spring-forward gap detection
+				// Daylight Saving Time spring-forward gap detection
 				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					switch m.dstPolicy {
-					case DSTSkip:
+					switch m.daylightSavingsTimePolicy {
+					case DaylightSavingsTimeSkip:
 						continue
-					case DSTRunAfterTransition:
-						atDate = dstRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
+					case DaylightSavingsTimeRunAfterTransition:
+						atDate = daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
 					}
 				}
 

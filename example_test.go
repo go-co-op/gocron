@@ -711,11 +711,11 @@ func ExampleWithCronImplementation() {
 	)
 }
 
-func ExampleWithDSTPolicy() {
+func ExampleWithDaylightSavingsTimePolicy() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
 
-	// Skip jobs whose scheduled time falls in a DST spring-forward gap
+	// Skip jobs whose scheduled time falls in a Daylight Saving Time spring-forward gap
 	_, _ = s.NewJob(
 		gocron.DailyJob(
 			1,
@@ -726,11 +726,11 @@ func ExampleWithDSTPolicy() {
 		gocron.NewTask(
 			func() {},
 		),
-		gocron.WithDSTPolicy(gocron.DSTSkip),
+		gocron.WithDaylightSavingsTimePolicy(gocron.DaylightSavingsTimeSkip),
 	)
 
 	// Run jobs at the post-transition time when their scheduled time
-	// falls in a DST spring-forward gap
+	// falls in a Daylight Saving Time spring-forward gap
 	_, _ = s.NewJob(
 		gocron.CronJob(
 			"30 2 * * *",
@@ -739,7 +739,7 @@ func ExampleWithDSTPolicy() {
 		gocron.NewTask(
 			func() {},
 		),
-		gocron.WithDSTPolicy(gocron.DSTRunAfterTransition),
+		gocron.WithDaylightSavingsTimePolicy(gocron.DaylightSavingsTimeRunAfterTransition),
 	)
 }
 
