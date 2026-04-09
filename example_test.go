@@ -271,6 +271,22 @@ func ExampleJob_lastRunCompletedAt() {
 	fmt.Println(j.LastRunCompletedAt())
 }
 
+func ExampleJob_lastRunStartedAt() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(j.LastRunStartedAt())
+}
+
 func ExampleJob_name() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()

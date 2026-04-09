@@ -100,6 +100,21 @@ func (mr *MockJobMockRecorder) LastRunCompletedAt() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastRunCompletedAt", reflect.TypeOf((*MockJob)(nil).LastRunCompletedAt))
 }
 
+// LastRunStartedAt mocks base method.
+func (m *MockJob) LastRunStartedAt() (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastRunStartedAt")
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastRunStartedAt indicates an expected call of LastRunStartedAt.
+func (mr *MockJobMockRecorder) LastRunStartedAt() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastRunStartedAt", reflect.TypeOf((*MockJob)(nil).LastRunStartedAt))
+}
+
 // Name mocks base method.
 func (m *MockJob) Name() string {
 	m.ctrl.T.Helper()
