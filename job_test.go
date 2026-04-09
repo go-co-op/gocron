@@ -1781,12 +1781,11 @@ func TestJob_LastRunCompletedAt(t *testing.T) {
 		t.Fatal("timeout waiting for job to complete")
 	}
 
-	// Give a little time for the timing update to propagate to the scheduler
-	time.Sleep(50 * time.Millisecond)
-
-	completedAt, err = j.LastRunCompletedAt()
-	assert.NoError(t, err)
-	assert.False(t, completedAt.IsZero())
+	// Poll until the timing update propagates to the scheduler
+	require.Eventually(t, func() bool {
+		completedAt, err = j.LastRunCompletedAt()
+		return err == nil && !completedAt.IsZero()
+	}, 5*time.Second, 10*time.Millisecond)
 
 	err = s.Shutdown()
 	require.NoError(t, err)
@@ -1825,24 +1824,20 @@ func TestJob_IsRunning(t *testing.T) {
 		t.Fatal("timeout waiting for job to start")
 	}
 
-	// Give a little time for the timing update to propagate
-	time.Sleep(50 * time.Millisecond)
-
-	// Now the job should be running
-	running, err = j.IsRunning()
-	assert.NoError(t, err)
-	assert.True(t, running)
+	// Poll until the timing update propagates
+	require.Eventually(t, func() bool {
+		running, err = j.IsRunning()
+		return err == nil && running
+	}, 5*time.Second, 10*time.Millisecond)
 
 	// Signal the job to finish
 	close(finish)
 
-	// Wait for the job to complete
-	time.Sleep(100 * time.Millisecond)
-
-	// Now the job should not be running
-	running, err = j.IsRunning()
-	assert.NoError(t, err)
-	assert.False(t, running)
+	// Poll until the job completion propagates
+	require.Eventually(t, func() bool {
+		running, err = j.IsRunning()
+		return err == nil && !running
+	}, 5*time.Second, 10*time.Millisecond)
 
 	err = s.Shutdown()
 	require.NoError(t, err)
