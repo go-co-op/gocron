@@ -232,6 +232,8 @@ func ExampleJob_isRunning() {
 		),
 	)
 
+	s.Start()
+
 	fmt.Println(j.IsRunning())
 }
 
@@ -263,6 +265,8 @@ func ExampleJob_lastRunCompletedAt() {
 			func() {},
 		),
 	)
+
+	s.Start()
 
 	fmt.Println(j.LastRunCompletedAt())
 }
