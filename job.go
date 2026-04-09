@@ -987,7 +987,149 @@ func AfterLockError(eventListenerFunc func(jobID uuid.UUID, jobName string, err 
 
 // -----------------------------------------------
 // -----------------------------------------------
-// ---------------- Job Schedules ----------------
+// ------------- Public Job Schedules ------------
+// -----------------------------------------------
+// -----------------------------------------------
+
+// JobType is used to determine the type of job.
+type JobType int
+
+const (
+	// CronJobType defines a job that runs on a cron schedule.
+	CronJobType JobType = iota
+	// DurationJobType defines a job that runs on a fixed duration interval.
+	DurationJobType
+	// DurationRandomJobType defines a job that runs on a random duration interval.
+	DurationRandomJobType
+	// DailyJobType defines a job that runs daily at specified times.
+	DailyJobType
+	// WeeklyJobType defines a job that runs weekly on specified days and times.
+	WeeklyJobType
+	// MonthlyJobType defines a job that runs monthly on specified days and times.
+	MonthlyJobType
+	// OneTimeJobType defines a job that runs once at a specified time.
+	OneTimeJobType
+)
+
+// JobSchedule defines the interface for the schedule
+// information a job uses to determine when to run.
+// The underlying type of a JobSchedule can be type-asserted
+// to the specific schedule type to get the schedule details.
+type JobSchedule interface {
+	// JobType returns the type of the job schedule.
+	JobType() JobType
+}
+
+var _ JobSchedule = (*CronJobSchedule)(nil)
+
+// CronJobSchedule holds the schedule details for a cron job.
+type CronJobSchedule struct {
+	// Crontab is the crontab expression used to schedule the job.
+	Crontab string
+}
+
+// JobType returns the type of the job schedule.
+func (c CronJobSchedule) JobType() JobType {
+	return CronJobType
+}
+
+var _ JobSchedule = (*DurationJobSchedule)(nil)
+
+// DurationJobSchedule holds the schedule details for a duration job.
+type DurationJobSchedule struct {
+	// Duration is the interval between job runs.
+	Duration time.Duration
+}
+
+// JobType returns the type of the job schedule.
+func (d DurationJobSchedule) JobType() JobType {
+	return DurationJobType
+}
+
+var _ JobSchedule = (*DurationRandomJobSchedule)(nil)
+
+// DurationRandomJobSchedule holds the schedule details for a random duration job.
+type DurationRandomJobSchedule struct {
+	// Min is the minimum duration between job runs.
+	Min time.Duration
+	// Max is the maximum duration between job runs.
+	Max time.Duration
+}
+
+// JobType returns the type of the job schedule.
+func (d DurationRandomJobSchedule) JobType() JobType {
+	return DurationRandomJobType
+}
+
+var _ JobSchedule = (*DailyJobSchedule)(nil)
+
+// DailyJobSchedule holds the schedule details for a daily job.
+type DailyJobSchedule struct {
+	// Interval is the number of days between job runs.
+	Interval uint
+	// AtTimes are the times of day the job should run.
+	AtTimes []time.Time
+}
+
+// JobType returns the type of the job schedule.
+func (d DailyJobSchedule) JobType() JobType {
+	return DailyJobType
+}
+
+var _ JobSchedule = (*WeeklyJobSchedule)(nil)
+
+// WeeklyJobSchedule holds the schedule details for a weekly job.
+type WeeklyJobSchedule struct {
+	// Interval is the number of weeks between job runs.
+	Interval uint
+	// DaysOfWeek are the days of the week the job should run.
+	DaysOfWeek []time.Weekday
+	// AtTimes are the times of day the job should run.
+	AtTimes []time.Time
+}
+
+// JobType returns the type of the job schedule.
+func (w WeeklyJobSchedule) JobType() JobType {
+	return WeeklyJobType
+}
+
+var _ JobSchedule = (*MonthlyJobSchedule)(nil)
+
+// MonthlyJobSchedule holds the schedule details for a monthly job.
+type MonthlyJobSchedule struct {
+	// Interval is the number of months between job runs.
+	Interval uint
+	// Days are the days of the month the job should run.
+	// Positive values count from the start of the month (1-31).
+	Days []int
+	// DaysFromEnd are the days from the end of the month the job should run.
+	// These are negative values (-1 is the last day, -2 is the second to last, etc.).
+	DaysFromEnd []int
+	// AtTimes are the times of day the job should run.
+	AtTimes []time.Time
+}
+
+// JobType returns the type of the job schedule.
+func (m MonthlyJobSchedule) JobType() JobType {
+	return MonthlyJobType
+}
+
+var _ JobSchedule = (*OneTimeJobSchedule)(nil)
+
+// OneTimeJobSchedule holds the schedule details for a one-time job.
+type OneTimeJobSchedule struct {
+	// StartAt are the scheduled start time(s) for the one-time job.
+	StartAt []time.Time
+}
+
+// JobType returns the type of the job schedule.
+func (o OneTimeJobSchedule) JobType() JobType {
+	return OneTimeJobType
+}
+
+// -----------------------------------------------
+// -----------------------------------------------
+// ------------- Internal Job Schedules ----------
 // -----------------------------------------------
 // -----------------------------------------------
 
@@ -1393,6 +1535,10 @@ type Job interface {
 	// cause the job's regular interval to be rescheduled due to
 	// the instance being run by RunNow blocking your run limit.
 	RunNow() error
+	// Schedule returns the job's schedule information.
+	// The return value can be type-asserted to the specific schedule type
+	// to get the schedule details for the job type.
+	Schedule() JobSchedule
 	// Tags returns the job's string tags.
 	Tags() []string
 }
@@ -1409,6 +1555,7 @@ type job struct {
 	tags          []string
 	jobOutRequest chan *jobOutRequest
 	runJobRequest chan runJobRequest
+	schedule      JobSchedule
 }
 
 func (j job) ID() uuid.UUID {
@@ -1496,6 +1643,10 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 
 func (j job) Tags() []string {
 	return j.tags
+}
+
+func (j job) Schedule() JobSchedule {
+	return j.schedule
 }
 
 func (j job) RunNow() error {

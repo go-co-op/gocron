@@ -648,6 +648,49 @@ func (s *scheduler) jobFromInternalJob(in internalJob) job {
 		slices.Clone(in.tags),
 		s.jobOutRequestCh,
 		s.runJobRequestCh,
+		s.jobScheduleFromInternal(in.jobSchedule),
+	}
+}
+
+func (s *scheduler) jobScheduleFromInternal(js jobSchedule) JobSchedule {
+	switch v := js.(type) {
+	case *cronJob:
+		return CronJobSchedule{
+			Crontab: v.crontab,
+		}
+	case *durationJob:
+		return DurationJobSchedule{
+			Duration: v.duration,
+		}
+	case *durationRandomJob:
+		return DurationRandomJobSchedule{
+			Min: v.min,
+			Max: v.max,
+		}
+	case dailyJob:
+		return DailyJobSchedule{
+			Interval: v.interval,
+			AtTimes:  slices.Clone(v.atTimes),
+		}
+	case weeklyJob:
+		return WeeklyJobSchedule{
+			Interval:   v.interval,
+			DaysOfWeek: slices.Clone(v.daysOfWeek),
+			AtTimes:    slices.Clone(v.atTimes),
+		}
+	case monthlyJob:
+		return MonthlyJobSchedule{
+			Interval:    v.interval,
+			Days:        slices.Clone(v.days),
+			DaysFromEnd: slices.Clone(v.daysFromEnd),
+			AtTimes:     slices.Clone(v.atTimes),
+		}
+	case oneTimeJob:
+		return OneTimeJobSchedule{
+			StartAt: slices.Clone(v.sortedTimes),
+		}
+	default:
+		return nil
 	}
 }
 
