@@ -58,6 +58,14 @@ type executor struct {
 	monitorStatus MonitorStatus
 	// reference to parent scheduler for lifecycle notifications
 	scheduler *scheduler
+	// channel to send job timing updates back to the scheduler
+	jobTimingUpdateCh chan jobTimingUpdate
+}
+
+type jobTimingUpdate struct {
+	id          uuid.UUID
+	startedAt   time.Time
+	completedAt time.Time
 }
 
 type jobIn struct {
@@ -472,6 +480,10 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	}
 
 	startTime := time.Now()
+	select {
+	case e.jobTimingUpdateCh <- jobTimingUpdate{id: j.id, startedAt: startTime}:
+	case <-e.ctx.Done():
+	}
 	if j.afterJobRunsWithPanic != nil {
 		err = e.callJobWithRecover(j)
 	} else {
@@ -483,6 +495,10 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		e.incrementJobCounter(j, Fail)
 		endTime := time.Now()
 		e.recordJobTimingWithStatus(startTime, endTime, j, Fail, err)
+		select {
+		case e.jobTimingUpdateCh <- jobTimingUpdate{id: j.id, completedAt: endTime}:
+		case <-e.ctx.Done():
+		}
 		// Notify job failed
 		if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 			jobObj := e.scheduler.jobFromInternalJob(j)
@@ -494,6 +510,10 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		e.incrementJobCounter(j, Success)
 		endTime := time.Now()
 		e.recordJobTimingWithStatus(startTime, endTime, j, Success, nil)
+		select {
+		case e.jobTimingUpdateCh <- jobTimingUpdate{id: j.id, completedAt: endTime}:
+		case <-e.ctx.Done():
+		}
 		// Notify job completed
 		if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 			jobObj := e.scheduler.jobFromInternalJob(j)

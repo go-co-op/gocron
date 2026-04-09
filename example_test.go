@@ -219,6 +219,22 @@ func ExampleJob_id() {
 	fmt.Println(j.ID())
 }
 
+func ExampleJob_isRunning() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(j.IsRunning())
+}
+
 func ExampleJob_lastRun() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
@@ -233,6 +249,22 @@ func ExampleJob_lastRun() {
 	)
 
 	fmt.Println(j.LastRun())
+}
+
+func ExampleJob_lastRunCompletedAt() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	fmt.Println(j.LastRunCompletedAt())
 }
 
 func ExampleJob_name() {

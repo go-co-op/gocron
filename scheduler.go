@@ -151,6 +151,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobsOutCompleted:       make(chan uuid.UUID),
 		jobOutRequest:          make(chan *jobOutRequest, 100),
 		done:                   make(chan error, 1),
+		jobTimingUpdateCh:      make(chan jobTimingUpdate, 1000),
 	}
 
 	s := &scheduler{
@@ -191,6 +192,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				s.updateNextScheduled(id)
 			case id := <-s.exec.jobsOutCompleted:
 				s.selectExecJobsOutCompleted(id)
+
+			case update := <-s.exec.jobTimingUpdateCh:
+				s.selectJobTimingUpdate(update)
 
 			case in := <-s.newJobCh:
 				s.selectNewJob(in)
@@ -494,6 +498,20 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 
 	j.lastRun = s.now()
 	s.jobs[id] = j
+}
+
+func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
+	j, ok := s.jobs[update.id]
+	if !ok {
+		return
+	}
+	if !update.startedAt.IsZero() {
+		j.lastRunStartedAt = update.startedAt
+	}
+	if !update.completedAt.IsZero() {
+		j.lastRunCompletedAt = update.completedAt
+	}
+	s.jobs[update.id] = j
 }
 
 func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
