@@ -1020,7 +1020,7 @@ type JobSchedule interface {
 	JobType() JobType
 }
 
-var _ JobSchedule = (*CronJobSchedule)(nil)
+var _ JobSchedule = CronJobSchedule{}
 
 // CronJobSchedule holds the schedule details for a cron job.
 type CronJobSchedule struct {
@@ -1033,7 +1033,7 @@ func (c CronJobSchedule) JobType() JobType {
 	return CronJobType
 }
 
-var _ JobSchedule = (*DurationJobSchedule)(nil)
+var _ JobSchedule = DurationJobSchedule{}
 
 // DurationJobSchedule holds the schedule details for a duration job.
 type DurationJobSchedule struct {
@@ -1046,7 +1046,7 @@ func (d DurationJobSchedule) JobType() JobType {
 	return DurationJobType
 }
 
-var _ JobSchedule = (*DurationRandomJobSchedule)(nil)
+var _ JobSchedule = DurationRandomJobSchedule{}
 
 // DurationRandomJobSchedule holds the schedule details for a random duration job.
 type DurationRandomJobSchedule struct {
@@ -1061,7 +1061,7 @@ func (d DurationRandomJobSchedule) JobType() JobType {
 	return DurationRandomJobType
 }
 
-var _ JobSchedule = (*DailyJobSchedule)(nil)
+var _ JobSchedule = DailyJobSchedule{}
 
 // DailyJobSchedule holds the schedule details for a daily job.
 type DailyJobSchedule struct {
@@ -1076,7 +1076,7 @@ func (d DailyJobSchedule) JobType() JobType {
 	return DailyJobType
 }
 
-var _ JobSchedule = (*WeeklyJobSchedule)(nil)
+var _ JobSchedule = WeeklyJobSchedule{}
 
 // WeeklyJobSchedule holds the schedule details for a weekly job.
 type WeeklyJobSchedule struct {
@@ -1093,7 +1093,7 @@ func (w WeeklyJobSchedule) JobType() JobType {
 	return WeeklyJobType
 }
 
-var _ JobSchedule = (*MonthlyJobSchedule)(nil)
+var _ JobSchedule = MonthlyJobSchedule{}
 
 // MonthlyJobSchedule holds the schedule details for a monthly job.
 type MonthlyJobSchedule struct {
@@ -1114,7 +1114,7 @@ func (m MonthlyJobSchedule) JobType() JobType {
 	return MonthlyJobType
 }
 
-var _ JobSchedule = (*OneTimeJobSchedule)(nil)
+var _ JobSchedule = OneTimeJobSchedule{}
 
 // OneTimeJobSchedule holds the schedule details for a one-time job.
 type OneTimeJobSchedule struct {
