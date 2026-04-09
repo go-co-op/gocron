@@ -55,6 +55,21 @@ func (mr *MockJobMockRecorder) ID() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ID", reflect.TypeOf((*MockJob)(nil).ID))
 }
 
+// IsRunning mocks base method.
+func (m *MockJob) IsRunning() (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsRunning")
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsRunning indicates an expected call of IsRunning.
+func (mr *MockJobMockRecorder) IsRunning() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsRunning", reflect.TypeOf((*MockJob)(nil).IsRunning))
+}
+
 // LastRun mocks base method.
 func (m *MockJob) LastRun() (time.Time, error) {
 	m.ctrl.T.Helper()
@@ -68,6 +83,36 @@ func (m *MockJob) LastRun() (time.Time, error) {
 func (mr *MockJobMockRecorder) LastRun() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastRun", reflect.TypeOf((*MockJob)(nil).LastRun))
+}
+
+// LastRunCompletedAt mocks base method.
+func (m *MockJob) LastRunCompletedAt() (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastRunCompletedAt")
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastRunCompletedAt indicates an expected call of LastRunCompletedAt.
+func (mr *MockJobMockRecorder) LastRunCompletedAt() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastRunCompletedAt", reflect.TypeOf((*MockJob)(nil).LastRunCompletedAt))
+}
+
+// LastRunStartedAt mocks base method.
+func (m *MockJob) LastRunStartedAt() (time.Time, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastRunStartedAt")
+	ret0, _ := ret[0].(time.Time)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastRunStartedAt indicates an expected call of LastRunStartedAt.
+func (mr *MockJobMockRecorder) LastRunStartedAt() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastRunStartedAt", reflect.TypeOf((*MockJob)(nil).LastRunStartedAt))
 }
 
 // Name mocks base method.

@@ -56,6 +56,8 @@ type internalJob struct {
 	nextScheduled []time.Time
 
 	lastRun                time.Time
+	lastRunStartedAt       time.Time
+	lastRunCompletedAt     time.Time
 	function               any
 	parameters             []any
 	timer                  clockwork.Timer
@@ -1358,8 +1360,23 @@ func (o oneTimeJob) next(lastRun time.Time) time.Time {
 type Job interface {
 	// ID returns the job's unique identifier.
 	ID() uuid.UUID
+	// IsRunning returns true if the job is currently running.
+	// This can be used to determine if a job's function is still
+	// executing. For example, if a job runs at 9am and takes 10
+	// minutes, IsRunning will return true between 9am and 9:10am.
+	IsRunning() (bool, error)
+	// Deprecated: use LastRunStartedAt instead.
 	// LastRun returns the time of the job's last run
 	LastRun() (time.Time, error)
+	// LastRunCompletedAt returns the time of the job's last completed run.
+	// This differs from LastRunStartedAt, which returns when the last run started.
+	// For example, if a job started at 9am and completed at 9:10am,
+	// LastRunStartedAt returns 9am and LastRunCompletedAt returns 9:10am.
+	LastRunCompletedAt() (time.Time, error)
+	// LastRunStartedAt returns the time of the job's last run start.
+	// For example, if a job started at 9am and completed at 9:10am,
+	// LastRunStartedAt returns 9am and LastRunCompletedAt returns 9:10am.
+	LastRunStartedAt() (time.Time, error)
 	// Name returns the name defined on the job.
 	Name() string
 	// NextRun returns the time of the job's next scheduled run.
@@ -1398,7 +1415,34 @@ func (j job) ID() uuid.UUID {
 	return j.id
 }
 
+func (j job) IsRunning() (bool, error) {
+	ij := requestJob(j.id, j.jobOutRequest)
+	if ij == nil || ij.id == uuid.Nil {
+		return false, ErrJobNotFound
+	}
+	if ij.lastRunStartedAt.IsZero() {
+		return false, nil
+	}
+	return ij.lastRunStartedAt.After(ij.lastRunCompletedAt), nil
+}
+
 func (j job) LastRun() (time.Time, error) {
+	ij := requestJob(j.id, j.jobOutRequest)
+	if ij == nil || ij.id == uuid.Nil {
+		return time.Time{}, ErrJobNotFound
+	}
+	return ij.lastRun, nil
+}
+
+func (j job) LastRunCompletedAt() (time.Time, error) {
+	ij := requestJob(j.id, j.jobOutRequest)
+	if ij == nil || ij.id == uuid.Nil {
+		return time.Time{}, ErrJobNotFound
+	}
+	return ij.lastRunCompletedAt, nil
+}
+
+func (j job) LastRunStartedAt() (time.Time, error) {
 	ij := requestJob(j.id, j.jobOutRequest)
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound

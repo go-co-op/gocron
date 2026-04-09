@@ -1748,3 +1748,97 @@ func TestJob_NextRun_ConcurrentCompletions(t *testing.T) {
 	testWg.Wait()
 	require.NoError(t, s.Shutdown())
 }
+
+func TestJob_LastRunCompletedAt(t *testing.T) {
+	s := newTestScheduler(t)
+
+	ch := make(chan struct{}, 1)
+
+	j, err := s.NewJob(
+		DurationJob(
+			time.Second,
+		),
+		NewTask(
+			func() {
+				time.Sleep(50 * time.Millisecond)
+				ch <- struct{}{}
+			},
+		),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	// Before starting, LastRunCompletedAt should be zero
+	completedAt, err := j.LastRunCompletedAt()
+	assert.NoError(t, err)
+	assert.True(t, completedAt.IsZero())
+
+	s.Start()
+
+	select {
+	case <-ch:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for job to complete")
+	}
+
+	// Poll until the timing update propagates to the scheduler
+	require.Eventually(t, func() bool {
+		completedAt, err = j.LastRunCompletedAt()
+		return err == nil && !completedAt.IsZero()
+	}, 5*time.Second, 10*time.Millisecond)
+
+	err = s.Shutdown()
+	require.NoError(t, err)
+}
+
+func TestJob_IsRunning(t *testing.T) {
+	s := newTestScheduler(t)
+
+	started := make(chan struct{}, 1)
+	finish := make(chan struct{})
+
+	j, err := s.NewJob(
+		DurationJob(
+			10*time.Second,
+		),
+		NewTask(
+			func() {
+				started <- struct{}{}
+				<-finish
+			},
+		),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	// Before starting, IsRunning should be false
+	running, err := j.IsRunning()
+	assert.NoError(t, err)
+	assert.False(t, running)
+
+	s.Start()
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for job to start")
+	}
+
+	// Poll until the timing update propagates
+	require.Eventually(t, func() bool {
+		running, err = j.IsRunning()
+		return err == nil && running
+	}, 5*time.Second, 10*time.Millisecond)
+
+	// Signal the job to finish
+	close(finish)
+
+	// Poll until the job completion propagates
+	require.Eventually(t, func() bool {
+		running, err = j.IsRunning()
+		return err == nil && !running
+	}, 5*time.Second, 10*time.Millisecond)
+
+	err = s.Shutdown()
+	require.NoError(t, err)
+}
