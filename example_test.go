@@ -284,6 +284,8 @@ func ExampleJob_lastRunStartedAt() {
 		),
 	)
 
+	s.Start()
+
 	fmt.Println(j.LastRunStartedAt())
 }
 
