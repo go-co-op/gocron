@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	v2 "github.com/go-co-op/gocron/v2"
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -171,6 +172,20 @@ func (m *MockJob) RunNow() error {
 func (mr *MockJobMockRecorder) RunNow() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunNow", reflect.TypeOf((*MockJob)(nil).RunNow))
+}
+
+// Schedule mocks base method.
+func (m *MockJob) Schedule() v2.JobSchedule {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Schedule")
+	ret0, _ := ret[0].(v2.JobSchedule)
+	return ret0
+}
+
+// Schedule indicates an expected call of Schedule.
+func (mr *MockJobMockRecorder) Schedule() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Schedule", reflect.TypeOf((*MockJob)(nil).Schedule))
 }
 
 // Tags mocks base method.

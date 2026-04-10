@@ -3034,3 +3034,157 @@ func BenchmarkSchedulerJobs(b *testing.B) {
 		})
 	}
 }
+
+func TestScheduler_JobSchedule(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name       string
+		jd         JobDefinition
+		assertFunc func(t *testing.T, schedule JobSchedule)
+	}{
+		{
+			"cron",
+			CronJob(
+				"*/5 * * * *",
+				false,
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, CronJobType, schedule.JobType())
+				cronSchedule, ok := schedule.(CronJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, "*/5 * * * *", cronSchedule.Crontab)
+			},
+		},
+		{
+			"cron with seconds",
+			CronJob(
+				"*/5 * * * * *",
+				true,
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, CronJobType, schedule.JobType())
+				cronSchedule, ok := schedule.(CronJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, "*/5 * * * * *", cronSchedule.Crontab)
+			},
+		},
+		{
+			"duration",
+			DurationJob(
+				5 * time.Second,
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, DurationJobType, schedule.JobType())
+				durationSchedule, ok := schedule.(DurationJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, 5*time.Second, durationSchedule.Duration)
+			},
+		},
+		{
+			"duration random",
+			DurationRandomJob(
+				time.Second,
+				5*time.Second,
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, DurationRandomJobType, schedule.JobType())
+				durationRandomSchedule, ok := schedule.(DurationRandomJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, time.Second, durationRandomSchedule.Min)
+				assert.Equal(t, 5*time.Second, durationRandomSchedule.Max)
+			},
+		},
+		{
+			"daily",
+			DailyJob(
+				2,
+				NewAtTimes(
+					NewAtTime(1, 30, 0),
+					NewAtTime(12, 0, 0),
+				),
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, DailyJobType, schedule.JobType())
+				dailySchedule, ok := schedule.(DailyJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, uint(2), dailySchedule.Interval)
+				assert.Len(t, dailySchedule.AtTimes, 2)
+			},
+		},
+		{
+			"weekly",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday, time.Wednesday, time.Friday),
+				NewAtTimes(
+					NewAtTime(9, 0, 0),
+				),
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, WeeklyJobType, schedule.JobType())
+				weeklySchedule, ok := schedule.(WeeklyJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, uint(1), weeklySchedule.Interval)
+				assert.Len(t, weeklySchedule.DaysOfWeek, 3)
+				assert.Contains(t, weeklySchedule.DaysOfWeek, time.Monday)
+				assert.Contains(t, weeklySchedule.DaysOfWeek, time.Wednesday)
+				assert.Contains(t, weeklySchedule.DaysOfWeek, time.Friday)
+				assert.Len(t, weeklySchedule.AtTimes, 1)
+			},
+		},
+		{
+			"monthly",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1, 15, -1),
+				NewAtTimes(
+					NewAtTime(8, 0, 0),
+				),
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, MonthlyJobType, schedule.JobType())
+				monthlySchedule, ok := schedule.(MonthlyJobSchedule)
+				require.True(t, ok)
+				assert.Equal(t, uint(1), monthlySchedule.Interval)
+				assert.Contains(t, monthlySchedule.Days, 1)
+				assert.Contains(t, monthlySchedule.Days, 15)
+				assert.Contains(t, monthlySchedule.DaysFromEnd, -1)
+				assert.Len(t, monthlySchedule.AtTimes, 1)
+			},
+		},
+		{
+			"one time",
+			OneTimeJob(
+				OneTimeJobStartDateTime(time.Now().Add(time.Hour)),
+			),
+			func(t *testing.T, schedule JobSchedule) {
+				require.NotNil(t, schedule)
+				assert.Equal(t, OneTimeJobType, schedule.JobType())
+				oneTimeSchedule, ok := schedule.(OneTimeJobSchedule)
+				require.True(t, ok)
+				assert.Len(t, oneTimeSchedule.StartAt, 1)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			j, err := s.NewJob(tt.jd, NewTask(func() {}))
+			require.NoError(t, err)
+
+			tt.assertFunc(t, j.Schedule())
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}

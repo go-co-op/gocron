@@ -370,6 +370,185 @@ func ExampleJob_runNow() {
 	_ = j.RunNow()
 }
 
+func ExampleJob_schedule() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second*5,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	fmt.Println(schedule.JobType())
+
+	// type-assert the schedule to get the specific schedule details
+	if durationSchedule, ok := schedule.(gocron.DurationJobSchedule); ok {
+		fmt.Println(durationSchedule.Duration)
+	}
+	// Output:
+	// 1
+	// 5s
+}
+
+func ExampleJob_schedule_cron() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.CronJob(
+			"*/5 * * * *",
+			false,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if cronSchedule, ok := schedule.(gocron.CronJobSchedule); ok {
+		fmt.Println(cronSchedule.Crontab)
+	}
+	// Output:
+	// */5 * * * *
+}
+
+func ExampleJob_schedule_daily() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DailyJob(
+			1,
+			gocron.NewAtTimes(
+				gocron.NewAtTime(10, 30, 0),
+				gocron.NewAtTime(14, 0, 0),
+			),
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if dailySchedule, ok := schedule.(gocron.DailyJobSchedule); ok {
+		fmt.Println(dailySchedule.Interval)
+		fmt.Println(len(dailySchedule.AtTimes))
+	}
+	// Output:
+	// 1
+	// 2
+}
+
+func ExampleJob_schedule_durationRandom() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationRandomJob(
+			time.Second,
+			5*time.Second,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if randomSchedule, ok := schedule.(gocron.DurationRandomJobSchedule); ok {
+		fmt.Println(randomSchedule.Min)
+		fmt.Println(randomSchedule.Max)
+	}
+	// Output:
+	// 1s
+	// 5s
+}
+
+func ExampleJob_schedule_monthly() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.MonthlyJob(
+			1,
+			gocron.NewDaysOfTheMonth(3, -5, -1),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(10, 30, 0),
+				gocron.NewAtTime(11, 15, 0),
+			),
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if monthlySchedule, ok := schedule.(gocron.MonthlyJobSchedule); ok {
+		fmt.Println(monthlySchedule.Interval)
+		fmt.Println(monthlySchedule.Days)
+		fmt.Println(monthlySchedule.DaysFromEnd)
+	}
+	// Output:
+	// 1
+	// [3]
+	// [-5 -1]
+}
+
+func ExampleJob_schedule_oneTime() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.OneTimeJob(
+			gocron.OneTimeJobStartDateTimes(
+				time.Date(2099, 5, 15, 12, 0, 0, 0, time.UTC),
+				time.Date(2099, 6, 15, 12, 0, 0, 0, time.UTC),
+			),
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if oneTimeSchedule, ok := schedule.(gocron.OneTimeJobSchedule); ok {
+		fmt.Println(len(oneTimeSchedule.StartAt))
+	}
+	// Output:
+	// 2
+}
+
+func ExampleJob_schedule_weekly() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.WeeklyJob(
+			2,
+			gocron.NewWeekdays(time.Monday, time.Wednesday, time.Friday),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(9, 0, 0),
+			),
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if weeklySchedule, ok := schedule.(gocron.WeeklyJobSchedule); ok {
+		fmt.Println(weeklySchedule.Interval)
+		fmt.Println(weeklySchedule.DaysOfWeek)
+	}
+	// Output:
+	// 2
+	// [Monday Wednesday Friday]
+}
+
 func ExampleJob_tags() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
