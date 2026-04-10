@@ -370,6 +370,80 @@ func ExampleJob_runNow() {
 	_ = j.RunNow()
 }
 
+func ExampleJob_schedule() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.DurationJob(
+			time.Second*5,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	fmt.Println(schedule.JobType())
+
+	// type-assert the schedule to get the specific schedule details
+	if durationSchedule, ok := schedule.(gocron.DurationJobSchedule); ok {
+		fmt.Println(durationSchedule.Duration)
+	}
+	// Output:
+	// 1
+	// 5s
+}
+
+func ExampleJob_schedule_cron() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.CronJob(
+			"*/5 * * * *",
+			false,
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if cronSchedule, ok := schedule.(gocron.CronJobSchedule); ok {
+		fmt.Println(cronSchedule.Crontab)
+	}
+	// Output:
+	// */5 * * * *
+}
+
+func ExampleJob_schedule_weekly() {
+	s, _ := gocron.NewScheduler()
+	defer func() { _ = s.Shutdown() }()
+
+	j, _ := s.NewJob(
+		gocron.WeeklyJob(
+			2,
+			gocron.NewWeekdays(time.Monday, time.Wednesday, time.Friday),
+			gocron.NewAtTimes(
+				gocron.NewAtTime(9, 0, 0),
+			),
+		),
+		gocron.NewTask(
+			func() {},
+		),
+	)
+
+	schedule := j.Schedule()
+	if weeklySchedule, ok := schedule.(gocron.WeeklyJobSchedule); ok {
+		fmt.Println(weeklySchedule.Interval)
+		fmt.Println(weeklySchedule.DaysOfWeek)
+	}
+	// Output:
+	// 2
+	// [Monday Wednesday Friday]
+}
+
 func ExampleJob_tags() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()
