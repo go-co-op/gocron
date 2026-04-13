@@ -2087,7 +2087,9 @@ func TestScheduler_RemoveJob_RemoveSelf(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	time.Sleep(time.Millisecond * 400)
+	require.Eventually(t, func() bool {
+		return len(s.Jobs()) == 0
+	}, time.Second, 10*time.Millisecond)
 	assert.NoError(t, s.Shutdown())
 }
 
