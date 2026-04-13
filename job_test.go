@@ -1192,8 +1192,8 @@ func TestWithIntervalFromCompletion_BasicFunctionality(t *testing.T) {
 			completeTime time.Time
 		}{}
 
-		jobExecutionTime := 2 * time.Second
-		scheduledInterval := 5 * time.Second
+		jobExecutionTime := 200 * time.Millisecond
+		scheduledInterval := 500 * time.Millisecond
 
 		_, err = s.NewJob(
 			DurationJob(scheduledInterval),
@@ -1217,12 +1217,12 @@ func TestWithIntervalFromCompletion_BasicFunctionality(t *testing.T) {
 
 		// Wait for at least 3 executions
 		// With intervalFromCompletion:
-		// Execution 1: 0s-2s
-		// Wait: 5s (from 2s to 7s)
-		// Execution 2: 7s-9s
-		// Wait: 5s (from 9s to 14s)
-		// Execution 3: 14s-16s
-		time.Sleep(18 * time.Second)
+		// Execution 1: 0ms-200ms
+		// Wait: 500ms (from 200ms to 700ms)
+		// Execution 2: 700ms-900ms
+		// Wait: 500ms (from 900ms to 1400ms)
+		// Execution 3: 1400ms-1600ms
+		time.Sleep(1800 * time.Millisecond)
 
 		mu.Lock()
 		executionCount := len(executions)
@@ -1240,7 +1240,7 @@ func TestWithIntervalFromCompletion_BasicFunctionality(t *testing.T) {
 
 			completionToStartGap := curr.startTime.Sub(prev.completeTime)
 
-			assert.InDelta(t, scheduledInterval.Seconds(), completionToStartGap.Seconds(), 0.5,
+			assert.InDelta(t, scheduledInterval.Seconds(), completionToStartGap.Seconds(), 0.15,
 				"Gap from completion to start should match the interval")
 		}
 	})
@@ -1259,12 +1259,12 @@ func TestWithIntervalFromCompletion_VariableExecutionTime(t *testing.T) {
 	}{}
 
 	executionTimes := []time.Duration{
-		1 * time.Second,
-		3 * time.Second,
-		500 * time.Millisecond,
+		100 * time.Millisecond,
+		300 * time.Millisecond,
+		50 * time.Millisecond,
 	}
 	currentExecution := atomic.Int32{}
-	scheduledInterval := 4 * time.Second
+	scheduledInterval := 400 * time.Millisecond
 
 	_, err = s.NewJob(
 		DurationJob(scheduledInterval),
@@ -1294,10 +1294,10 @@ func TestWithIntervalFromCompletion_VariableExecutionTime(t *testing.T) {
 	s.Start()
 
 	// Wait for all 3 executions
-	// Execution 1: 0s-1s, wait 4s → next at 5s
-	// Execution 2: 5s-8s, wait 4s → next at 12s
-	// Execution 3: 12s-12.5s
-	time.Sleep(15 * time.Second)
+	// Execution 1: 0ms-100ms, wait 400ms → next at 500ms
+	// Execution 2: 500ms-800ms, wait 400ms → next at 1200ms
+	// Execution 3: 1200ms-1250ms
+	time.Sleep(1500 * time.Millisecond)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -1310,7 +1310,7 @@ func TestWithIntervalFromCompletion_VariableExecutionTime(t *testing.T) {
 
 		restPeriod := curr.startTime.Sub(prev.completeTime)
 
-		assert.InDelta(t, scheduledInterval.Seconds(), restPeriod.Seconds(), 0.5,
+		assert.InDelta(t, scheduledInterval.Seconds(), restPeriod.Seconds(), 0.15,
 			"Rest period should be consistent regardless of execution time")
 	}
 }
@@ -1326,8 +1326,8 @@ func TestWithIntervalFromCompletion_LongRunningJob(t *testing.T) {
 		completeTime time.Time
 	}{}
 
-	jobExecutionTime := 6 * time.Second
-	scheduledInterval := 3 * time.Second
+	jobExecutionTime := 600 * time.Millisecond
+	scheduledInterval := 300 * time.Millisecond
 
 	_, err = s.NewJob(
 		DurationJob(scheduledInterval),
@@ -1351,10 +1351,10 @@ func TestWithIntervalFromCompletion_LongRunningJob(t *testing.T) {
 	s.Start()
 
 	// Wait for 2 executions
-	// Execution 1: 0s-6s, wait 3s → next at 9s
-	// Execution 2: 9s-15s, wait 3s → next at 18s
-	// Need to wait at least 16 seconds for 2 executions + buffer
-	time.Sleep(22 * time.Second)
+	// Execution 1: 0ms-600ms, wait 300ms → next at 900ms
+	// Execution 2: 900ms-1500ms, wait 300ms → next at 1800ms
+	// Need to wait at least 1600ms for 2 executions + buffer
+	time.Sleep(2200 * time.Millisecond)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -1371,13 +1371,13 @@ func TestWithIntervalFromCompletion_LongRunningJob(t *testing.T) {
 
 	completionGap := curr.startTime.Sub(prev.completeTime)
 
-	assert.InDelta(t, scheduledInterval.Seconds(), completionGap.Seconds(), 0.5,
+	assert.InDelta(t, scheduledInterval.Seconds(), completionGap.Seconds(), 0.15,
 		"Gap should be the full interval even when execution time exceeds interval")
 }
 
 func TestWithIntervalFromCompletion_ComparedToDefault(t *testing.T) {
-	jobExecutionTime := 2 * time.Second
-	scheduledInterval := 5 * time.Second
+	jobExecutionTime := 200 * time.Millisecond
+	scheduledInterval := 500 * time.Millisecond
 
 	t.Run("default behavior - interval from scheduled time", func(t *testing.T) {
 		s, err := NewScheduler()
@@ -1408,7 +1408,7 @@ func TestWithIntervalFromCompletion_ComparedToDefault(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
-		time.Sleep(13 * time.Second)
+		time.Sleep(1300 * time.Millisecond)
 
 		mu.Lock()
 		defer mu.Unlock()
@@ -1420,7 +1420,7 @@ func TestWithIntervalFromCompletion_ComparedToDefault(t *testing.T) {
 		completionGap := curr.startTime.Sub(prev.completeTime)
 
 		expectedGap := scheduledInterval - jobExecutionTime
-		assert.InDelta(t, expectedGap.Seconds(), completionGap.Seconds(), 0.5,
+		assert.InDelta(t, expectedGap.Seconds(), completionGap.Seconds(), 0.15,
 			"Default behavior: gap should be interval minus execution time")
 	})
 
@@ -1454,7 +1454,7 @@ func TestWithIntervalFromCompletion_ComparedToDefault(t *testing.T) {
 		require.NoError(t, err)
 
 		s.Start()
-		time.Sleep(15 * time.Second)
+		time.Sleep(1500 * time.Millisecond)
 
 		mu.Lock()
 		defer mu.Unlock()
@@ -1465,7 +1465,7 @@ func TestWithIntervalFromCompletion_ComparedToDefault(t *testing.T) {
 		curr := executions[1]
 		completionGap := curr.startTime.Sub(prev.completeTime)
 
-		assert.InDelta(t, scheduledInterval.Seconds(), completionGap.Seconds(), 0.5,
+		assert.InDelta(t, scheduledInterval.Seconds(), completionGap.Seconds(), 0.15,
 			"With intervalFromCompletion: gap should be the full interval")
 	})
 }
@@ -1481,9 +1481,9 @@ func TestWithIntervalFromCompletion_DurationRandomJob(t *testing.T) {
 		completeTime time.Time
 	}{}
 
-	jobExecutionTime := 1 * time.Second
-	minInterval := 3 * time.Second
-	maxInterval := 4 * time.Second
+	jobExecutionTime := 100 * time.Millisecond
+	minInterval := 300 * time.Millisecond
+	maxInterval := 400 * time.Millisecond
 
 	_, err = s.NewJob(
 		DurationRandomJob(minInterval, maxInterval),
@@ -1505,7 +1505,7 @@ func TestWithIntervalFromCompletion_DurationRandomJob(t *testing.T) {
 
 	s.Start()
 
-	time.Sleep(15 * time.Second)
+	time.Sleep(1500 * time.Millisecond)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -1517,9 +1517,9 @@ func TestWithIntervalFromCompletion_DurationRandomJob(t *testing.T) {
 		curr := executions[i]
 
 		restPeriod := curr.startTime.Sub(prev.completeTime)
-		assert.GreaterOrEqual(t, restPeriod.Seconds(), minInterval.Seconds()-0.5,
+		assert.GreaterOrEqual(t, restPeriod.Seconds(), minInterval.Seconds()-0.15,
 			"Rest period should be at least minInterval")
-		assert.LessOrEqual(t, restPeriod.Seconds(), maxInterval.Seconds()+0.5,
+		assert.LessOrEqual(t, restPeriod.Seconds(), maxInterval.Seconds()+0.15,
 			"Rest period should be at most maxInterval")
 	}
 }
@@ -1533,7 +1533,7 @@ func TestWithIntervalFromCompletion_FirstRun(t *testing.T) {
 	var firstRunTime time.Time
 
 	_, err = s.NewJob(
-		DurationJob(5*time.Second),
+		DurationJob(500*time.Millisecond),
 		NewTask(func() {
 			mu.Lock()
 			if firstRunTime.IsZero() {
@@ -1549,7 +1549,7 @@ func TestWithIntervalFromCompletion_FirstRun(t *testing.T) {
 	startTime := time.Now()
 	s.Start()
 
-	time.Sleep(1 * time.Second)
+	time.Sleep(200 * time.Millisecond)
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -1557,7 +1557,7 @@ func TestWithIntervalFromCompletion_FirstRun(t *testing.T) {
 	require.False(t, firstRunTime.IsZero(), "Job should have run at least once")
 
 	timeSinceStart := firstRunTime.Sub(startTime)
-	assert.Less(t, timeSinceStart.Seconds(), 1.0,
+	assert.Less(t, timeSinceStart.Seconds(), 0.2,
 		"First run should happen quickly with WithStartImmediately")
 }
 

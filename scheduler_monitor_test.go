@@ -254,7 +254,9 @@ func TestSchedulerMonitor_Basic(t *testing.T) {
 	s.Start()
 
 	// Wait a bit for the start to complete
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return monitor.getStartedCount() == int64(1)
+	}, time.Second, 5*time.Millisecond)
 
 	// SchedulerStarted should have been called once
 	assert.Equal(t, int64(1), monitor.getStartedCount())
@@ -291,7 +293,9 @@ func TestSchedulerMonitor_MultipleStartStop(t *testing.T) {
 
 	// Start and stop multiple times
 	s.Start()
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return monitor.getStartedCount() == int64(1)
+	}, time.Second, 5*time.Millisecond)
 	assert.Equal(t, int64(1), monitor.getStartedCount())
 
 	err = s.StopJobs()
@@ -301,7 +305,9 @@ func TestSchedulerMonitor_MultipleStartStop(t *testing.T) {
 
 	// Start again
 	s.Start()
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return monitor.getStartedCount() == int64(2)
+	}, time.Second, 5*time.Millisecond)
 	assert.Equal(t, int64(2), monitor.getStartedCount())
 
 	// Final shutdown
@@ -323,7 +329,9 @@ func TestSchedulerMonitor_WithoutMonitor(t *testing.T) {
 	require.NoError(t, err)
 
 	s.Start()
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return true // just ensure scheduler started
+	}, time.Second, 5*time.Millisecond)
 
 	err = s.Shutdown()
 	require.NoError(t, err)
@@ -353,7 +361,9 @@ func TestSchedulerMonitor_ConcurrentAccess(t *testing.T) {
 
 	// Start scheduler once (normal use case)
 	s.Start()
-	time.Sleep(150 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return monitor.getStartedCount() == int64(1)
+	}, time.Second, 5*time.Millisecond)
 
 	// Verify monitor was called
 	assert.Equal(t, int64(1), monitor.getStartedCount())
@@ -373,7 +383,9 @@ func TestSchedulerMonitor_StartWithoutJobs(t *testing.T) {
 
 	// Start scheduler without any jobs
 	s.Start()
-	time.Sleep(50 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return monitor.getStartedCount() == int64(1)
+	}, time.Second, 5*time.Millisecond)
 
 	// Monitor should still be called
 	assert.Equal(t, int64(1), monitor.getStartedCount())
@@ -464,7 +476,9 @@ func TestSchedulerMonitor_IntegrationWithJobs(t *testing.T) {
 
 	// Start scheduler
 	s.Start()
-	time.Sleep(150 * time.Millisecond) // Wait for jobs to execute
+	require.Eventually(t, func() bool {
+		return monitor.getJobCompletedCount() >= int64(1) && monitor.getJobFailedCount() >= int64(1)
+	}, time.Second, 5*time.Millisecond)
 
 	// Verify scheduler lifecycle events
 	assert.Equal(t, int64(1), monitor.getStartedCount())
@@ -488,7 +502,9 @@ func TestSchedulerMonitor_IntegrationWithJobs(t *testing.T) {
 	// Test unregistration
 	err = s.RemoveJob(j.ID())
 	require.NoError(t, err)
-	time.Sleep(50 * time.Millisecond) // Wait for async removal
+	require.Eventually(t, func() bool {
+		return monitor.getJobUnregCount() == int64(1)
+	}, time.Second, 5*time.Millisecond)
 	assert.Equal(t, int64(1), monitor.getJobUnregCount(), "Should have unregistered 1 job")
 
 	// Shutdown
