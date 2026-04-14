@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"context"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,10 +13,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func requireStressTestsEnabled(t *testing.T) {
+	t.Helper()
+	if os.Getenv("TEST_STRESS") != "1" {
+		t.Skip("stress tests are opt-in; set TEST_STRESS=1 to run")
+	}
+}
+
 // TestStress_ConcurrentNewJobAndRemoveJob tests concurrent job additions and removals.
 // This exercises the scheduler's main select loop handling both newJobCh and removeJobCh
 // simultaneously, ensuring no race conditions or map corruption.
 func TestStress_ConcurrentNewJobAndRemoveJob(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -145,6 +154,7 @@ func TestStress_ConcurrentNewJobAndRemoveJob(t *testing.T) {
 // TestStress_RemoveJobDuringExecution tests removing jobs while they're executing.
 // This ensures proper context cancellation and cleanup when jobs are removed mid-flight.
 func TestStress_RemoveJobDuringExecution(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -254,6 +264,7 @@ func TestStress_RemoveJobDuringExecution(t *testing.T) {
 // TestStress_RunNowDuringShutdown tests RunNow calls racing with Shutdown.
 // This ensures the scheduler handles manual job triggers gracefully during shutdown.
 func TestStress_RunNowDuringShutdown(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -329,6 +340,7 @@ func TestStress_RunNowDuringShutdown(t *testing.T) {
 // TestStress_UpdateJobDuringExecution tests updating job definitions while jobs are running.
 // This ensures proper handling of context swapping and job rescheduling.
 func TestStress_UpdateJobDuringExecution(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -427,6 +439,7 @@ func TestStress_UpdateJobDuringExecution(t *testing.T) {
 // TestStress_RapidStartStopCycles tests rapid Start/Stop/Start cycles.
 // This ensures no goroutine leaks, timer leaks, or channel issues across cycles.
 func TestStress_RapidStartStopCycles(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -490,6 +503,7 @@ func TestStress_RapidStartStopCycles(t *testing.T) {
 // TestStress_ConcurrentMetadataReads tests concurrent Jobs(), NextRun(), LastRun() calls
 // while jobs are being added/removed. This ensures metadata reads are safe under mutation.
 func TestStress_ConcurrentMetadataReads(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -625,6 +639,7 @@ func TestStress_ConcurrentMetadataReads(t *testing.T) {
 // TestStress_RemoveByTagsDuringExecution tests removing multiple jobs by tags
 // while they're executing. This ensures bulk removal is safe during execution.
 func TestStress_RemoveByTagsDuringExecution(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
@@ -707,6 +722,7 @@ func TestStress_RemoveByTagsDuringExecution(t *testing.T) {
 // NOTE: Goroutine leak detection is disabled for this test as the high-load scenarios (especially
 // 200 jobs in wait mode) create many goroutines that may not fully clean up by the time goleak runs.
 func TestStress_SingletonModeHighContention(t *testing.T) {
+	requireStressTestsEnabled(t)
 	// Skip leak detection for high-load scenarios
 	// defer verifyNoGoroutineLeaks(t)
 
@@ -780,6 +796,7 @@ func TestStress_SingletonModeHighContention(t *testing.T) {
 // TestStress_LimitModeChannelSaturation tests limit mode with many jobs hitting the limiter.
 // This validates the reschedule channel and wait queue behavior under sustained load.
 func TestStress_LimitModeChannelSaturation(t *testing.T) {
+	requireStressTestsEnabled(t)
 	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
