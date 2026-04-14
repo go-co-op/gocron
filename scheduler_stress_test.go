@@ -47,6 +47,9 @@ func TestStress_ConcurrentNewJobAndRemoveJob(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(t)
+			t.Cleanup(func() {
+				_ = s.Shutdown()
+			})
 			s.Start()
 
 			var (
@@ -173,6 +176,9 @@ func TestStress_RemoveJobDuringExecution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(t, WithStopTimeout(2*time.Second))
+			t.Cleanup(func() {
+				_ = s.Shutdown()
+			})
 
 			var (
 				startedCount   atomic.Int32
@@ -681,12 +687,10 @@ func TestStress_RemoveByTagsDuringExecution(t *testing.T) {
 			time.Sleep(tt.removeDelay)
 			s.RemoveByTags("tag1")
 
-			// Give time for cancellations to propagate
-			time.Sleep(100 * time.Millisecond)
-
 			// Verify jobs were removed
-			jobs := s.Jobs()
-			assert.Equal(t, 0, len(jobs), "All tagged jobs should be removed")
+			require.Eventually(t, func() bool {
+				return len(s.Jobs()) == 0
+			}, 2*time.Second, 10*time.Millisecond, "All tagged jobs should be removed")
 
 			require.NoError(t, s.Shutdown())
 
@@ -775,11 +779,8 @@ func TestStress_SingletonModeHighContention(t *testing.T) {
 
 // TestStress_LimitModeChannelSaturation tests limit mode with many jobs hitting the limiter.
 // This validates the reschedule channel and wait queue behavior under sustained load.
-// NOTE: Goroutine leak detection is disabled for this test as it creates many goroutines
-// that may not fully clean up by the time goleak runs. This is acceptable in high-load scenarios.
 func TestStress_LimitModeChannelSaturation(t *testing.T) {
-	// Skip leak detection for this high-load test
-	// defer verifyNoGoroutineLeaks(t)
+	defer verifyNoGoroutineLeaks(t)
 
 	tests := []struct {
 		name          string
@@ -844,9 +845,6 @@ func TestStress_LimitModeChannelSaturation(t *testing.T) {
 			time.Sleep(tt.testDuration)
 
 			require.NoError(t, s.Shutdown())
-
-			// Give goroutines time to fully clean up before leak detection
-			time.Sleep(100 * time.Millisecond)
 
 			// Verify executions
 			assert.GreaterOrEqual(t, int(executionCount.Load()), tt.minExecutions,
