@@ -1635,7 +1635,11 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 		}
 
 		from := out[i-1]
-		out[i] = ij.next(from)
+		next := ij.next(from)
+		if !ij.stopTime.IsZero() && !next.Before(ij.stopTime) {
+			return out[:i], nil
+		}
+		out[i] = next
 	}
 
 	return out, nil

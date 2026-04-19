@@ -3190,3 +3190,76 @@ func TestScheduler_JobSchedule(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_WithStopDateTime_JobRemovedAfterStopTime(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	t.Run("job is removed from scheduler after stop time elapses", func(t *testing.T) {
+		monitor := newTestSchedulerMonitor()
+		s := newTestScheduler(t, WithSchedulerMonitor(monitor))
+
+		_, err := s.NewJob(
+			DurationJob(50*time.Millisecond),
+			NewTask(func() {}),
+			WithStopAt(WithStopDateTime(time.Now().Add(200*time.Millisecond))),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		require.Eventually(t, func() bool {
+			return len(s.Jobs()) == 0
+		}, time.Second, 10*time.Millisecond, "job should be removed after stop time")
+
+		assert.GreaterOrEqual(t, monitor.getJobUnregCount(), int64(1), "monitor should receive JobUnregistered notification")
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("job added before start is removed on start when stop time already elapsed", func(t *testing.T) {
+		monitor := newTestSchedulerMonitor()
+		s := newTestScheduler(t, WithSchedulerMonitor(monitor))
+
+		_, err := s.NewJob(
+			DurationJob(time.Hour),
+			NewTask(func() {}),
+			WithStopAt(WithStopDateTime(time.Now().Add(100*time.Millisecond))),
+		)
+		require.NoError(t, err)
+
+		// wait until stop time has passed, then start the scheduler
+		time.Sleep(150 * time.Millisecond)
+		s.Start()
+
+		require.Eventually(t, func() bool {
+			return len(s.Jobs()) == 0
+		}, time.Second, 10*time.Millisecond, "job should be removed when scheduler starts after stop time")
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("RemoveJob on already auto-removed job returns ErrJobNotFound", func(t *testing.T) {
+		s := newTestScheduler(t)
+
+		j, err := s.NewJob(
+			DurationJob(50*time.Millisecond),
+			NewTask(func() {}),
+			WithStopAt(WithStopDateTime(time.Now().Add(150*time.Millisecond))),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		require.Eventually(t, func() bool {
+			return len(s.Jobs()) == 0
+		}, time.Second, 10*time.Millisecond, "job should be auto-removed after stop time")
+
+		// Explicitly removing an already auto-removed job should return ErrJobNotFound
+		err = s.RemoveJob(j.ID())
+		assert.ErrorIs(t, err, ErrJobNotFound)
+
+		require.NoError(t, s.Shutdown())
+	})
+}
