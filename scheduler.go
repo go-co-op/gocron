@@ -363,6 +363,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	}
 
 	if j.stopTimeReached(s.now()) {
+		s.selectRemoveJob(id)
 		return
 	}
 
@@ -420,6 +421,11 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		for slices.Contains(j.nextScheduled, next) {
 			next = j.next(next)
 		}
+	}
+
+	if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+		s.selectRemoveJob(id)
+		return
 	}
 
 	// Clean up any existing timer to prevent leaks
@@ -548,6 +554,13 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 				}
 			}
 
+			if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+				s.jobs[j.id] = j
+				in.cancel()
+				s.selectRemoveJob(j.id)
+				return
+			}
+
 			id := j.id
 			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 				select {
@@ -607,6 +620,11 @@ func (s *scheduler) selectStart() {
 				for next.Before(s.now()) {
 					next = j.next(next)
 				}
+			}
+
+			if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+				s.selectRemoveJob(id)
+				continue
 			}
 
 			jobID := id

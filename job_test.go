@@ -1043,6 +1043,37 @@ func TestJob_NextRuns(t *testing.T) {
 	}
 }
 
+func TestJob_NextRuns_StopTime(t *testing.T) {
+	stopTime := time.Now().Add(350 * time.Millisecond)
+
+	s := newTestScheduler(t)
+	j, err := s.NewJob(
+		DurationJob(100*time.Millisecond),
+		NewTask(func() {}),
+		WithStopAt(WithStopDateTime(stopTime)),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	time.Sleep(50 * time.Millisecond)
+
+	// nextScheduled must not contain any time at or after stopTime
+	ij := requestJob(j.ID(), j.(*job).jobOutRequest)
+	require.NotNil(t, ij)
+	for _, ns := range ij.nextScheduled {
+		assert.True(t, ns.Before(stopTime), "nextScheduled contains time after stopTime: %v >= %v", ns, stopTime)
+	}
+
+	// NextRuns with a large count must all be before stopTime
+	runs, err := j.NextRuns(100)
+	require.NoError(t, err)
+	for _, r := range runs {
+		assert.True(t, r.Before(stopTime), "NextRuns returned time after stopTime: %v >= %v", r, stopTime)
+	}
+
+	require.NoError(t, s.Shutdown())
+}
+
 func TestJob_PanicOccurred(t *testing.T) {
 	gotCh := make(chan any)
 	errCh := make(chan error)
