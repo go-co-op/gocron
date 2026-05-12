@@ -3263,3 +3263,38 @@ func TestScheduler_WithStopDateTime_JobRemovedAfterStopTime(t *testing.T) {
 		require.NoError(t, s.Shutdown())
 	})
 }
+
+// TestScheduler_WithLimitedRuns_ContextNotCanceledDuringTask asserts that the
+// context passed to a task running under WithLimitedRuns is not canceled
+// while the task function is still executing. Regression test for #925.
+func TestScheduler_WithLimitedRuns_ContextNotCanceledDuringTask(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	s := newTestScheduler(t)
+
+	ctxErrCh := make(chan error, 1)
+	_, err := s.NewJob(
+		DurationJob(time.Hour),
+		NewTask(func(ctx context.Context) {
+			// Hold the task open briefly so the scheduler has time to
+			// process the after-rescheduling signal and (incorrectly)
+			// cancel the context before this function returns.
+			time.Sleep(100 * time.Millisecond)
+			ctxErrCh <- ctx.Err()
+		}),
+		WithStartAt(WithStartImmediately()),
+		WithLimitedRuns(1),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	select {
+	case ctxErr := <-ctxErrCh:
+		require.NoError(t, ctxErr, "task context must not be canceled while task is still running")
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for task to run")
+	}
+
+	require.NoError(t, s.Shutdown())
+}

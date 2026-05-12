@@ -487,17 +487,14 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 
 	// if the job has a limited number of runs set, we need to
 	// check how many runs have occurred and stop running this
-	// job if it has reached the limit.
+	// job if it has reached the limit. Removal is deferred until
+	// the task function actually completes (signaled via a non-zero
+	// completedAt on jobTimingUpdateCh) so that the job's context is
+	// not canceled while the task is still executing. See #925.
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
-		if j.limitRunsTo.runCount == j.limitRunsTo.limit {
-			go func() {
-				select {
-				case <-s.shutdownCtx.Done():
-					return
-				case s.removeJobCh <- id:
-				}
-			}()
+		if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+			s.jobs[id] = j
 			return
 		}
 	}
@@ -518,6 +515,20 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 		j.lastRunCompletedAt = update.completedAt
 	}
 	s.jobs[update.id] = j
+
+	// If the job has hit its WithLimitedRuns limit and the task function
+	// has finished (completedAt is set), remove the job now. This is done
+	// here rather than in selectExecJobsOutCompleted to avoid canceling
+	// the job's context while the task is still running. See #925.
+	if !update.completedAt.IsZero() && j.limitRunsTo != nil && j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+		go func(id uuid.UUID) {
+			select {
+			case <-s.shutdownCtx.Done():
+				return
+			case s.removeJobCh <- id:
+			}
+		}(update.id)
+	}
 }
 
 func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
