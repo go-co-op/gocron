@@ -347,6 +347,22 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 	delete(s.jobs, id)
 }
 
+// advancePastNow advances next via j.next until it is no longer before s.now(),
+// returning the new time and ok=true. Returns ok=false if next() ever produces
+// the zero time or fails to make forward progress (which would otherwise spin
+// the scheduler goroutine forever. Callers should treat ok=false the same way
+// they treat an exhausted schedule and remove the job.
+func (s *scheduler) advancePastNow(j internalJob, next time.Time) (time.Time, bool) {
+	for next.Before(s.now()) {
+		n := j.next(next)
+		if n.IsZero() || !n.After(next) {
+			return time.Time{}, false
+		}
+		next = n
+	}
+	return next, true
+}
+
 // Jobs coming back from the executor to the scheduler that
 // need to be evaluated for rescheduling.
 func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
@@ -409,8 +425,11 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		// - the machine went to sleep, and woke up some time later
 		// in those cases, we want to increment to the next run in the future
 		// and schedule the job for that time.
-		for next.Before(s.now()) {
-			next = j.next(next)
+		var ok bool
+		next, ok = s.advancePastNow(j, next)
+		if !ok {
+			s.selectRemoveJob(id)
+			return
 		}
 	}
 
@@ -560,8 +579,13 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 			}
 
 			if next.Before(s.now()) {
-				for next.Before(s.now()) {
-					next = j.next(next)
+				var ok bool
+				next, ok = s.advancePastNow(j, next)
+				if !ok {
+					s.jobs[j.id] = j
+					in.cancel()
+					s.selectRemoveJob(j.id)
+					return
 				}
 			}
 
@@ -628,8 +652,11 @@ func (s *scheduler) selectStart() {
 				next = j.next(s.now())
 			}
 			if next.Before(s.now()) {
-				for next.Before(s.now()) {
-					next = j.next(next)
+				var ok bool
+				next, ok = s.advancePastNow(j, next)
+				if !ok {
+					s.selectRemoveJob(id)
+					continue
 				}
 			}
 

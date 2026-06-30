@@ -3298,3 +3298,57 @@ func TestScheduler_WithLimitedRuns_ContextNotCanceledDuringTask(t *testing.T) {
 
 	require.NoError(t, s.Shutdown())
 }
+
+// zeroNextCron is a pathological Cron implementation whose Next always
+// returns the zero time. Used to verify the scheduler does not hang when
+// a custom Cron implementation fails to produce a forward-progressing time.
+// Regression test for the infinite loop in selectExecJobsOutForRescheduling /
+// selectNewJob / selectStart documented as C2 in CODE_REVIEW.md.
+type zeroNextCron struct{}
+
+func (zeroNextCron) IsValid(_ string, _ *time.Location, _ time.Time) error {
+	return nil
+}
+
+func (zeroNextCron) Next(_ time.Time) time.Time {
+	return time.Time{}
+}
+
+func TestScheduler_CronWithZeroNext_DoesNotHang(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	s := newTestScheduler(t)
+
+	// Use a fail-safe context timeout so a regression hangs the test
+	// rather than the entire test binary.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+
+		_, err := s.NewJob(
+			CronJob("* * * * *", false),
+			NewTask(func() {}),
+			WithCronImplementation(zeroNextCron{}),
+		)
+		require.NoError(t, err)
+
+		s.Start()
+
+		// Give the scheduler a moment to attempt rescheduling.
+		time.Sleep(100 * time.Millisecond)
+
+		// Jobs() must respond promptly even though the cron impl
+		// produces a zero-time next run. The job should have been
+		// removed because no forward-progressing time can be found.
+		jobs := s.Jobs()
+		require.Empty(t, jobs, "job with zero-next cron should be removed, not retained in a spin loop")
+
+		require.NoError(t, s.Shutdown())
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("scheduler hung when custom Cron.Next returned zero time")
+	}
+}
