@@ -102,7 +102,7 @@ func (e *executor) start() {
 	e.ctx, e.cancel = context.WithCancel(context.Background())
 	e.stopOnce = &sync.Once{}
 
-	// the standardJobsWg tracks
+	// standardJobsWg tracks the standard (non-singleton, non-limit-mode) jobs in flight.
 	standardJobsWg := &waitGroupWithMutex{}
 
 	singletonJobsWg := &waitGroupWithMutex{}
@@ -112,7 +112,7 @@ func (e *executor) start() {
 	// create a fresh map for tracking singleton runners
 	e.singletonRunners = &sync.Map{}
 
-	// start the for leap that is the executor
+	// start the for-loop that is the executor
 	// selecting on channels for work to do
 	for {
 		select {
@@ -145,9 +145,9 @@ func (e *executor) start() {
 			// spin off into a goroutine to unblock the executor and
 			// allow for processing for more work
 			go func(executorCtx context.Context) {
-				// make sure to cancel the above context per the docs
-				// // Canceling this context releases resources associated with it, so code should
-				// // call cancel as soon as the operations running in this Context complete.
+				// make sure to cancel the above context per the docs:
+				// Canceling this context releases resources associated with it, so code should
+				// call cancel as soon as the operations running in this Context complete.
 				defer cancel()
 
 				// check for limit mode - this spins up a separate runner which handles
@@ -621,10 +621,12 @@ func (e *executor) stop(standardJobsWg, singletonJobsWg, limitModeJobsWg *waitGr
 		}()
 
 		// now either wait for all the jobs to complete,
-		// or hit the timeout.
+		// or hit the timeout. Uses the executor's clock so fake clocks
+		// in tests continue to work, and blocks on the select (no busy-wait).
 		var count int
-		timeout := time.Now().Add(e.stopTimeout)
-		for time.Now().Before(timeout) && count < 3 {
+		timer := e.clock.NewTimer(e.stopTimeout)
+		timedOut := false
+		for !timedOut && count < 3 {
 			select {
 			case <-waitForJobs:
 				count++
@@ -632,9 +634,11 @@ func (e *executor) stop(standardJobsWg, singletonJobsWg, limitModeJobsWg *waitGr
 				count++
 			case <-waitForLimitMode:
 				count++
-			default:
+			case <-timer.Chan():
+				timedOut = true
 			}
 		}
+		timer.Stop()
 		if count < 3 {
 			e.done <- ErrStopJobsTimedOut
 			e.logger.Debug("gocron: executor stopped - timed out")
