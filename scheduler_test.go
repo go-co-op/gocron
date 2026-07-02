@@ -3352,3 +3352,32 @@ func TestScheduler_CronWithZeroNext_DoesNotHang(t *testing.T) {
 		t.Fatal("scheduler hung when custom Cron.Next returned zero time")
 	}
 }
+
+// TestScheduler_WithGlobalJobOptions_MultipleCallsAppend asserts that
+// passing WithGlobalJobOptions multiple times to NewScheduler results
+// in all option lists being applied to each job (in order), rather
+// than the last call silently overwriting earlier calls. See H6 in
+// CODE_REVIEW.md.
+func TestScheduler_WithGlobalJobOptions_MultipleCallsAppend(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	s := newTestScheduler(t,
+		WithGlobalJobOptions(WithTags("shared-tag")),
+		WithGlobalJobOptions(WithName("shared-name")),
+	)
+
+	j, err := s.NewJob(
+		DurationJob(time.Hour),
+		NewTask(func() {}),
+	)
+	require.NoError(t, err)
+
+	// Both option lists must have applied. If WithGlobalJobOptions
+	// had overwritten instead of appended, only the "shared-name"
+	// option (from the second call) would be present and Tags()
+	// would be empty.
+	require.Equal(t, []string{"shared-tag"}, j.Tags())
+	require.Equal(t, "shared-name", j.Name())
+
+	require.NoError(t, s.Shutdown())
+}
