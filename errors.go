@@ -19,6 +19,7 @@ var (
 	ErrDurationRandomJobMinMax       = errors.New("gocron: DurationRandomJob: minimum duration must be less than maximum duration")
 	ErrEventListenerFuncNil          = errors.New("gocron: eventListenerFunc must not be nil")
 	ErrJobNotFound                   = errors.New("gocron: job not found")
+	ErrJobParameterMismatch          = errors.New("gocron: job function called with wrong number of parameters")
 	ErrJobRunNowFailed               = errors.New("gocron: Job: RunNow: scheduler unreachable")
 	ErrMonthlyJobDays                = errors.New("gocron: MonthlyJob: daysOfTheMonth must be between 31 and -31 inclusive, and not 0")
 	ErrMonthlyJobAtTimeNil           = errors.New("gocron: MonthlyJob: atTime within atTimes must not be nil")

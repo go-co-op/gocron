@@ -59,7 +59,7 @@ func TestCallJobFuncWithParams(t *testing.T) {
 			"wrong number of params",
 			func(_ string, _ int) {},
 			[]any{"one"},
-			nil,
+			ErrJobParameterMismatch,
 		},
 		{
 			"function that returns an error",

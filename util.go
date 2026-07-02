@@ -19,7 +19,7 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 		return nil
 	}
 	if len(params) != f.Type().NumIn() {
-		return nil
+		return ErrJobParameterMismatch
 	}
 	in := make([]reflect.Value, len(params))
 	for k, param := range params {

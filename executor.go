@@ -418,6 +418,11 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	} else if !j.disabledLocker && j.locker != nil {
 		lock, err := j.locker.Lock(j.ctx, j.name)
 		if err != nil {
+			// Event-listener signatures are enforced by the typed JobOption
+			// factories (AfterLockError, BeforeJobRuns, etc.), so
+			// callJobFuncWithParams cannot return ErrJobParameterMismatch here
+			// in practice. We discard the error to keep listener execution
+			// best-effort. This applies to every listener call in this file.
 			_ = callJobFuncWithParams(j.afterLockError, j.id, j.name, err)
 			e.sendOutForRescheduling(&jIn)
 			e.incrementJobCounter(j, Skip)
