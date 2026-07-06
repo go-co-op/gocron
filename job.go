@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"strings"
 	"time"
@@ -180,6 +180,14 @@ type limitRunsTo struct {
 // Next returns the next scheduled run after lastRun. Callers assume the
 // returned time is strictly after lastRun; returning lastRun or an earlier
 // value can cause the scheduler to spin.
+//
+// If a custom implementation caches parsed state in IsValid for later
+// use by Next, it must either be safe for concurrent use across the
+// goroutines that call NewJob/Update, next-computation in the
+// scheduler, and Job.NextRuns from user code, or the caller must
+// supply a fresh instance per job via WithCronImplementation. The
+// default implementation is cloned per job automatically to avoid
+// aliasing when the same JobDefinition is reused across NewJob calls.
 type Cron interface {
 	IsValid(crontab string, location *time.Location, now time.Time) error
 	Next(lastRun time.Time) time.Time
@@ -280,15 +288,23 @@ type cronJobDefinition struct {
 }
 
 func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now time.Time) error {
+	cronImpl := c.cron
 	if j.cron != nil {
-		c.cron = j.cron
+		cronImpl = j.cron
+	} else if dc, ok := cronImpl.(*defaultCron); ok {
+		// Give each job its own defaultCron so parsing state written
+		// by IsValid isn't shared across jobs derived from the same
+		// JobDefinition, and isn't concurrently mutated by later
+		// setups (e.g. Update) while another goroutine is reading
+		// through Job.NextRuns. See C4 in the code review.
+		cronImpl = &defaultCron{withSeconds: dc.withSeconds}
 	}
 
-	if err := c.cron.IsValid(c.crontab, location, now); err != nil {
+	if err := cronImpl.IsValid(c.crontab, location, now); err != nil {
 		return err
 	}
 
-	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: c.cron, daylightSavingsTimePolicy: j.daylightSavingsTimePolicy}
+	j.jobSchedule = &cronJob{crontab: c.crontab, cronSchedule: cronImpl, daylightSavingsTimePolicy: j.daylightSavingsTimePolicy}
 	return nil
 }
 
@@ -346,9 +362,8 @@ func (d durationRandomJobDefinition) setup(j *internalJob, _ *time.Location, _ t
 	}
 
 	j.jobSchedule = &durationRandomJob{
-		min:  d.min,
-		max:  d.max,
-		rand: rand.New(rand.NewSource(time.Now().UnixNano())), // nolint:gosec
+		min: d.min,
+		max: d.max,
 	}
 	return nil
 }
@@ -1282,11 +1297,14 @@ var _ jobSchedule = (*durationRandomJob)(nil)
 
 type durationRandomJob struct {
 	min, max time.Duration
-	rand     *rand.Rand
 }
 
 func (j *durationRandomJob) next(lastRun time.Time) time.Time {
-	r := j.rand.Int63n(int64(j.max - j.min))
+	// math/rand/v2's top-level functions use a per-goroutine generator
+	// derived from a shared, cryptographically-seeded source, so this
+	// is safe to call concurrently from the scheduler goroutine and
+	// from user goroutines invoking Job.NextRuns.
+	r := rand.Int64N(int64(j.max - j.min))
 	return lastRun.Add(j.min + time.Duration(r))
 }
 
