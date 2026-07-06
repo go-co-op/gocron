@@ -1103,9 +1103,12 @@ func WithDistributedLocker(locker Locker) SchedulerOption {
 // WithGlobalJobOptions sets JobOption's that will be applied to
 // all jobs added to the scheduler. JobOption's set on the job
 // itself will override if the same JobOption is set globally.
+//
+// WithGlobalJobOptions may be called multiple times; options from all
+// calls are appended in order and applied to each job in that order.
 func WithGlobalJobOptions(jobOptions ...JobOption) SchedulerOption {
 	return func(s *scheduler) error {
-		s.globalJobOptions = jobOptions
+		s.globalJobOptions = append(s.globalJobOptions, jobOptions...)
 		return nil
 	}
 }
