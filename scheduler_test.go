@@ -3381,3 +3381,47 @@ func TestScheduler_WithGlobalJobOptions_MultipleCallsAppend(t *testing.T) {
 
 	require.NoError(t, s.Shutdown())
 }
+
+// TestScheduler_WithLimitedRuns_SkippedRunsDoNotConsumeBudget asserts
+// that runs aborted before the task function executes (for example,
+// by BeforeJobRunsSkipIfBeforeFuncErrors returning an error) do not
+// count against the WithLimitedRuns budget. See C3 in CODE_REVIEW.md.
+func TestScheduler_WithLimitedRuns_SkippedRunsDoNotConsumeBudget(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	s := newTestScheduler(t)
+
+	var skipCalls atomic.Int32
+	var runs atomic.Int32
+	const forcedSkips = 3
+
+	_, err := s.NewJob(
+		DurationJob(20*time.Millisecond),
+		NewTask(func() { runs.Add(1) }),
+		WithStartAt(WithStartImmediately()),
+		WithLimitedRuns(2),
+		WithEventListeners(
+			BeforeJobRunsSkipIfBeforeFuncErrors(func(_ uuid.UUID, _ string) error {
+				// Force the first `forcedSkips` invocations to skip;
+				// afterward let the task run.
+				if skipCalls.Add(1) <= forcedSkips {
+					return errors.New("forced skip")
+				}
+				return nil
+			}),
+		),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	// Wait long enough for forcedSkips skips + 2 real runs at 20ms
+	// intervals to play out with margin for CI noise.
+	time.Sleep(400 * time.Millisecond)
+	require.NoError(t, s.Shutdown())
+
+	require.GreaterOrEqual(t, skipCalls.Load(), int32(forcedSkips),
+		"beforeFunc should have fired at least forcedSkips times")
+	require.Equal(t, int32(2), runs.Load(),
+		"task should have executed exactly WithLimitedRuns(2) times, "+
+			"regardless of how many prior invocations were skipped")
+}

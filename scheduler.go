@@ -148,7 +148,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobsIn:                 make(chan jobIn),
 		jobsOutForRescheduling: make(chan uuid.UUID),
 		jobUpdateNextRuns:      make(chan uuid.UUID),
-		jobsOutCompleted:       make(chan uuid.UUID),
+		jobsOutCompleted:       make(chan jobOutCompleted),
 		jobOutRequest:          make(chan *jobOutRequest, 100),
 		done:                   make(chan error, 1),
 		jobTimingUpdateCh:      make(chan jobTimingUpdate, 100),
@@ -190,8 +190,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				s.selectExecJobsOutForRescheduling(id)
 			case id := <-s.exec.jobUpdateNextRuns:
 				s.updateNextScheduled(id)
-			case id := <-s.exec.jobsOutCompleted:
-				s.selectExecJobsOutCompleted(id)
+			case completed := <-s.exec.jobsOutCompleted:
+				s.selectExecJobsOutCompleted(completed)
 
 			case update := <-s.exec.jobTimingUpdateCh:
 				s.selectJobTimingUpdate(update)
@@ -487,8 +487,8 @@ func (s *scheduler) updateNextScheduled(id uuid.UUID) {
 	s.jobs[id] = j
 }
 
-func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
-	j, ok := s.jobs[id]
+func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
+	j, ok := s.jobs[completed.id]
 	if !ok {
 		return
 	}
@@ -504,6 +504,14 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 	}
 	j.nextScheduled = newNextScheduled
 
+	// Skipped runs (for example, when BeforeJobRunsSkipIfBeforeFuncErrors
+	// returns an error) don't consume a WithLimitedRuns slot and don't
+	// update lastRun — the task function never executed.
+	if completed.skipped {
+		s.jobs[completed.id] = j
+		return
+	}
+
 	// if the job has a limited number of runs set, we need to
 	// check how many runs have occurred and stop running this
 	// job if it has reached the limit. Removal is deferred until
@@ -513,13 +521,13 @@ func (s *scheduler) selectExecJobsOutCompleted(id uuid.UUID) {
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
 		if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
-			s.jobs[id] = j
+			s.jobs[completed.id] = j
 			return
 		}
 	}
 
 	j.lastRun = s.now()
-	s.jobs[id] = j
+	s.jobs[completed.id] = j
 }
 
 func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {

@@ -27,7 +27,7 @@ type executor struct {
 	// sends out jobs for rescheduling
 	jobsOutForRescheduling chan uuid.UUID
 	// sends out jobs once completed
-	jobsOutCompleted chan uuid.UUID
+	jobsOutCompleted chan jobOutCompleted
 	// used to request jobs from the scheduler
 	jobOutRequest chan *jobOutRequest
 
@@ -66,6 +66,17 @@ type jobTimingUpdate struct {
 	id          uuid.UUID
 	startedAt   time.Time
 	completedAt time.Time
+}
+
+// jobOutCompleted signals that a scheduled invocation of a job has
+// reached its completion point in the executor. skipped is true when
+// the run was aborted before the task function ran (for example, by
+// BeforeJobRunsSkipIfBeforeFuncErrors); the scheduler uses this to
+// avoid consuming a WithLimitedRuns slot for a run that never
+// actually executed.
+type jobOutCompleted struct {
+	id      uuid.UUID
+	skipped bool
 }
 
 type jobIn struct {
@@ -459,7 +470,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	if err != nil {
 		e.sendOutForRescheduling(&jIn)
 		select {
-		case e.jobsOutCompleted <- j.id:
+		case e.jobsOutCompleted <- jobOutCompleted{id: j.id, skipped: true}:
 		case <-e.ctx.Done():
 		}
 		// Notify job failed (before actual run)
@@ -479,7 +490,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	if !j.intervalFromCompletion {
 		e.sendOutForRescheduling(&jIn)
 		select {
-		case e.jobsOutCompleted <- j.id:
+		case e.jobsOutCompleted <- jobOutCompleted{id: j.id}:
 		case <-e.ctx.Done():
 		}
 	}
@@ -530,7 +541,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 	// For intervalFromCompletion, reschedule AFTER the job completes
 	if j.intervalFromCompletion {
 		select {
-		case e.jobsOutCompleted <- j.id:
+		case e.jobsOutCompleted <- jobOutCompleted{id: j.id}:
 		case <-e.ctx.Done():
 		}
 		e.sendOutForRescheduling(&jIn)
