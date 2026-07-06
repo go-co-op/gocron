@@ -91,6 +91,27 @@ func ascendingTime(a, b time.Time) int {
 	return a.Compare(b)
 }
 
+// insertNextScheduled inserts t into times while preserving the
+// ascending-time invariant that Job.NextRun and Job.NextRuns rely on.
+// The caller must ensure times is already sorted ascending; this is
+// enforced by construction because every mutation site goes through
+// this helper. Uses ascendingTime (time.Time.Compare) so ordering is
+// determined by wall-clock instant regardless of monotonic readings.
+func insertNextScheduled(times []time.Time, t time.Time) []time.Time {
+	idx, _ := slices.BinarySearchFunc(times, t, ascendingTime)
+	return slices.Insert(times, idx, t)
+}
+
+// nextScheduledContains reports whether times (sorted ascending)
+// contains a value at the same wall-clock instant as t, ignoring any
+// difference in monotonic readings. Callers relying on slices.Contains
+// would miss such matches because Go's == on time.Time also compares
+// monotonic components.
+func nextScheduledContains(times []time.Time, t time.Time) bool {
+	_, found := slices.BinarySearchFunc(times, t, ascendingTime)
+	return found
+}
+
 type waitGroupWithMutex struct {
 	wg sync.WaitGroup
 	mu sync.Mutex

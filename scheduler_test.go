@@ -3425,3 +3425,41 @@ func TestScheduler_WithLimitedRuns_SkippedRunsDoNotConsumeBudget(t *testing.T) {
 		"task should have executed exactly WithLimitedRuns(2) times, "+
 			"regardless of how many prior invocations were skipped")
 }
+
+// TestScheduler_NextRuns_ReturnsAscendingAfterRescheduleCycles asserts
+// that after many reschedule cycles, Job.NextRuns returns strictly
+// ascending times. This locks in the internalJob.nextScheduled
+// sort invariant that NextRun/NextRuns rely on (job.go:1614/1627/1633).
+// See H4 in CODE_REVIEW.md.
+func TestScheduler_NextRuns_ReturnsAscendingAfterRescheduleCycles(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	s := newTestScheduler(t)
+	j, err := s.NewJob(
+		DurationJob(15*time.Millisecond),
+		NewTask(func() {}),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	// Poll NextRuns while the scheduler cycles the job.
+	deadline := time.Now().Add(300 * time.Millisecond)
+	checks := 0
+	for time.Now().Before(deadline) {
+		runs, err := j.NextRuns(5)
+		require.NoError(t, err)
+		for i := 1; i < len(runs); i++ {
+			require.False(t, runs[i].Before(runs[i-1]),
+				"NextRuns must return strictly ascending times: "+
+					"idx %d (%v) < idx %d (%v); full result: %v",
+				i, runs[i], i-1, runs[i-1], runs)
+		}
+		checks++
+		time.Sleep(5 * time.Millisecond)
+	}
+	require.Greater(t, checks, 10, "sanity: expected many polling iterations")
+
+	require.NoError(t, s.Shutdown())
+}
