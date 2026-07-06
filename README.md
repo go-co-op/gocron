@@ -260,12 +260,3 @@ This project is supported by:
  </picture>
 </a>
 
-## Star History
-
-<a href="https://www.star-history.com/#go-co-op/gocron&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=go-co-op/gocron&type=Date" />
- </picture>
-</a>
