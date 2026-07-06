@@ -51,8 +51,14 @@ type internalJob struct {
 	jobSchedule
 	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 
-	// as some jobs may queue up, it's possible to
-	// have multiple nextScheduled times
+	// nextScheduled holds upcoming scheduled invocation times for the
+	// job. Ordered ascending by wall-clock instant (see ascendingTime).
+	// Job.NextRun and Job.NextRuns rely on this invariant. All
+	// mutations must go through insertNextScheduled or the filter
+	// helpers in the scheduler; do NOT append directly.
+	//
+	// As some jobs may queue up, it's possible to have multiple
+	// nextScheduled times.
 	nextScheduled []time.Time
 
 	lastRun                time.Time

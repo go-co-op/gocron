@@ -433,11 +433,11 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		}
 	}
 
-	if slices.Contains(j.nextScheduled, next) {
+	if nextScheduledContains(j.nextScheduled, next) {
 		// if the next value is a duplicate of what's already in the nextScheduled slice, for example:
 		// - the job is being rescheduled off the same next run value as before
 		// increment to the next, next value
-		for slices.Contains(j.nextScheduled, next) {
+		for nextScheduledContains(j.nextScheduled, next) {
 			next = j.next(next)
 		}
 	}
@@ -453,7 +453,7 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		j.timer = nil // Ensure timer is cleared for GC
 	}
 
-	j.nextScheduled = append(j.nextScheduled, next)
+	j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
 	j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 		// set the actual timer on the job here and listen for
 		// shut down events so that the job doesn't attempt to
@@ -616,7 +616,7 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 			})
 		}
 		j.startTime = next
-		j.nextScheduled = append(j.nextScheduled, next)
+		j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
 	}
 
 	s.jobs[j.id] = j
@@ -685,7 +685,7 @@ func (s *scheduler) selectStart() {
 			})
 		}
 		j.startTime = next
-		j.nextScheduled = append(j.nextScheduled, next)
+		j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
 		s.jobs[id] = j
 	}
 	select {
