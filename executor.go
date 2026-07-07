@@ -300,6 +300,18 @@ func (e *executor) sendOutForNextRunUpdate(jIn *jobIn) {
 	}
 }
 
+// limitModeRunner is the worker goroutine spawned per limit-mode slot
+// under WithLimitConcurrentJobs. Multiple runners share the same `in`
+// channel (the limit-mode queue in scheduler.exec.limitMode), so the
+// number of runners bounds concurrent execution across ALL jobs.
+//
+// Behavior by mode:
+//   - LimitModeReschedule: a full queue causes the send in selectStart
+//     to non-block via rescheduleLimiter (cap == limit); overflow runs
+//     are dropped and the job is rescheduled at its next tick.
+//   - LimitModeWait: sends block on the queue, so callers wait for a
+//     slot rather than being dropped. See the LimitModeWait doc
+//     warning about queue growth.
 func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
 	e.logger.Debug("gocron: limitModeRunner starting", "name", name)
 	for {
@@ -365,6 +377,14 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 	}
 }
 
+// singletonModeRunner is the worker goroutine spawned per job that has
+// WithSingletonMode set. Unlike limitModeRunner, `in` is unique per
+// job (owned by e.singletonRunners[jobID]), so the runner serializes
+// runs of that ONE job while other jobs run freely.
+//
+// LimitModeReschedule drops overlapping ticks (job still executing);
+// LimitModeWait queues them up to the channel's buffer
+// (defaultSingletonQueueBuffer, see scheduler.go).
 func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
 	e.logger.Debug("gocron: singletonModeRunner starting", "name", name)
 	for {

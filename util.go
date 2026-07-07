@@ -127,6 +127,18 @@ func nextScheduledContains(times []time.Time, t time.Time) bool {
 	return found
 }
 
+// waitGroupWithMutex wraps sync.WaitGroup so that Add() cannot race
+// with Wait(). This addresses the classic "Add called after Wait
+// returned (or with counter == 0)" panic that sync.WaitGroup enforces:
+// gocron dispatches new work concurrently with executor shutdown, and
+// the mutex serializes the two.
+//
+// Invariant the mutex protects: an Add() call is never concurrent with
+// a Wait() call. Done() intentionally does NOT take the mutex, because
+// sync.WaitGroup.Done is already safe to call while Wait is blocked
+// (that's the entire point of Wait). Adding the lock to Done would
+// deadlock any goroutine that Waits on this group from inside
+// wg-tracked work.
 type waitGroupWithMutex struct {
 	wg sync.WaitGroup
 	mu sync.Mutex

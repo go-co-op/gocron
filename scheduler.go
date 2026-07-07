@@ -335,6 +335,10 @@ func (s *scheduler) stopScheduler() {
 	s.notifySchedulerStopped()
 }
 
+// selectAllJobsOutRequest handles Scheduler.Jobs() calls. Snapshots the
+// current jobs map into an owned []Job and sends it on out.outChan. The
+// snapshot is sorted by raw UUID bytes; see Scheduler.Jobs() for the
+// ordering rationale.
 func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 	outJobs := make([]Job, len(s.jobs))
 	var counter int
@@ -352,6 +356,11 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 	}
 }
 
+// selectRunJobRequest handles Job.RunNow() calls. Forwards the job to
+// the executor's jobsIn channel and reports the outcome (or
+// ErrJobNotFound / shutdown) back on run.outChan. Waits on jobsIn
+// rather than dropping, so callers get accurate backpressure signal
+// bounded by defaultRunNowSendTimeout.
 func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	j, ok := s.jobs[run.id]
 	if !ok {
@@ -378,6 +387,8 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	}
 }
 
+// selectRemoveJob deletes a single job by id and cancels its running
+// context. No-op if the id is unknown.
 func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 	j, ok := s.jobs[id]
 	if !ok {
@@ -407,8 +418,10 @@ func (s *scheduler) advancePastNow(j internalJob, next time.Time) (time.Time, bo
 	return next, true
 }
 
-// Jobs coming back from the executor to the scheduler that
-// need to be evaluated for rescheduling.
+// selectExecJobsOutForRescheduling handles the executor's post-run
+// notification for a job that just started. Advances j.nextRun past
+// now, updates the timer, and appends to nextScheduled. No-op if the
+// job was removed while running.
 func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	select {
 	case <-s.shutdownCtx.Done():
@@ -524,6 +537,11 @@ func (s *scheduler) updateNextScheduled(id uuid.UUID) {
 	s.jobs[id] = j
 }
 
+// selectExecJobsOutCompleted handles the executor's post-run
+// notification for a completed run. Records lastRun, prunes past
+// entries from j.nextScheduled, and evaluates the WithLimitedRuns
+// stop condition. Runs that were skipped before execution do NOT
+// arrive here (see C3 in Plan #3).
 func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	j, ok := s.jobs[completed.id]
 	if !ok {
@@ -560,6 +578,9 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	s.jobs[completed.id] = j
 }
 
+// selectJobTimingUpdate applies a start/stop-time change to an
+// existing job while the scheduler is running, re-evaluating
+// nextRun so the change takes effect on the next tick.
 func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 	j, ok := s.jobs[update.id]
 	if !ok {
@@ -588,6 +609,11 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 	}
 }
 
+// selectJobOutRequest handles Job.X() accessor queries (LastRun,
+// NextRun, IsRunning, etc.). If the id is unknown the outChan is
+// closed WITHOUT a send, which requestJobCtx interprets as
+// ErrJobNotFound. A slow/absent receiver is bounded by the caller's
+// requestJob timeout (surfaced as ErrSchedulerBusy).
 func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 	if j, ok := s.jobs[out.id]; ok {
 		select {
@@ -598,6 +624,10 @@ func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 	close(out.outChan)
 }
 
+// selectNewJob installs a job produced by addOrUpdateJob into s.jobs.
+// Runs the job's initial nextRun computation and, if the scheduler is
+// already started, wires it into the executor immediately. Signals
+// completion via in.cancel() so NewJob can return.
 func (s *scheduler) selectNewJob(in newJobIn) {
 	j := in.job
 	if s.started.Load() {
@@ -653,6 +683,8 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 	in.cancel()
 }
 
+// selectRemoveJobsByTags deletes every job whose tag set intersects
+// tags. Cancels each removed job's running context.
 func (s *scheduler) selectRemoveJobsByTags(tags []string) {
 	for _, j := range s.jobs {
 		for _, tag := range tags {
@@ -1172,7 +1204,7 @@ const (
 	// WithLimitConcurrentJobs or WithSingletonMode to be skipped
 	// and rescheduled for the next run time rather than being
 	// queued up to wait.
-	LimitModeReschedule = 1
+	LimitModeReschedule LimitMode = iota + 1
 
 	// LimitModeWait causes jobs reaching the limit set in
 	// WithLimitConcurrentJobs or WithSingletonMode to wait
@@ -1198,7 +1230,7 @@ const (
 	//				},
 	//			),
 	//      )
-	LimitModeWait = 2
+	LimitModeWait
 )
 
 // WithLimitConcurrentJobs sets the limit and mode to be used by the

@@ -170,6 +170,16 @@ type limitRunsTo struct {
 // Cron defines the interface that must be
 // implemented to provide a custom cron implementation for
 // the job. Pass in the implementation using the JobOption WithCronImplementation.
+//
+// IsValid parses crontab and returns nil if it is a syntactically valid
+// expression with at least one future run relative to now. Implementations
+// SHOULD honor the location argument as the default timezone, but MAY be
+// overridden by an explicit timezone prefix on the crontab itself (see the
+// defaultCron.IsValid docstring for the precedence rules gocron ships with).
+//
+// Next returns the next scheduled run after lastRun. Callers assume the
+// returned time is strictly after lastRun; returning lastRun or an earlier
+// value can cause the scheduler to spin.
 type Cron interface {
 	IsValid(crontab string, location *time.Location, now time.Time) error
 	Next(lastRun time.Time) time.Time
@@ -211,6 +221,21 @@ type defaultCron struct {
 	withSeconds  bool
 }
 
+// IsValid parses crontab against the given location.
+//
+// Timezone precedence:
+//  1. If crontab starts with "TZ=" or "CRON_TZ=", that prefix wins and
+//     the location argument is ignored.
+//  2. Otherwise the location is prepended as "CRON_TZ=<location.String()>".
+//     location.String() is used verbatim (e.g. "UTC", "America/New_York",
+//     "Local"). Some platforms/locales may report location names that
+//     robfig/cron does not accept; callers who need portability should
+//     supply a standard IANA zone via WithLocation.
+//
+// Returns ErrCronJobParse (wrapping the parser's error) on syntactic
+// failure, or ErrCronJobInvalid when the crontab parses but produces
+// no future run relative to now (e.g. a one-shot expression already in
+// the past).
 func (c *defaultCron) IsValid(crontab string, location *time.Location, now time.Time) error {
 	var withLocation string
 	if strings.HasPrefix(crontab, "TZ=") || strings.HasPrefix(crontab, "CRON_TZ=") {
