@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -255,4 +257,36 @@ func TestNextScheduledContains_MonotonicMismatch(t *testing.T) {
 
 	assert.True(t, nextScheduledContains([]time.Time{sameInstantNoMono}, nowMonotonic),
 		"instants are equal per time.Compare; helper must report contains=true")
+}
+
+// TestRequestJob_ReturnsSchedulerBusyOnTimeout verifies that when the
+// scheduler goroutine fails to service a job-out request within the
+// default timeout, requestJob returns ErrSchedulerBusy rather than a
+// nil-pointer that callers would misinterpret as ErrJobNotFound.
+//
+// Uses a channel with capacity 0 that no one receives from, so the
+// send inside requestJobCtx blocks until the internal 1-second
+// timeout expires. This test intentionally runs the full timeout;
+// it's the smallest deterministic way to exercise the code path
+// without exposing internal hooks.
+func TestRequestJob_ReturnsSchedulerBusyOnTimeout(t *testing.T) {
+	// Zero-capacity channel with no receiver: any send blocks forever.
+	// requestJob's internal WithTimeout(defaultRequestJobTimeout) fires
+	// first and returns ErrSchedulerBusy.
+	ch := make(chan *jobOutRequest)
+	// Use a deliberately-invalid uuid; we never expect the request to
+	// be serviced.
+	var id uuid.UUID
+
+	start := time.Now()
+	ij, err := requestJob(id, ch)
+	elapsed := time.Since(start)
+
+	assert.Nil(t, ij)
+	assert.ErrorIs(t, err, ErrSchedulerBusy)
+	// Sanity: we should have waited approximately defaultRequestJobTimeout.
+	// Guard against a false-pass where the function returns before the
+	// timeout for some other reason.
+	assert.GreaterOrEqual(t, elapsed, defaultRequestJobTimeout-50*time.Millisecond,
+		"expected requestJob to block until the timeout; got %v", elapsed)
 }

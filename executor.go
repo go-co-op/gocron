@@ -213,7 +213,7 @@ func (e *executor) start() {
 						runner := &singletonRunner{}
 						runnerSrc, ok := e.singletonRunners.Load(jIn.id)
 						if !ok {
-							runner.in = make(chan jobIn, 1000)
+							runner.in = make(chan jobIn, defaultSingletonQueueBuffer)
 							if j.singletonLimitMode == LimitModeReschedule {
 								runner.rescheduleLimiter = make(chan struct{}, 1)
 							}

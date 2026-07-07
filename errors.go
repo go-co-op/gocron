@@ -43,6 +43,7 @@ var (
 	ErrWeeklyJobZeroInterval         = errors.New("gocron: WeeklyJob: interval must be greater than 0")
 	ErrWeeklyJobMinutesSeconds       = errors.New("gocron: WeeklyJob: atTimes minutes and seconds must be between 0 and 59 inclusive")
 	ErrPanicRecovered                = errors.New("gocron: panic recovered")
+	ErrSchedulerBusy                 = errors.New("gocron: scheduler did not respond in time")
 	ErrWithClockNil                  = errors.New("gocron: WithClock: clock must not be nil")
 	ErrWithContextNil                = errors.New("gocron: WithContext: context must not be nil")
 	ErrWithDistributedElectorNil     = errors.New("gocron: WithDistributedElector: elector must not be nil")
