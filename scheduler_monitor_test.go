@@ -15,16 +15,16 @@ import (
 // that tracks scheduler lifecycle events
 type testSchedulerMonitor struct {
 	mu                    sync.RWMutex
-	startedCount          int64
-	stoppedCount          int64
-	shutdownCount         int64
-	jobRegCount           int64
-	jobUnregCount         int64
-	jobStartCount         int64
-	jobRunningCount       int64
-	jobCompletedCount     int64
-	jobFailedCount        int64
-	concurrencyLimitCount int64
+	startedCount          atomic.Int64
+	stoppedCount          atomic.Int64
+	shutdownCount         atomic.Int64
+	jobRegCount           atomic.Int64
+	jobUnregCount         atomic.Int64
+	jobStartCount         atomic.Int64
+	jobRunningCount       atomic.Int64
+	jobCompletedCount     atomic.Int64
+	jobFailedCount        atomic.Int64
+	concurrencyLimitCount atomic.Int64
 	startedCalls          []time.Time
 	stoppedCalls          []time.Time
 	shutdownCalls         []time.Time
@@ -68,30 +68,30 @@ func newTestSchedulerMonitor() *testSchedulerMonitor {
 func (t *testSchedulerMonitor) SchedulerStarted() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.startedCount, 1)
+	t.startedCount.Add(1)
 	t.startedCalls = append(t.startedCalls, time.Now())
 }
 
 func (t *testSchedulerMonitor) SchedulerStopped() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.stoppedCount, 1)
+	t.stoppedCount.Add(1)
 	t.stoppedCalls = append(t.stoppedCalls, time.Now())
 }
 
 func (t *testSchedulerMonitor) SchedulerShutdown() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.shutdownCount, 1)
+	t.shutdownCount.Add(1)
 	t.shutdownCalls = append(t.shutdownCalls, time.Now())
 }
 
 func (t *testSchedulerMonitor) getStartedCount() int64 {
-	return atomic.LoadInt64(&t.startedCount)
+	return t.startedCount.Load()
 }
 
 func (t *testSchedulerMonitor) getShutdownCount() int64 {
-	return atomic.LoadInt64(&t.shutdownCount)
+	return t.shutdownCount.Load()
 }
 
 func (t *testSchedulerMonitor) getStartedCalls() []time.Time {
@@ -109,42 +109,42 @@ func (t *testSchedulerMonitor) getShutdownCalls() []time.Time {
 func (t *testSchedulerMonitor) JobRegistered(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.jobRegCount, 1)
+	t.jobRegCount.Add(1)
 	t.jobRegCalls = append(t.jobRegCalls, job)
 }
 
 func (t *testSchedulerMonitor) JobUnregistered(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.jobUnregCount, 1)
+	t.jobUnregCount.Add(1)
 	t.jobUnregCalls = append(t.jobUnregCalls, job)
 }
 
 func (t *testSchedulerMonitor) JobStarted(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.jobStartCount, 1)
+	t.jobStartCount.Add(1)
 	t.jobStartCalls = append(t.jobStartCalls, job)
 }
 
 func (t *testSchedulerMonitor) JobRunning(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.jobRunningCount, 1)
+	t.jobRunningCount.Add(1)
 	t.jobRunningCalls = append(t.jobRunningCalls, job)
 }
 
 func (t *testSchedulerMonitor) JobCompleted(job Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.jobCompletedCount, 1)
+	t.jobCompletedCount.Add(1)
 	t.jobCompletedCalls = append(t.jobCompletedCalls, job)
 }
 
 func (t *testSchedulerMonitor) JobFailed(job Job, err error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.jobFailedCount, 1)
+	t.jobFailedCount.Add(1)
 	t.jobFailedCalls.jobs = append(t.jobFailedCalls.jobs, job)
 	t.jobFailedCalls.errs = append(t.jobFailedCalls.errs, err)
 }
@@ -167,32 +167,32 @@ func (t *testSchedulerMonitor) JobSchedulingDelay(_ Job, scheduledTime time.Time
 func (t *testSchedulerMonitor) ConcurrencyLimitReached(limitType string, _ Job) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	atomic.AddInt64(&t.concurrencyLimitCount, 1)
+	t.concurrencyLimitCount.Add(1)
 	t.concurrencyLimitCalls = append(t.concurrencyLimitCalls, limitType)
 }
 
 func (t *testSchedulerMonitor) getJobRegCount() int64 {
-	return atomic.LoadInt64(&t.jobRegCount)
+	return t.jobRegCount.Load()
 }
 
 func (t *testSchedulerMonitor) getJobUnregCount() int64 {
-	return atomic.LoadInt64(&t.jobUnregCount)
+	return t.jobUnregCount.Load()
 }
 
 func (t *testSchedulerMonitor) getJobStartCount() int64 {
-	return atomic.LoadInt64(&t.jobStartCount)
+	return t.jobStartCount.Load()
 }
 
 func (t *testSchedulerMonitor) getJobRunningCount() int64 {
-	return atomic.LoadInt64(&t.jobRunningCount)
+	return t.jobRunningCount.Load()
 }
 
 func (t *testSchedulerMonitor) getJobCompletedCount() int64 {
-	return atomic.LoadInt64(&t.jobCompletedCount)
+	return t.jobCompletedCount.Load()
 }
 
 func (t *testSchedulerMonitor) getJobFailedCount() int64 {
-	return atomic.LoadInt64(&t.jobFailedCount)
+	return t.jobFailedCount.Load()
 }
 
 // func (t *testSchedulerMonitor) getJobRegCalls() []Job {
