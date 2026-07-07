@@ -41,14 +41,15 @@ const (
 // internalJob stores the information needed by the scheduler
 // to manage scheduling, starting and stopping the job
 type internalJob struct {
-	ctx       context.Context
-	parentCtx context.Context
-	cancel    context.CancelFunc
-	id        uuid.UUID
-	name      string
-	tags      []string
-	cron      Cron
 	jobSchedule
+
+	ctx                       context.Context
+	parentCtx                 context.Context
+	cancel                    context.CancelFunc
+	id                        uuid.UUID
+	name                      string
+	tags                      []string
+	cron                      Cron
 	daylightSavingsTimePolicy DaylightSavingsTimePolicy
 
 	// nextScheduled holds upcoming scheduled invocation times for the

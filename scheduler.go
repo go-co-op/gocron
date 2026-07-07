@@ -903,7 +903,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 
 	tsk := taskWrapper()
 	taskFunc := reflect.ValueOf(tsk.function)
-	for taskFunc.Kind() == reflect.Ptr {
+	for taskFunc.Kind() == reflect.Pointer {
 		taskFunc = taskFunc.Elem()
 	}
 

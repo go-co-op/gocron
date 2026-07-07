@@ -13,9 +13,14 @@ linters:
   enable:
     - bodyclose
     - copyloopvar
+    - embeddedstructfieldcheck
     - misspell
+    - modernize
     - revive
     - whitespace
+  settings:
+    embeddedstructfieldcheck:
+      forbid-mutex: true
   exclusions:
     generated: lax
     presets:
