@@ -1243,7 +1243,7 @@ func TestScheduler_NewJobTask(t *testing.T) {
 		},
 		{
 			"all good interface",
-			NewTask(func(_ interface{}) {}, struct{}{}),
+			NewTask(func(_ any) {}, struct{}{}),
 			nil,
 		},
 		{
@@ -1293,17 +1293,17 @@ func TestScheduler_NewJobTask(t *testing.T) {
 		},
 		{
 			"all good struct - variadic",
-			NewTask(func(_ ...interface{}) {}, struct{}{}),
+			NewTask(func(_ ...any) {}, struct{}{}),
 			nil,
 		},
 		{
 			"all good no arguments passed in - variadic",
-			NewTask(func(_ ...interface{}) {}),
+			NewTask(func(_ ...any) {}),
 			nil,
 		},
 		{
 			"all good - interface variadic, int, string",
-			NewTask(func(_ ...interface{}) {}, 1, "2", 3.0),
+			NewTask(func(_ ...any) {}, 1, "2", 3.0),
 			nil,
 		},
 		{
@@ -2570,7 +2570,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "no at times",
 			atTimes:   []time.Time{},
 			fakeClock: clockwork.NewFakeClock(),
-			assertErr: func(t require.TestingT, err error, _ ...interface{}) {
+			assertErr: func(t require.TestingT, err error, _ ...any) {
 				require.ErrorIs(t, err, ErrOneTimeJobStartDateTimePast)
 			},
 		},
@@ -2578,7 +2578,7 @@ func TestScheduler_AtTimesJob(t *testing.T) {
 			name:      "all in the past",
 			atTimes:   []time.Time{n.Add(-1 * time.Second)},
 			fakeClock: clockwork.NewFakeClockAt(n),
-			assertErr: func(t require.TestingT, err error, _ ...interface{}) {
+			assertErr: func(t require.TestingT, err error, _ ...any) {
 				require.ErrorIs(t, err, ErrOneTimeJobStartDateTimePast)
 			},
 		},
