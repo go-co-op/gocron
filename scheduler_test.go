@@ -561,11 +561,16 @@ func TestScheduler_Shutdown(t *testing.T) {
 		s.Start()
 		require.NoError(t, s.Shutdown())
 
+		// After shutdown, Job accessors can no longer reach the
+		// scheduler goroutine, so they surface ErrSchedulerBusy
+		// (rather than the historically-misleading ErrJobNotFound;
+		// see M4 in CODE_REVIEW.md). Callers who want a single
+		// "job not usable" error should combine both with errors.Is.
 		_, err = j.LastRun()
-		assert.ErrorIs(t, err, ErrJobNotFound)
+		assert.ErrorIs(t, err, ErrSchedulerBusy)
 
 		_, err = j.NextRun()
-		assert.ErrorIs(t, err, ErrJobNotFound)
+		assert.ErrorIs(t, err, ErrSchedulerBusy)
 	})
 
 	t.Run("calling shutdown multiple times is a no-op", func(t *testing.T) {

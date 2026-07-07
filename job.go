@@ -106,6 +106,28 @@ func (j *internalJob) stopTimeReached(now time.Time) bool {
 	return j.stopTime.Before(now)
 }
 
+// pruneStaleScheduled removes any entries in j.nextScheduled that are
+// at or before now (i.e. no longer upcoming). The remaining entries
+// keep their ascending-time ordering; see the docstring on
+// internalJob.nextScheduled.
+//
+// Callers of Job.NextRuns() receive a subslice of j.nextScheduled
+// and read from it on their own goroutine. This function therefore
+// MUST allocate a fresh backing array rather than reusing the
+// existing one via j.nextScheduled[:0]; otherwise concurrent reads
+// from previously-returned subslices race with our writes. This is
+// verified by TestScheduler_NextRuns_ReturnsAscendingAfterRescheduleCycles
+// under -race.
+func (j *internalJob) pruneStaleScheduled(now time.Time) {
+	var kept []time.Time
+	for _, t := range j.nextScheduled {
+		if t.After(now) {
+			kept = append(kept, t)
+		}
+	}
+	j.nextScheduled = kept
+}
+
 // task stores the function and parameters
 // that are actually run when the job is executed.
 type task struct {
@@ -1570,7 +1592,10 @@ func (j job) ID() uuid.UUID {
 }
 
 func (j job) IsRunning() (bool, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
+	ij, err := requestJob(j.id, j.jobOutRequest)
+	if err != nil {
+		return false, err
+	}
 	if ij == nil || ij.id == uuid.Nil {
 		return false, ErrJobNotFound
 	}
@@ -1581,7 +1606,10 @@ func (j job) IsRunning() (bool, error) {
 }
 
 func (j job) LastRun() (time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
+	ij, err := requestJob(j.id, j.jobOutRequest)
+	if err != nil {
+		return time.Time{}, err
+	}
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
@@ -1589,7 +1617,10 @@ func (j job) LastRun() (time.Time, error) {
 }
 
 func (j job) LastRunCompletedAt() (time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
+	ij, err := requestJob(j.id, j.jobOutRequest)
+	if err != nil {
+		return time.Time{}, err
+	}
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
@@ -1597,7 +1628,10 @@ func (j job) LastRunCompletedAt() (time.Time, error) {
 }
 
 func (j job) LastRunStartedAt() (time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
+	ij, err := requestJob(j.id, j.jobOutRequest)
+	if err != nil {
+		return time.Time{}, err
+	}
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
@@ -1609,7 +1643,10 @@ func (j job) Name() string {
 }
 
 func (j job) NextRun() (time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
+	ij, err := requestJob(j.id, j.jobOutRequest)
+	if err != nil {
+		return time.Time{}, err
+	}
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
@@ -1622,7 +1659,10 @@ func (j job) NextRun() (time.Time, error) {
 }
 
 func (j job) NextRuns(count int) ([]time.Time, error) {
-	ij := requestJob(j.id, j.jobOutRequest)
+	ij, err := requestJob(j.id, j.jobOutRequest)
+	if err != nil {
+		return nil, err
+	}
 	if ij == nil || ij.id == uuid.Nil {
 		return nil, ErrJobNotFound
 	}
@@ -1661,11 +1701,11 @@ func (j job) Schedule() JobSchedule {
 }
 
 func (j job) RunNow() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRunNowResultTimeout)
 	defer cancel()
 	resp := make(chan error, 1)
 
-	t := time.NewTimer(100 * time.Millisecond)
+	t := time.NewTimer(defaultRunNowSendTimeout)
 	select {
 	case j.runJobRequest <- runJobRequest{
 		id:      j.id,

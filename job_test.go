@@ -1058,7 +1058,8 @@ func TestJob_NextRuns_StopTime(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// nextScheduled must not contain any time at or after stopTime
-	ij := requestJob(j.ID(), j.(*job).jobOutRequest)
+	ij, err := requestJob(j.ID(), j.(*job).jobOutRequest)
+	require.NoError(t, err)
 	require.NotNil(t, ij)
 	for _, ns := range ij.nextScheduled {
 		assert.True(t, ns.Before(stopTime), "nextScheduled contains time after stopTime: %v >= %v", ns, stopTime)

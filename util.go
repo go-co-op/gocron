@@ -35,10 +35,25 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 	return nil
 }
 
-func requestJob(id uuid.UUID, ch chan *jobOutRequest) *internalJob {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+// requestJob resolves a Job.X() accessor's request against the
+// scheduler goroutine. Returns:
+//
+//   - (nil, ErrSchedulerBusy) if the scheduler didn't respond within
+//     defaultRequestJobTimeout. Callers should surface this to users
+//     rather than reporting ErrJobNotFound, so users can distinguish
+//     "gone" from "temporarily unreachable."
+//   - (&internalJob{}, nil) with id == uuid.Nil when the scheduler
+//     responded but the id isn't registered. Callers translate this
+//     to ErrJobNotFound.
+//   - (&j, nil) with a populated job on success.
+func requestJob(id uuid.UUID, ch chan *jobOutRequest) (*internalJob, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultRequestJobTimeout)
 	defer cancel()
-	return requestJobCtx(ctx, id, ch)
+	ij := requestJobCtx(ctx, id, ch)
+	if ij == nil {
+		return nil, ErrSchedulerBusy
+	}
+	return ij, nil
 }
 
 func requestJobCtx(ctx context.Context, id uuid.UUID, ch chan *jobOutRequest) *internalJob {

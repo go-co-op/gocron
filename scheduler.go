@@ -15,11 +15,55 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+// Default channel buffer sizes and RPC timeouts for scheduler internals.
+// Extracted from previously-inlined magic numbers; not exposed via
+// SchedulerOption yet (that would be an additive public-API change and
+// deserves its own design). Values chosen to match the historical
+// behavior on the v2 line.
+const (
+	// defaultJobOutRequestBuffer bounds the queue of internal
+	// job-lookup requests (Job.LastRun, Job.NextRun, etc.).
+	defaultJobOutRequestBuffer = 100
+	// defaultJobTimingBuffer bounds the queue of internal
+	// job-timing updates from the executor.
+	defaultJobTimingBuffer = 100
+	// defaultLimitModeQueueBuffer bounds the per-LimitMode job
+	// queue. Beyond this, LimitModeWait callers block; see the
+	// LimitMode docs.
+	defaultLimitModeQueueBuffer = 1000
+	// defaultSingletonQueueBuffer bounds the per-job queue for
+	// singleton-mode jobs.
+	defaultSingletonQueueBuffer = 1000
+	// defaultRunNowSendTimeout bounds how long Job.RunNow will
+	// wait to hand its request to the scheduler goroutine before
+	// giving up with ErrJobRunNowFailed.
+	defaultRunNowSendTimeout = 100 * time.Millisecond
+	// defaultRunNowResultTimeout bounds how long Job.RunNow will
+	// wait for a result after the request is queued.
+	defaultRunNowResultTimeout = time.Second
+	// defaultRequestJobTimeout bounds how long a Job.X() accessor
+	// waits for the scheduler goroutine to respond before returning
+	// ErrSchedulerBusy.
+	defaultRequestJobTimeout = time.Second
+)
+
 var _ Scheduler = (*scheduler)(nil)
 
 // Scheduler defines the interface for the Scheduler.
 type Scheduler interface {
 	// Jobs returns all the jobs currently in the scheduler.
+	//
+	// The returned slice is sorted by job UUID as raw bytes, giving a
+	// deterministic-but-effectively-random ordering. Callers that need
+	// a specific order (by name, insertion order, etc.) should re-sort
+	// the returned slice themselves.
+	//
+	// If the scheduler has been shut down, or shuts down before this
+	// call completes, Jobs returns nil, which is indistinguishable
+	// from a scheduler with zero jobs. This behavior is retained for
+	// backward compatibility; callers that need to disambiguate should
+	// track scheduler lifecycle explicitly or coordinate via
+	// Shutdown()'s return value.
 	Jobs() []Job
 	// NewJob creates a new job in the Scheduler. The job is scheduled per the provided
 	// definition when the Scheduler is started. If the Scheduler is already running
@@ -149,9 +193,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobsOutForRescheduling: make(chan uuid.UUID),
 		jobUpdateNextRuns:      make(chan uuid.UUID),
 		jobsOutCompleted:       make(chan jobOutCompleted),
-		jobOutRequest:          make(chan *jobOutRequest, 100),
+		jobOutRequest:          make(chan *jobOutRequest, defaultJobOutRequestBuffer),
 		done:                   make(chan error, 1),
-		jobTimingUpdateCh:      make(chan jobTimingUpdate, 100),
+		jobTimingUpdateCh:      make(chan jobTimingUpdate, defaultJobTimingBuffer),
 	}
 
 	s := &scheduler{
@@ -313,7 +357,7 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	if !ok {
 		select {
 		case run.outChan <- ErrJobNotFound:
-		default:
+		case <-s.shutdownCtx.Done():
 		}
 		return
 	}
@@ -321,7 +365,7 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	case <-s.shutdownCtx.Done():
 		select {
 		case run.outChan <- ErrJobRunNowFailed:
-		default:
+		case <-s.shutdownCtx.Done():
 		}
 	case s.exec.jobsIn <- jobIn{
 		id:            j.id,
@@ -329,7 +373,7 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	}:
 		select {
 		case run.outChan <- nil:
-		default:
+		case <-s.shutdownCtx.Done():
 		}
 	}
 }
@@ -476,14 +520,7 @@ func (s *scheduler) updateNextScheduled(id uuid.UUID) {
 	if !ok {
 		return
 	}
-	var newNextScheduled []time.Time
-	now := s.now()
-	for _, t := range j.nextScheduled {
-		if t.After(now) { // Changed to match selectExecJobsOutCompleted
-			newNextScheduled = append(newNextScheduled, t)
-		}
-	}
-	j.nextScheduled = newNextScheduled
+	j.pruneStaleScheduled(s.now())
 	s.jobs[id] = j
 }
 
@@ -495,14 +532,7 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 
 	// if the job has nextScheduled time in the past,
 	// we need to remove any that are in the past or at the current time (just executed).
-	var newNextScheduled []time.Time
-	now := s.now()
-	for _, t := range j.nextScheduled {
-		if t.After(now) {
-			newNextScheduled = append(newNextScheduled, t)
-		}
-	}
-	j.nextScheduled = newNextScheduled
+	j.pruneStaleScheduled(s.now())
 
 	// Skipped runs (for example, when BeforeJobRunsSkipIfBeforeFuncErrors
 	// returns an error) don't consume a WithLimitedRuns slot and don't
@@ -883,7 +913,19 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 
 	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()
 	j.function = tsk.function
-	j.parameters = tsk.parameters
+	// Defensive copy: stopScheduler rewrites j.parameters[0] to swap
+	// in a refreshed context whenever j.parameters[0] happens to be
+	// the old j.ctx. Today, all code paths that produce that state
+	// (addOrUpdateJob below at the append() branches) already yield a
+	// fresh slice, so the mutation cannot touch the user's original.
+	// This copy keeps that invariant explicit and cheap, so future
+	// changes to those branches can't quietly introduce user-visible
+	// aliasing.
+	if len(tsk.parameters) > 0 {
+		j.parameters = append([]any(nil), tsk.parameters...)
+	} else {
+		j.parameters = tsk.parameters
+	}
 
 	// apply global job options
 	for _, option := range s.globalJobOptions {
@@ -1178,7 +1220,7 @@ func WithLimitConcurrentJobs(limit uint, mode LimitMode) SchedulerOption {
 		s.exec.limitMode = &limitModeConfig{
 			mode:          mode,
 			limit:         limit,
-			in:            make(chan jobIn, 1000),
+			in:            make(chan jobIn, defaultLimitModeQueueBuffer),
 			singletonJobs: make(map[uuid.UUID]struct{}),
 		}
 		if mode == LimitModeReschedule {
