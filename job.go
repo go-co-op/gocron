@@ -296,7 +296,7 @@ func (c cronJobDefinition) setup(j *internalJob, location *time.Location, now ti
 		// by IsValid isn't shared across jobs derived from the same
 		// JobDefinition, and isn't concurrently mutated by later
 		// setups (e.g. Update) while another goroutine is reading
-		// through Job.NextRuns. See C4 in the code review.
+		// through Job.NextRuns.
 		cronImpl = &defaultCron{withSeconds: dc.withSeconds}
 	}
 

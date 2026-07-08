@@ -3474,7 +3474,6 @@ func TestScheduler_NextRuns_ReturnsAscendingAfterRescheduleCycles(t *testing.T) 
 // derived from the same definition shared the same *defaultCron
 // pointer, which was mutated by IsValid during setup — creating a
 // latent data race when Update ran concurrently with Job.NextRuns.
-// See C4 in CODE_REVIEW.md.
 func TestScheduler_CronJob_DefinitionReuseDoesNotAliasCronImpl(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
@@ -3507,7 +3506,7 @@ func TestScheduler_CronJob_DefinitionReuseDoesNotAliasCronImpl(t *testing.T) {
 // Job.NextRuns from many goroutines while the scheduler is running,
 // which previously tripped `-race` because durationRandomJob used a
 // non-concurrent *rand.Rand shared between the scheduler goroutine
-// and user callers of NextRuns. See H5 in CODE_REVIEW.md.
+// and user callers of NextRuns.
 func TestScheduler_DurationRandomJob_NextRunsIsRaceFree(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
