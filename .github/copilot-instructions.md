@@ -98,7 +98,7 @@ The CI will fail if:
 - `errors.go` - Error definitions
 
 ### Dependencies and Versions
-- Requires Go 1.23.0+
+- Requires Go 1.23.0+ (CI matrix pins to `stable`/`oldstable` — see `.github/workflows/go_test.yml`)
 - Key dependencies automatically managed via `go mod`:
   - `github.com/google/uuid` - UUID generation
   - `github.com/jonboulle/clockwork` - Time mocking for tests
@@ -117,7 +117,7 @@ The CI will fail if:
 - No application to build - this is a library
 - Version managed via Git tags (v2.x.x)
 - Distribution via Go module system
-- CI tests on Go 1.23 and 1.24
+- CI tests on Go `stable` and `oldstable` (see `.github/workflows/go_test.yml`)
 
 ## Troubleshooting
 
