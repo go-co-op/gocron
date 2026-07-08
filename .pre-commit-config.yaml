@@ -2,7 +2,7 @@
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-added-large-files
       - id: check-case-conflict
@@ -16,7 +16,7 @@ repos:
     hooks:
       - id: golangci-lint
   - repo: https://github.com/TekWizely/pre-commit-golang
-    rev: v1.0.0-rc.1
+    rev: v1.0.0-rc.4
     hooks:
       - id: go-fumpt
         args:
