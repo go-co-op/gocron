@@ -8,12 +8,12 @@ Always reference these instructions first and fallback to search or bash command
 - Install dependencies: `go mod tidy`
 - Build the library: `go build -v ./...`
 - Install required tools:
-  - `go install go.uber.org/mock/mockgen@latest` 
+  - `go install go.uber.org/mock/mockgen@latest`
   - `export PATH=$PATH:$(go env GOPATH)/bin` (add to shell profile)
 - Generate mocks: `make mocks`
 - Format code: `make fmt`
 
-### Testing Commands  
+### Testing Commands
 - Run all tests: `make test` -- takes 50 seconds. NEVER CANCEL. Set timeout to 90+ seconds.
 - Run CI tests: `make test_ci` -- takes 50 seconds. NEVER CANCEL. Set timeout to 90+ seconds.
 - Run with coverage: `make test_coverage` -- takes 50 seconds. NEVER CANCEL. Set timeout to 90+ seconds.
@@ -74,7 +74,7 @@ The CI will fail if:
 ```
 .
 ├── README.md              # Main documentation
-├── CONTRIBUTING.md        # Contribution guidelines  
+├── CONTRIBUTING.md        # Contribution guidelines
 ├── SECURITY.md           # Security policy
 ├── Makefile              # Build automation
 ├── go.mod               # Go module definition
@@ -91,7 +91,7 @@ The CI will fail if:
 - `scheduler.go` - Main scheduler implementation
 - `job.go` - Job definitions and scheduling logic
 - `executor.go` - Job execution engine
-- `logger.go` - Logging interfaces and implementations  
+- `logger.go` - Logging interfaces and implementations
 - `distributed.go` - Distributed scheduling support
 - `monitor.go` - Job monitoring interfaces
 - `util.go` - Utility functions
@@ -130,7 +130,7 @@ The CI will fail if:
 
 ### Expected Timings
 - `make test`: ~50 seconds
-- `make test_coverage`: ~50 seconds  
+- `make test_coverage`: ~50 seconds
 - `make test_ci`: ~50 seconds
 - `go build`: ~5 seconds
 - `make mocks`: ~2 seconds
