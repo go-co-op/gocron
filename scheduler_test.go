@@ -3020,7 +3020,6 @@ func BenchmarkSchedulerJobs(b *testing.B) {
 		{"500", 500},
 	}
 	for _, tc := range cases {
-		tc := tc
 		b.Run(tc.name, func(b *testing.B) {
 			s, err := NewScheduler(WithLogger(NewLogger(LogLevelError)))
 			if err != nil {
@@ -3466,5 +3465,71 @@ func TestScheduler_NextRuns_ReturnsAscendingAfterRescheduleCycles(t *testing.T) 
 	}
 	require.Greater(t, checks, 10, "sanity: expected many polling iterations")
 
+	require.NoError(t, s.Shutdown())
+}
+
+// TestScheduler_CronJob_DefinitionReuseDoesNotAliasCronImpl asserts
+// that reusing a JobDefinition across multiple NewJob calls yields
+// jobs with independent Cron implementations. Previously, all jobs
+// derived from the same definition shared the same *defaultCron
+// pointer, which was mutated by IsValid during setup — creating a
+// latent data race when Update ran concurrently with Job.NextRuns.
+func TestScheduler_CronJob_DefinitionReuseDoesNotAliasCronImpl(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	def := CronJob("*/5 * * * *", false)
+	s := newTestScheduler(t)
+
+	j1, err := s.NewJob(def, NewTask(func() {}))
+	require.NoError(t, err)
+	j2, err := s.NewJob(def, NewTask(func() {}))
+	require.NoError(t, err)
+
+	// Reach into the scheduler's job map (test-only access via the
+	// concrete type) to confirm that each cronJob holds its own
+	// Cron instance rather than aliasing the definition's inner
+	// pointer.
+	sched := s.(*scheduler)
+	ij1 := sched.jobs[j1.ID()]
+	ij2 := sched.jobs[j2.ID()]
+	cj1, ok := ij1.jobSchedule.(*cronJob)
+	require.True(t, ok, "expected *cronJob jobSchedule for j1")
+	cj2, ok := ij2.jobSchedule.(*cronJob)
+	require.True(t, ok, "expected *cronJob jobSchedule for j2")
+	require.NotSame(t, cj1.cronSchedule, cj2.cronSchedule,
+		"each job derived from the same JobDefinition must hold its own Cron instance")
+
+	require.NoError(t, s.Shutdown())
+}
+
+// TestScheduler_DurationRandomJob_NextRunsIsRaceFree hammers
+// Job.NextRuns from many goroutines while the scheduler is running,
+// which previously tripped `-race` because durationRandomJob used a
+// non-concurrent *rand.Rand shared between the scheduler goroutine
+// and user callers of NextRuns.
+func TestScheduler_DurationRandomJob_NextRunsIsRaceFree(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	s := newTestScheduler(t)
+	j, err := s.NewJob(
+		DurationRandomJob(10*time.Millisecond, 20*time.Millisecond),
+		NewTask(func() {}),
+	)
+	require.NoError(t, err)
+	s.Start()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for k := 0; k < 200; k++ {
+				runs, err := j.NextRuns(5)
+				require.NoError(t, err)
+				require.NotNil(t, runs)
+			}
+		}()
+	}
+	wg.Wait()
 	require.NoError(t, s.Shutdown())
 }
