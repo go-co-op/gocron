@@ -1,7 +1,6 @@
 package gocron
 
 import (
-	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -735,9 +734,8 @@ func TestDurationRandomJob_next(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rj := durationRandomJob{
-				min:  tt.min,
-				max:  tt.max,
-				rand: rand.New(rand.NewSource(time.Now().UnixNano())), // nolint:gosec
+				min: tt.min,
+				max: tt.max,
 			}
 
 			for i := 0; i < 100; i++ {
