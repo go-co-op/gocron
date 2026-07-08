@@ -16,3 +16,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+
+  # Maintain pre-commit hook pins (prevents the config/pin drift
+  # that caused #934 to ship a broken .pre-commit-config.yaml).
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
