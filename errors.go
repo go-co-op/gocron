@@ -58,6 +58,7 @@ var (
 	ErrWithNameEmpty                 = errors.New("gocron: WithName: name must not be empty")
 	ErrWithStartDateTimePast         = errors.New("gocron: WithStartDateTime: start must not be in the past")
 	ErrWithStartDateTimePastZero     = errors.New("gocron: WithStartDateTime: start must not be zero")
+	ErrWithStartAtGraceNegative      = errors.New("gocron: WithStartAtGrace: grace must not be negative")
 	ErrWithStopDateTimePast          = errors.New("gocron: WithStopDateTime: end must not be in the past")
 	ErrStartTimeLaterThanEndTime     = errors.New("gocron: WithStartDateTime: start must not be later than end")
 	ErrStopTimeEarlierThanStartTime  = errors.New("gocron: WithStopDateTime: end must not be earlier than start")

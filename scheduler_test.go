@@ -3604,3 +3604,225 @@ func TestScheduler_OneTimeJob_PastStartTime_DoesNotSpin(t *testing.T) {
 
 	require.NoError(t, s.Shutdown())
 }
+
+// TestScheduler_WithStartAtGrace covers the WithStartAtGrace JobOption,
+// which lets callers opt into a bounded tolerance for late first-run
+// dispatch. Without grace, a job whose scheduled start time has already
+// elapsed by dispatch is silently removed (strict semantics, preserved
+// as the default). With grace, if the elapsed drift is within the
+// configured window the run fires immediately; if it exceeds the window
+// the strict behavior kicks in.
+//
+// See WithStartAtGrace docstring and issue #943 for the workload that
+// motivated this option.
+func TestScheduler_WithStartAtGrace(t *testing.T) {
+	t.Run("within grace fires the missed one-time run", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+		s := newTestScheduler(t, WithClock(fakeClock))
+
+		var runs atomic.Uint32
+		done := make(chan struct{}, 1)
+		startAt := schedulerStart.Add(time.Minute)
+		_, err := s.NewJob(
+			OneTimeJob(OneTimeJobStartDateTime(startAt)),
+			NewTask(func() {
+				runs.Add(1)
+				select {
+				case done <- struct{}{}:
+				default:
+				}
+			}),
+			WithStartAtGrace(10*time.Minute),
+		)
+		require.NoError(t, err)
+
+		// Advance past startAt but still within the 10-minute grace window.
+		fakeClock.Advance(5 * time.Minute)
+		s.Start()
+
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected grace-triggered fire within 2s")
+		}
+		require.Equal(t, uint32(1), runs.Load())
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("outside grace drops the job", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+		s := newTestScheduler(t, WithClock(fakeClock))
+
+		var runs atomic.Uint32
+		startAt := schedulerStart.Add(time.Minute)
+		_, err := s.NewJob(
+			OneTimeJob(OneTimeJobStartDateTime(startAt)),
+			NewTask(func() { runs.Add(1) }),
+			WithStartAtGrace(2*time.Minute),
+		)
+		require.NoError(t, err)
+
+		// Advance past startAt by more than the grace window (10m > 2m).
+		fakeClock.Advance(10 * time.Minute)
+		s.Start()
+
+		// Give the scheduler time to process the queue and remove the job.
+		time.Sleep(100 * time.Millisecond)
+		require.Empty(t, s.Jobs(), "job past its grace window should be removed")
+		require.Equal(t, uint32(0), runs.Load(), "no run should happen for a dropped job")
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("default (no option) preserves strict drop behavior", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+		s := newTestScheduler(t, WithClock(fakeClock))
+
+		var runs atomic.Uint32
+		startAt := schedulerStart.Add(time.Minute)
+		_, err := s.NewJob(
+			OneTimeJob(OneTimeJobStartDateTime(startAt)),
+			NewTask(func() { runs.Add(1) }),
+			// No WithStartAtGrace — must behave identically to pre-feature.
+		)
+		require.NoError(t, err)
+
+		fakeClock.Advance(5 * time.Minute)
+		s.Start()
+
+		time.Sleep(100 * time.Millisecond)
+		require.Empty(t, s.Jobs(), "default (grace=0) must drop past OneTimeJob")
+		require.Equal(t, uint32(0), runs.Load())
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("grace of zero is equivalent to no option", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+		s := newTestScheduler(t, WithClock(fakeClock))
+
+		var runs atomic.Uint32
+		startAt := schedulerStart.Add(time.Minute)
+		_, err := s.NewJob(
+			OneTimeJob(OneTimeJobStartDateTime(startAt)),
+			NewTask(func() { runs.Add(1) }),
+			WithStartAtGrace(0),
+		)
+		require.NoError(t, err)
+
+		fakeClock.Advance(5 * time.Minute)
+		s.Start()
+
+		time.Sleep(100 * time.Millisecond)
+		require.Empty(t, s.Jobs())
+		require.Equal(t, uint32(0), runs.Load())
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("negative grace returns an error at NewJob", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		s := newTestScheduler(t)
+		_, err := s.NewJob(
+			OneTimeJob(OneTimeJobStartImmediately()),
+			NewTask(func() {}),
+			WithStartAtGrace(-1*time.Second),
+		)
+		require.ErrorIs(t, err, ErrWithStartAtGraceNegative)
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("grace-triggered fire respects stopTime", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+		s := newTestScheduler(t, WithClock(fakeClock))
+
+		var runs atomic.Uint32
+		startAt := schedulerStart.Add(time.Minute)
+		stopAt := schedulerStart.Add(2 * time.Minute)
+		_, err := s.NewJob(
+			OneTimeJob(OneTimeJobStartDateTime(startAt)),
+			NewTask(func() { runs.Add(1) }),
+			WithStartAtGrace(1*time.Hour),
+			WithStopAt(WithStopDateTime(stopAt)),
+		)
+		require.NoError(t, err)
+
+		// Advance past BOTH startAt and stopAt — within grace but past stop.
+		fakeClock.Advance(10 * time.Minute)
+		s.Start()
+
+		time.Sleep(100 * time.Millisecond)
+		require.Empty(t, s.Jobs(), "grace must not fire a job past its stopTime")
+		require.Equal(t, uint32(0), runs.Load())
+
+		require.NoError(t, s.Shutdown())
+	})
+
+	t.Run("applies to first run of recurring schedules and does not catch up", func(t *testing.T) {
+		defer verifyNoGoroutineLeaks(t)
+
+		schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+		s := newTestScheduler(t, WithClock(fakeClock))
+
+		var runs atomic.Uint32
+		firstFired := make(chan struct{}, 1)
+		startAt := schedulerStart.Add(time.Minute)
+		_, err := s.NewJob(
+			DurationJob(30*time.Second),
+			NewTask(func() {
+				runs.Add(1)
+				select {
+				case firstFired <- struct{}{}:
+				default:
+				}
+			}),
+			WithStartAt(WithStartDateTime(startAt)),
+			WithStartAtGrace(30*time.Minute),
+		)
+		require.NoError(t, err)
+
+		// Advance five minutes past startAt — well within grace, well past
+		// several 30-second intervals. We expect exactly ONE grace-triggered
+		// fire on Start(), NOT catch-up fires for every missed 30s tick.
+		fakeClock.Advance(5 * time.Minute)
+		s.Start()
+
+		select {
+		case <-firstFired:
+		case <-time.After(2 * time.Second):
+			t.Fatal("expected first grace-triggered fire within 2s")
+		}
+
+		// Give the scheduler a moment to (incorrectly) queue catch-ups if
+		// it were going to. It shouldn't.
+		time.Sleep(100 * time.Millisecond)
+		require.Equal(t, uint32(1), runs.Load(), "exactly one grace-triggered fire, no catch-up")
+
+		require.NoError(t, s.Shutdown())
+	})
+}

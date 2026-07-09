@@ -418,6 +418,50 @@ func (s *scheduler) advancePastNow(j internalJob, next time.Time) (time.Time, bo
 	return next, true
 }
 
+// firstRunAction communicates how the scheduler should handle a
+// newly-dispatched job's first scheduled run after firstRunOrGrace has
+// resolved any past-time drift.
+type firstRunAction uint8
+
+const (
+	// firstRunSchedule means the caller should schedule a timer for the
+	// returned time as normal.
+	firstRunSchedule firstRunAction = iota
+	// firstRunFireNow means the returned time is the current wall time
+	// (grace-triggered) and the caller should dispatch on jobsIn
+	// immediately rather than arming a zero-duration timer. This
+	// matches the semantics of startImmediately.
+	firstRunFireNow
+	// firstRunDrop means the schedule is exhausted (or past its stop
+	// time) and the caller should remove the job.
+	firstRunDrop
+)
+
+// firstRunOrGrace resolves the first-run time for a newly-dispatched
+// job. Behavior:
+//
+//   - If next is not before now, it is returned with firstRunSchedule.
+//   - If next is before now and the job's startAtGrace tolerates the
+//     drift (now.Sub(next) <= j.startAtGrace), now is returned with
+//     firstRunFireNow so the caller can dispatch immediately.
+//   - Otherwise advancePastNow is consulted; if it too fails to find a
+//     future run the schedule is exhausted and firstRunDrop is returned.
+//
+// See WithStartAtGrace.
+func (s *scheduler) firstRunOrGrace(j internalJob, next time.Time) (time.Time, firstRunAction) {
+	now := s.now()
+	if !next.Before(now) {
+		return next, firstRunSchedule
+	}
+	if j.startAtGrace > 0 && now.Sub(next) <= j.startAtGrace {
+		return now, firstRunFireNow
+	}
+	if advanced, ok := s.advancePastNow(j, next); ok {
+		return advanced, firstRunSchedule
+	}
+	return time.Time{}, firstRunDrop
+}
+
 // selectExecJobsOutForRescheduling handles the executor's post-run
 // notification for a job that just started. Advances j.nextRun past
 // now, updates the timer, and appends to nextScheduled. No-op if the
@@ -647,12 +691,32 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 			}
 
 			if next.Before(s.now()) {
-				var ok bool
-				next, ok = s.advancePastNow(j, next)
-				if !ok {
+				var action firstRunAction
+				next, action = s.firstRunOrGrace(j, next)
+				switch action {
+				case firstRunDrop:
 					s.jobs[j.id] = j
 					in.cancel()
 					s.selectRemoveJob(j.id)
+					return
+				case firstRunFireNow:
+					if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+						s.jobs[j.id] = j
+						in.cancel()
+						s.selectRemoveJob(j.id)
+						return
+					}
+					select {
+					case <-s.shutdownCtx.Done():
+					case s.exec.jobsIn <- jobIn{
+						id:            j.id,
+						shouldSendOut: true,
+					}:
+					}
+					j.startTime = next
+					j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
+					s.jobs[j.id] = j
+					in.cancel()
 					return
 				}
 			}
@@ -722,10 +786,27 @@ func (s *scheduler) selectStart() {
 				next = j.next(s.now())
 			}
 			if next.Before(s.now()) {
-				var ok bool
-				next, ok = s.advancePastNow(j, next)
-				if !ok {
+				var action firstRunAction
+				next, action = s.firstRunOrGrace(j, next)
+				switch action {
+				case firstRunDrop:
 					s.selectRemoveJob(id)
+					continue
+				case firstRunFireNow:
+					if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+						s.selectRemoveJob(id)
+						continue
+					}
+					select {
+					case <-s.shutdownCtx.Done():
+					case s.exec.jobsIn <- jobIn{
+						id:            id,
+						shouldSendOut: true,
+					}:
+					}
+					j.startTime = next
+					j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
+					s.jobs[id] = j
 					continue
 				}
 			}
@@ -877,7 +958,7 @@ func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicSta
 }
 
 func (s *scheduler) verifyNonVariadic(taskFunc reflect.Value, tsk task, length int) error {
-	for i := 0; i < length; i++ {
+	for i := range length {
 		argumentType := reflect.TypeOf(tsk.parameters[i])
 		t1 := argumentType.Kind()
 		if t1 == reflect.Interface || t1 == reflect.Pointer {
@@ -909,7 +990,7 @@ func (s *scheduler) verifyParameterType(taskFunc reflect.Value, tsk task) error 
 	return s.verifyNonVariadic(taskFunc, tsk, expectedParameterLength)
 }
 
-var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
+var contextType = reflect.TypeFor[context.Context]()
 
 func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskWrapper Task, options []JobOption) (Job, error) {
 	j := internalJob{}

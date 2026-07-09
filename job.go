@@ -62,17 +62,24 @@ type internalJob struct {
 	// nextScheduled times.
 	nextScheduled []time.Time
 
-	lastRun                time.Time
-	lastRunStartedAt       time.Time
-	lastRunCompletedAt     time.Time
-	function               any
-	parameters             []any
-	timer                  clockwork.Timer
-	singletonMode          bool
-	singletonLimitMode     LimitMode
-	limitRunsTo            *limitRunsTo
-	startTime              time.Time
-	startImmediately       bool
+	lastRun            time.Time
+	lastRunStartedAt   time.Time
+	lastRunCompletedAt time.Time
+	function           any
+	parameters         []any
+	timer              clockwork.Timer
+	singletonMode      bool
+	singletonLimitMode LimitMode
+	limitRunsTo        *limitRunsTo
+	startTime          time.Time
+	startImmediately   bool
+	// startAtGrace is the maximum tolerated lateness for the first
+	// scheduled run. If the scheduler dispatches a job and finds that
+	// the computed first-run time has already passed, the run fires
+	// immediately at the current time when now-firstRun <= startAtGrace,
+	// and is otherwise treated as exhausted (strict behavior, preserved
+	// as the default when startAtGrace is 0). See WithStartAtGrace.
+	startAtGrace           time.Duration
 	stopTime               time.Time
 	intervalFromCompletion bool
 	// event listeners
@@ -652,6 +659,16 @@ func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.T
 	if !j.startImmediately && len(sortedTimes) == 0 {
 		return ErrOneTimeJobStartDateTimePast
 	}
+	if len(sortedTimes) > 0 {
+		// Record the earliest scheduled run so downstream scheduling logic
+		// (selectStart / selectNewJob / firstRunOrGrace) has a concrete
+		// reference point rather than relying on oneTimeJob.next(now) to
+		// re-derive it. This matters for WithStartAtGrace, where the fake
+		// or wall clock may advance past sortedTimes[0] between setup and
+		// dispatch: without this, oneTimeJob.next(now) returns zero (all
+		// entries already elapsed) and grace has no drift to measure.
+		j.startTime = sortedTimes[0]
+	}
 	j.jobSchedule = oneTimeJob{sortedTimes: sortedTimes}
 	return nil
 }
@@ -853,6 +870,53 @@ func WithIntervalFromCompletion() JobOption {
 func WithStartAt(option StartAtOption) JobOption {
 	return func(j *internalJob, now time.Time) error {
 		return option(j, now)
+	}
+}
+
+// WithStartAtGrace configures the maximum tolerated lateness for the
+// job's first scheduled run. It is a robustness knob for jobs whose
+// scheduled first-run time may already have passed by the time the
+// scheduler dispatches them.
+//
+// NewJob validates and enqueues a job synchronously, but the scheduler
+// dispatch loop processes new jobs asynchronously. Under load
+// (heavy LimitModeWait queues, GC pauses, event storms) or with race-y
+// scheduling patterns such as
+//
+//	OneTimeJob(OneTimeJobStartDateTime(time.Now().Add(randomDelay)))
+//
+// dispatch can lag past the intended start time. Without a grace
+// setting the scheduler treats the missed first run as exhausted and
+// silently removes the job (see issue #943 for the workload that
+// motivated this option).
+//
+// Semantics:
+//   - Applies to the FIRST scheduled run only. Subsequent runs of
+//     recurring schedules follow the schedule's normal next()
+//     progression.
+//   - When dispatch observes firstRun.Before(now):
+//   - if now.Sub(firstRun) <= grace, the job fires immediately at
+//     the current time (the original firstRun is preserved on the
+//     job for observability via Job.NextRun / event listeners);
+//   - otherwise the job is treated as exhausted (existing behavior).
+//   - A grace-triggered fire still respects stopTime: if stopTime has
+//     already passed, the job is removed rather than fired.
+//   - A grace-triggered fire still respects LimitMode: the run enters
+//     the executor queue like any other dispatch.
+//   - No catch-up is performed for recurring schedules. If the
+//     scheduler was down long enough to miss multiple cron ticks, at
+//     most one grace-triggered fire happens on startup, and the
+//     schedule resumes from schedule.Next(now).
+//
+// Default: 0 (strict — any past first-run time at dispatch is treated
+// as exhausted). A negative value returns ErrWithStartAtGraceNegative.
+func WithStartAtGrace(grace time.Duration) JobOption {
+	return func(j *internalJob, _ time.Time) error {
+		if grace < 0 {
+			return ErrWithStartAtGraceNegative
+		}
+		j.startAtGrace = grace
+		return nil
 	}
 }
 
@@ -1718,7 +1782,7 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 	}
 
 	out := make([]time.Time, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		if i < lengthNextScheduled {
 			out[i] = ij.nextScheduled[i]
 			continue
