@@ -3519,11 +3519,11 @@ func TestScheduler_DurationRandomJob_NextRunsIsRaceFree(t *testing.T) {
 	s.Start()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for k := 0; k < 200; k++ {
+			for range 200 {
 				runs, err := j.NextRuns(5)
 				require.NoError(t, err)
 				require.NotNil(t, runs)
@@ -3531,5 +3531,76 @@ func TestScheduler_DurationRandomJob_NextRunsIsRaceFree(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	require.NoError(t, s.Shutdown())
+}
+
+// TestScheduler_OneTimeJob_PastStartTime_DoesNotSpin is a regression test
+// for issue #943 (100% CPU spin under LimitModeWait + OneTimeJobStartDateTime).
+//
+// The v2.21.2 spin worked as follows: selectStart (and selectNewJob) had
+//
+//	if next.Before(s.now()) {
+//	    for next.Before(s.now()) {
+//	        next = j.next(next)
+//	    }
+//	}
+//
+// For a oneTimeJob whose sortedTimes has been exhausted, next() returns
+// time.Time{} — which is also Before(s.now()). The subsequent call
+// next(time.Time{}) binary-searches to idx=0 and returns sortedTimes[0]
+// (the original past time). The loop oscillates between the past time
+// and the zero time forever, pegging one CPU core inside time.Now().
+// The reporter's pprof profile showed 94% of CPU accounted for by
+// exactly these two lines (see issue #943 attachment).
+//
+// The fix (PR #930) is advancePastNow, which detects both the zero-time
+// return and any non-monotonic step and removes the job cleanly.
+//
+// To force the exhausted-schedule condition deterministically we use a
+// fake clock: register the job with a startAt one minute in the future
+// (so setup validation passes), then advance the clock past startAt
+// before starting the scheduler. selectStart then observes
+// next.Before(s.now()) and would spin on v2.21.2. With the fix, the job
+// is removed and Start() returns promptly.
+func TestScheduler_OneTimeJob_PastStartTime_DoesNotSpin(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	schedulerStart := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(schedulerStart)
+
+	s := newTestScheduler(t, WithClock(fakeClock))
+
+	// One minute in the future relative to the fake clock — passes
+	// oneTimeJobDefinition.setup's !at.After(now) validation.
+	startAt := schedulerStart.Add(time.Minute)
+	j, err := s.NewJob(
+		OneTimeJob(OneTimeJobStartDateTime(startAt)),
+		NewTask(func() {}),
+	)
+	require.NoError(t, err)
+	require.NotEqual(t, uuid.Nil, j.ID())
+
+	// Advance past startAt so selectStart sees a job whose only
+	// schedule time is in the past.
+	fakeClock.Advance(5 * time.Minute)
+
+	// Start() blocks on <-s.startedCh until the scheduler goroutine
+	// signals ready after selectStart completes. If selectStart spins
+	// (v2.21.2 behavior), this signal never arrives and Start() hangs.
+	done := make(chan struct{})
+	go func() {
+		s.Start()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("scheduler.Start() did not return within 2s — regression: selectStart is spinning on a past OneTimeJob (issue #943)")
+	}
+
+	// Past OneTimeJob should be silently removed at Start(), not retained
+	// in a poison state.
+	require.Empty(t, s.Jobs(), "exhausted OneTimeJob should be removed by selectStart, not retained")
+
 	require.NoError(t, s.Shutdown())
 }
