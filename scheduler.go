@@ -304,11 +304,14 @@ func (s *scheduler) stopScheduler() {
 	}
 	var err error
 	if s.started.Load() {
-		t := time.NewTimer(s.exec.stopTimeout + 1*time.Second)
+		// Use the executor's clock so fake clocks in tests behave
+		// consistently with the rest of the shutdown path (executor.stop
+		// already times out on e.clock).
+		t := s.exec.clock.NewTimer(s.exec.stopTimeout + 1*time.Second)
 		select {
 		case err = <-s.exec.done:
 			t.Stop()
-		case <-t.C:
+		case <-t.Chan():
 			err = ErrStopExecutorTimedOut
 		}
 	}
@@ -409,6 +412,25 @@ func (s *scheduler) selectRemoveJob(id uuid.UUID) {
 // they treat an exhausted schedule and remove the job.
 func (s *scheduler) advancePastNow(j internalJob, next time.Time) (time.Time, bool) {
 	for next.Before(s.now()) {
+		n := j.next(next)
+		if n.IsZero() || !n.After(next) {
+			return time.Time{}, false
+		}
+		next = n
+	}
+	return next, true
+}
+
+// advanceNextPastDuplicates advances next past any values already present in
+// j.nextScheduled (e.g. when a job is being rescheduled off the same next-run
+// value as before). It returns ok=false if j.next ever produces the zero time
+// or fails to make forward progress, which would otherwise either loop forever
+// or fall through with a zero next that arms AfterFunc with a large negative
+// duration and busy-loops the scheduler goroutine. This mirrors the guard in
+// advancePastNow; callers should treat ok=false as an exhausted schedule and
+// remove the job. See issue #943 for the failure class.
+func (s *scheduler) advanceNextPastDuplicates(j internalJob, next time.Time) (time.Time, bool) {
+	for nextScheduledContains(j.nextScheduled, next) {
 		n := j.next(next)
 		if n.IsZero() || !n.After(next) {
 			return time.Time{}, false
@@ -538,8 +560,11 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		// if the next value is a duplicate of what's already in the nextScheduled slice, for example:
 		// - the job is being rescheduled off the same next run value as before
 		// increment to the next, next value
-		for nextScheduledContains(j.nextScheduled, next) {
-			next = j.next(next)
+		var ok bool
+		next, ok = s.advanceNextPastDuplicates(j, next)
+		if !ok {
+			s.selectRemoveJob(id)
+			return
 		}
 	}
 

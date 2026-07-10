@@ -3826,3 +3826,165 @@ func TestScheduler_WithStartAtGrace(t *testing.T) {
 		require.NoError(t, s.Shutdown())
 	})
 }
+
+// stubSchedule is a test jobSchedule whose next() behavior is fully
+// controlled by nextFunc, letting tests simulate exhausted or
+// misbehaving schedules (zero / non-advancing next values).
+type stubSchedule struct {
+	nextFunc func(lastRun time.Time) time.Time
+}
+
+func (s stubSchedule) next(lastRun time.Time) time.Time {
+	return s.nextFunc(lastRun)
+}
+
+// TestScheduler_advanceNextPastDuplicates covers the guard that prevents
+// selectExecJobsOutForRescheduling from looping forever (or arming a
+// zero-time timer that busy-loops) when a schedule's next() returns the
+// zero time or fails to advance while skipping duplicate nextScheduled
+// entries. See issue #943 for the failure class.
+func TestScheduler_advanceNextPastDuplicates(t *testing.T) {
+	base := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+	s := &scheduler{location: time.UTC}
+
+	t.Run("no duplicate returns next unchanged", func(t *testing.T) {
+		j := internalJob{
+			jobSchedule:   stubSchedule{nextFunc: func(_ time.Time) time.Time { t.Fatal("next must not be called"); return time.Time{} }},
+			nextScheduled: []time.Time{base.Add(time.Hour)},
+		}
+		got, ok := s.advanceNextPastDuplicates(j, base)
+		require.True(t, ok)
+		require.Equal(t, base, got)
+	})
+
+	t.Run("advances past duplicate to a future non-duplicate", func(t *testing.T) {
+		dup := base.Add(time.Minute)
+		want := base.Add(2 * time.Minute)
+		j := internalJob{
+			jobSchedule:   stubSchedule{nextFunc: func(_ time.Time) time.Time { return want }},
+			nextScheduled: []time.Time{dup},
+		}
+		got, ok := s.advanceNextPastDuplicates(j, dup)
+		require.True(t, ok)
+		require.Equal(t, want, got)
+	})
+
+	t.Run("non-advancing next returns ok=false instead of spinning", func(t *testing.T) {
+		dup := base.Add(time.Minute)
+		j := internalJob{
+			// next() keeps returning the same duplicate value -> no forward progress.
+			jobSchedule:   stubSchedule{nextFunc: func(_ time.Time) time.Time { return dup }},
+			nextScheduled: []time.Time{dup},
+		}
+		done := make(chan struct{})
+		var ok bool
+		go func() {
+			_, ok = s.advanceNextPastDuplicates(j, dup)
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("advanceNextPastDuplicates spun on a non-advancing next() (regression)")
+		}
+		require.False(t, ok, "non-advancing schedule must be reported as exhausted")
+	})
+
+	t.Run("zero next returns ok=false", func(t *testing.T) {
+		dup := base.Add(time.Minute)
+		j := internalJob{
+			jobSchedule:   stubSchedule{nextFunc: func(_ time.Time) time.Time { return time.Time{} }},
+			nextScheduled: []time.Time{dup},
+		}
+		_, ok := s.advanceNextPastDuplicates(j, dup)
+		require.False(t, ok, "zero next must be reported as exhausted")
+	})
+}
+
+// TestScheduler_advancePastNow exercises the past-time guard directly,
+// complementing the integration-level regression test
+// TestScheduler_OneTimeJob_PastStartTime_DoesNotSpin.
+func TestScheduler_advancePastNow(t *testing.T) {
+	now := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+	s := &scheduler{location: time.UTC}
+	s.exec.clock = clockwork.NewFakeClockAt(now)
+
+	t.Run("already-future next returned unchanged", func(t *testing.T) {
+		future := now.Add(time.Hour)
+		j := internalJob{jobSchedule: stubSchedule{nextFunc: func(_ time.Time) time.Time { t.Fatal("next must not be called"); return time.Time{} }}}
+		got, ok := s.advancePastNow(j, future)
+		require.True(t, ok)
+		require.Equal(t, future, got)
+	})
+
+	t.Run("non-advancing next returns ok=false instead of spinning", func(t *testing.T) {
+		past := now.Add(-time.Hour)
+		j := internalJob{jobSchedule: stubSchedule{nextFunc: func(lastRun time.Time) time.Time { return lastRun }}}
+		done := make(chan struct{})
+		var ok bool
+		go func() {
+			_, ok = s.advancePastNow(j, past)
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("advancePastNow spun on a non-advancing next() (regression)")
+		}
+		require.False(t, ok)
+	})
+}
+
+// TestScheduler_ExecutionTimeUsesInjectedClock verifies that job timing
+// metrics are measured with the scheduler's injected clock rather than the
+// wall clock. With a fake clock, a job that advances the clock by a known
+// duration during execution must report that same duration as its execution
+// time. Prior to the fix, runJob captured start/end via time.Now(), so the
+// reported duration reflected wall time (~0) instead of the injected clock.
+func TestScheduler_ExecutionTimeUsesInjectedClock(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	fakeClock := clockwork.NewFakeClockAt(time.Date(2050, time.January, 1, 0, 0, 0, 0, time.UTC))
+	monitor := newTestSchedulerMonitor()
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithSchedulerMonitor(monitor),
+	)
+
+	const jobDuration = 5 * time.Second
+	ran := make(chan struct{}, 1)
+	_, err := s.NewJob(
+		DurationJob(time.Hour),
+		NewTask(func() {
+			// Simulate work that takes jobDuration on the injected clock.
+			fakeClock.Advance(jobDuration)
+			select {
+			case ran <- struct{}{}:
+			default:
+			}
+		}),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("job did not run within 2s")
+	}
+
+	require.NoError(t, s.Shutdown())
+
+	monitor.mu.RLock()
+	execTimes := append([]time.Duration(nil), monitor.jobExecutionTimes...)
+	monitor.mu.RUnlock()
+
+	require.NotEmpty(t, execTimes, "expected at least one JobExecutionTime notification")
+	// With the injected clock, execution time equals the advanced duration.
+	// With the wall-clock bug it would be sub-millisecond.
+	require.GreaterOrEqual(t, execTimes[0], jobDuration,
+		"execution time must be measured on the injected clock (got %s, want >= %s)", execTimes[0], jobDuration)
+}
