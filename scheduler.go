@@ -693,6 +693,72 @@ func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 	close(out.outChan)
 }
 
+// dispatchJobRun sends an immediate run request for id to the executor,
+// respecting scheduler shutdown. Used for both start-immediately jobs and
+// grace-triggered fires.
+func (s *scheduler) dispatchJobRun(id uuid.UUID) {
+	select {
+	case <-s.shutdownCtx.Done():
+	case s.exec.jobsIn <- jobIn{
+		id:            id,
+		shouldSendOut: true,
+	}:
+	}
+}
+
+// prepareFirstRun resolves a job's initial run when the scheduler is
+// already running. It computes the first next-run time, applies
+// grace/drift handling (firstRunOrGrace), and then either dispatches an
+// immediate fire, arms the run timer, or reports that the job should be
+// dropped. On a non-drop result the returned job carries the updated
+// startTime/nextScheduled and must be stored by the caller. Returns
+// drop=true when the schedule is exhausted or is past its stop time, in
+// which case the caller should remove the job.
+//
+// This is the single source of truth shared by selectNewJob (adding a job
+// while running) and selectStart (starting the scheduler); the callers
+// differ only in their store/remove bookkeeping.
+func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
+	next := j.startTime
+	if j.startImmediately {
+		next = s.now()
+		s.dispatchJobRun(j.id)
+	} else {
+		if next.IsZero() {
+			next = j.next(s.now())
+		}
+
+		if next.Before(s.now()) {
+			var action firstRunAction
+			next, action = s.firstRunOrGrace(j, next)
+			switch action {
+			case firstRunDrop:
+				return j, true
+			case firstRunFireNow:
+				if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+					return j, true
+				}
+				s.dispatchJobRun(j.id)
+				j.startTime = next
+				j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
+				return j, false
+			}
+		}
+
+		if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+			return j, true
+		}
+
+		id := j.id
+		j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
+			s.dispatchJobRun(id)
+		})
+	}
+	j.startTime = next
+	j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
+	return j, false
+}
+
 // selectNewJob installs a job produced by addOrUpdateJob into s.jobs.
 // Runs the job's initial nextRun computation and, if the scheduler is
 // already started, wires it into the executor immediately. Signals
@@ -700,72 +766,16 @@ func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 func (s *scheduler) selectNewJob(in newJobIn) {
 	j := in.job
 	if s.started.Load() {
-		next := j.startTime
-		if j.startImmediately {
-			next = s.now()
-			select {
-			case <-s.shutdownCtx.Done():
-			case s.exec.jobsIn <- jobIn{
-				id:            j.id,
-				shouldSendOut: true,
-			}:
-			}
-		} else {
-			if next.IsZero() {
-				next = j.next(s.now())
-			}
-
-			if next.Before(s.now()) {
-				var action firstRunAction
-				next, action = s.firstRunOrGrace(j, next)
-				switch action {
-				case firstRunDrop:
-					s.jobs[j.id] = j
-					in.cancel()
-					s.selectRemoveJob(j.id)
-					return
-				case firstRunFireNow:
-					if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
-						s.jobs[j.id] = j
-						in.cancel()
-						s.selectRemoveJob(j.id)
-						return
-					}
-					select {
-					case <-s.shutdownCtx.Done():
-					case s.exec.jobsIn <- jobIn{
-						id:            j.id,
-						shouldSendOut: true,
-					}:
-					}
-					j.startTime = next
-					j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
-					s.jobs[j.id] = j
-					in.cancel()
-					return
-				}
-			}
-
-			if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
-				s.jobs[j.id] = j
-				in.cancel()
-				s.selectRemoveJob(j.id)
-				return
-			}
-
-			id := j.id
-			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
-				select {
-				case <-s.shutdownCtx.Done():
-				case s.exec.jobsIn <- jobIn{
-					id:            id,
-					shouldSendOut: true,
-				}:
-				}
-			})
+		updated, drop := s.prepareFirstRun(j)
+		j = updated
+		if drop {
+			// Store before removing so selectRemoveJob can find the
+			// brand-new job to cancel its context and notify monitors.
+			s.jobs[j.id] = j
+			in.cancel()
+			s.selectRemoveJob(j.id)
+			return
 		}
-		j.startTime = next
-		j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
 	}
 
 	s.jobs[j.id] = j
@@ -796,65 +806,12 @@ func (s *scheduler) selectStart() {
 
 	s.started.Store(true)
 	for id, j := range s.jobs {
-		next := j.startTime
-		if j.startImmediately {
-			next = s.now()
-			select {
-			case <-s.shutdownCtx.Done():
-			case s.exec.jobsIn <- jobIn{
-				id:            id,
-				shouldSendOut: true,
-			}:
-			}
-		} else {
-			if next.IsZero() {
-				next = j.next(s.now())
-			}
-			if next.Before(s.now()) {
-				var action firstRunAction
-				next, action = s.firstRunOrGrace(j, next)
-				switch action {
-				case firstRunDrop:
-					s.selectRemoveJob(id)
-					continue
-				case firstRunFireNow:
-					if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
-						s.selectRemoveJob(id)
-						continue
-					}
-					select {
-					case <-s.shutdownCtx.Done():
-					case s.exec.jobsIn <- jobIn{
-						id:            id,
-						shouldSendOut: true,
-					}:
-					}
-					j.startTime = next
-					j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
-					s.jobs[id] = j
-					continue
-				}
-			}
-
-			if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
-				s.selectRemoveJob(id)
-				continue
-			}
-
-			jobID := id
-			j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
-				select {
-				case <-s.shutdownCtx.Done():
-				case s.exec.jobsIn <- jobIn{
-					id:            jobID,
-					shouldSendOut: true,
-				}:
-				}
-			})
+		updated, drop := s.prepareFirstRun(j)
+		if drop {
+			s.selectRemoveJob(id)
+			continue
 		}
-		j.startTime = next
-		j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
-		s.jobs[id] = j
+		s.jobs[id] = updated
 	}
 	select {
 	case <-s.shutdownCtx.Done():
