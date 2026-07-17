@@ -246,6 +246,58 @@ func TestNextScheduledContains(t *testing.T) {
 	assert.False(t, nextScheduledContains(nil, base))
 }
 
+func TestScheduledTimeForRun(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t0 := base
+	t1 := base.Add(time.Hour)
+	t2 := base.Add(2 * time.Hour)
+	slice := []time.Time{t0, t1, t2}
+
+	tests := []struct {
+		name        string
+		times       []time.Time
+		actualStart time.Time
+		want        time.Time
+	}{
+		{
+			name:        "single entry",
+			times:       []time.Time{t1},
+			actualStart: t1.Add(5 * time.Second),
+			want:        t1,
+		},
+		{
+			name:        "exact match returns that tick",
+			times:       slice,
+			actualStart: t1,
+			want:        t1,
+		},
+		{
+			name:        "between ticks returns the latest at-or-before",
+			times:       slice,
+			actualStart: t1.Add(30 * time.Minute),
+			want:        t1,
+		},
+		{
+			name:        "start after all ticks returns the latest",
+			times:       slice,
+			actualStart: t2.Add(time.Hour),
+			want:        t2,
+		},
+		{
+			name:        "start before all ticks falls back to earliest",
+			times:       slice,
+			actualStart: base.Add(-time.Hour),
+			want:        t0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := scheduledTimeForRun(tt.times, tt.actualStart)
+			assert.True(t, got.Equal(tt.want), "got %s, want %s", got, tt.want)
+		})
+	}
+}
+
 func TestNextScheduledContains_MonotonicMismatch(t *testing.T) {
 	// slices.Contains uses ==, which compares monotonic readings.
 	// nextScheduledContains uses time.Compare via ascendingTime, so
