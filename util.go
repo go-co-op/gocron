@@ -127,6 +127,27 @@ func nextScheduledContains(times []time.Time, t time.Time) bool {
 	return found
 }
 
+// scheduledTimeForRun returns the scheduled invocation time that best
+// corresponds to a run starting at actualStart: the latest entry at or
+// before actualStart, i.e. the schedule tick whose timer just fired.
+// Using the earliest entry (nextScheduled[0]) instead would overstate the
+// scheduling delay whenever an older, not-yet-pruned entry still lingers
+// in the slice or multiple ticks are pending. If every entry is in the
+// future relative to actualStart (not expected for a run dispatched by a
+// fired timer, but possible under clock skew), it falls back to the
+// earliest entry. Callers must ensure times is non-empty and sorted
+// ascending.
+func scheduledTimeForRun(times []time.Time, actualStart time.Time) time.Time {
+	idx, found := slices.BinarySearchFunc(times, actualStart, ascendingTime)
+	if found {
+		return times[idx]
+	}
+	if idx > 0 {
+		return times[idx-1]
+	}
+	return times[0]
+}
+
 // waitGroupWithMutex wraps sync.WaitGroup so that Add() cannot race
 // with Wait(). This addresses the classic "Add called after Wait
 // returned (or with counter == 0)" panic that sync.WaitGroup enforces:

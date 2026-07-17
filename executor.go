@@ -482,7 +482,8 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		e.scheduler.notifyJobStarted(jobObj)
 		// Notify scheduling delay if job had a scheduled time
 		if len(j.nextScheduled) > 0 {
-			e.scheduler.notifyJobSchedulingDelay(jobObj, j.nextScheduled[0], actualStartTime)
+			scheduled := scheduledTimeForRun(j.nextScheduled, actualStartTime)
+			e.scheduler.notifyJobSchedulingDelay(jobObj, scheduled, actualStartTime)
 		}
 	}
 
