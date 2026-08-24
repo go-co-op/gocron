@@ -351,7 +351,7 @@ func TestSchedulerMonitor_ConcurrentAccess(t *testing.T) {
 	s := newTestScheduler(t, WithSchedulerMonitor(monitor))
 
 	// Add multiple jobs
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err := s.NewJob(
 			DurationJob(100*time.Millisecond),
 			NewTask(func() {}),
@@ -426,7 +426,7 @@ func TestSchedulerMonitor_ThreadSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	iterations := 100
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
