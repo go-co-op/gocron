@@ -963,6 +963,9 @@ func (s *scheduler) verifyParameterType(taskFunc reflect.Value, tsk task) error 
 	isVariadic := taskFuncType.IsVariadic()
 	if isVariadic {
 		variadicStart := taskFuncType.NumIn() - 1
+		if len(tsk.parameters) < variadicStart {
+			return ErrNewJobWrongNumberOfParameters
+		}
 		return s.verifyVariadic(taskFunc, tsk, variadicStart)
 	}
 	expectedParameterLength := taskFuncType.NumIn()
