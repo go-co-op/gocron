@@ -35,6 +35,8 @@ const (
 	// the clock-adjusted time immediately following the Daylight Saving Time
 	// spring-forward transition when its scheduled wall-clock time
 	// does not exist.
+	// For CronJob, this adjustment applies to the default cron implementation;
+	// custom Cron implementations control spring-forward behavior through Next.
 	DaylightSavingsTimeRunAfterTransition
 )
 
@@ -1329,16 +1331,40 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 	// When the policy is DaylightSavingsTimeRunAfterTransition, check for intermediate
 	// days between lastRun and next where the target wall-clock time falls in a
 	// Daylight Saving Time gap. If found, return the clock-adjusted (normalized)
-	// time for that day instead of skipping.
+	// time for that day instead of skipping, but only if the expression permits it.
 	if j.daylightSavingsTimePolicy == DaylightSavingsTimeRunAfterTransition {
-		loc := lastRun.Location()
-		for day := lastRun.AddDate(0, 0, 1); day.Before(next); day = day.AddDate(0, 0, 1) {
+		// Next alone cannot tell us whether a custom cron intended to run on an
+		// intermediate date. Only adjust parsed, calendar-based default schedules.
+		cronImpl, ok := j.cronSchedule.(*defaultCron)
+		if !ok {
+			return next
+		}
+		spec, ok := cronImpl.cronSchedule.(*cron.SpecSchedule)
+		if !ok {
+			return next
+		}
+		loc := spec.Location
+		if loc == time.Local {
+			loc = lastRun.Location()
+		}
+		nextLocal := next.In(loc)
+		// Use a copy in UTC to test the requested wall-clock time without a DST
+		// gap. This delegates all expression rules, including DOM/DOW wildcard
+		// and OR semantics, to the parser's schedule without mutating shared state.
+		wallSchedule := *spec
+		wallSchedule.Location = time.UTC
+		for day := lastRun.In(loc).AddDate(0, 0, 1); day.Before(next); day = day.AddDate(0, 0, 1) {
 			candidate := time.Date(day.Year(), day.Month(), day.Day(),
-				next.Hour(), next.Minute(), next.Second(), 0, loc)
-			if candidate.Hour() != next.Hour() || candidate.Minute() != next.Minute() || candidate.Second() != next.Second() {
-				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, next.Hour(), next.Minute(), next.Second())
+				nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second(), 0, loc)
+			if candidate.Hour() != nextLocal.Hour() || candidate.Minute() != nextLocal.Minute() || candidate.Second() != nextLocal.Second() {
+				wallTime := time.Date(day.Year(), day.Month(), day.Day(),
+					nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second(), 0, time.UTC)
+				if !wallSchedule.Next(wallTime.Add(-time.Second)).Equal(wallTime) {
+					continue
+				}
+				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second())
 				if candidate.After(lastRun) && candidate.Before(next) {
-					return candidate
+					return candidate.In(lastRun.Location())
 				}
 			}
 		}
