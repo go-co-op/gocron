@@ -305,6 +305,91 @@ func TestScheduler_Update(t *testing.T) {
 	}
 }
 
+func TestScheduler_UpdateValidationError(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name       string
+		definition JobDefinition
+		task       Task
+		options    []JobOption
+		err        error
+	}{
+		{
+			name:       "nil task",
+			definition: DurationJob(2 * time.Second),
+			err:        ErrNewJobTaskNil,
+		},
+		{
+			name:       "invalid option",
+			definition: DurationJob(2 * time.Second),
+			task:       NewTask(func() {}),
+			options:    []JobOption{WithName("")},
+			err:        ErrWithNameEmpty,
+		},
+		{
+			name:       "missing argument",
+			definition: DurationJob(2 * time.Second),
+			task:       NewTask(func(int) {}),
+			err:        ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			name:       "invalid interval",
+			definition: DurationJob(0),
+			task:       NewTask(func() {}),
+			err:        ErrDurationJobIntervalZero,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clock := clockwork.NewFakeClock()
+			s := newTestScheduler(t, WithClock(clock))
+			defer func() { require.NoError(t, s.Shutdown()) }()
+
+			release := make(chan struct{})
+			defer close(release)
+			runs := make(chan context.Context, 2)
+			original, err := s.NewJob(DurationJob(time.Second), NewTask(func(ctx context.Context) {
+				runs <- ctx
+				<-release
+			}), WithName("original"))
+			require.NoError(t, err)
+			s.Start()
+			clock.Advance(time.Second)
+
+			var jobCtx context.Context
+			select {
+			case jobCtx = <-runs:
+			case <-time.After(time.Second):
+				t.Fatal("original job did not run")
+			}
+			next, err := original.NextRun()
+			require.NoError(t, err)
+
+			updated, err := s.Update(original.ID(), tt.definition, tt.task, tt.options...)
+			require.ErrorIs(t, err, tt.err)
+			require.Nil(t, updated)
+			assert.NoError(t, jobCtx.Err(), "failed update canceled the original job")
+			jobs := s.Jobs()
+			require.Len(t, jobs, 1, "failed update removed the original job")
+			assert.Equal(t, original.ID(), jobs[0].ID())
+			assert.Equal(t, "original", jobs[0].Name())
+			gotNext, err := original.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, next, gotNext)
+
+			clock.Advance(time.Second)
+			select {
+			case ctx := <-runs:
+				assert.NoError(t, ctx.Err())
+			case <-time.After(time.Second):
+				t.Fatal("original job did not run after the failed update")
+			}
+		})
+	}
+}
+
 func TestScheduler_StopTimeout(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
