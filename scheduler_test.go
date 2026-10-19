@@ -2211,8 +2211,8 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 				}
 			} else {
 				select {
-				case <-listenerRunCh:
-					t.Fatal("listener ran when it shouldn't have")
+				case err = <-listenerRunCh:
+					t.Fatal("listener ran when it shouldn't have", err)
 				case <-time.After(time.Millisecond * 100):
 				}
 			}
@@ -2271,8 +2271,8 @@ func TestScheduler_WithLocker_WithEventListeners(t *testing.T) {
 				}
 			} else {
 				select {
-				case <-listenerRunCh:
-					t.Fatal("listener ran when it shouldn't have")
+				case err = <-listenerRunCh:
+					t.Fatal("listener ran when it shouldn't have", err)
 				case <-time.After(time.Millisecond * 100):
 				}
 			}
