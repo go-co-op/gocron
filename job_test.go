@@ -738,7 +738,7 @@ func TestDurationRandomJob_next(t *testing.T) {
 				max: tt.max,
 			}
 
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				next := rj.next(tt.lastRun)
 				assert.GreaterOrEqual(t, next, tt.expectedMin)
 				assert.LessOrEqual(t, next, tt.expectedMax)
@@ -1650,7 +1650,7 @@ func TestJob_NextRun_MultipleJobsSimultaneously(t *testing.T) {
 	s.Start()
 
 	// Wait for all 4 jobs to complete their immediate run
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		<-jobsCompleted
 	}
 
@@ -1741,7 +1741,7 @@ func TestJob_NextRun_ConcurrentCompletions(t *testing.T) {
 
 	go func() {
 		defer testWg.Done()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			nextRun, err := job1.NextRun()
 			require.NoError(t, err)
 			assert.Equal(t, testTime.Add(1*time.Minute), nextRun)
@@ -1750,7 +1750,7 @@ func TestJob_NextRun_ConcurrentCompletions(t *testing.T) {
 
 	go func() {
 		defer testWg.Done()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			nextRun, err := job2.NextRun()
 			require.NoError(t, err)
 			assert.Equal(t, testTime.Add(2*time.Minute), nextRun)
@@ -1759,7 +1759,7 @@ func TestJob_NextRun_ConcurrentCompletions(t *testing.T) {
 
 	go func() {
 		defer testWg.Done()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			nextRun, err := job3.NextRun()
 			require.NoError(t, err)
 			assert.Equal(t, testTime.Add(3*time.Minute), nextRun)
@@ -1768,7 +1768,7 @@ func TestJob_NextRun_ConcurrentCompletions(t *testing.T) {
 
 	go func() {
 		defer testWg.Done()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			nextRun, err := job4.NextRun()
 			require.NoError(t, err)
 			assert.Equal(t, testTime.Add(4*time.Minute), nextRun)
