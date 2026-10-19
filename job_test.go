@@ -156,6 +156,162 @@ func TestDaylightSavingsTimePolicy_CronJob(t *testing.T) {
 	}
 }
 
+func TestDaylightSavingsTimePolicy_CronJob_CalendarConstraints(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	// March 8, 2026 is a Sunday with no 02:30 wall-clock time in New York.
+	march2 := time.Date(2026, 3, 2, 3, 0, 0, 0, americaNewYork)
+	march7 := time.Date(2026, 3, 7, 3, 0, 0, 0, americaNewYork)
+	adjusted := time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork)
+	monday := time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork)
+	april1 := time.Date(2026, 4, 1, 2, 30, 0, 0, americaNewYork)
+
+	tests := []struct {
+		name            string
+		crontab         string
+		withSeconds     bool
+		lastRun         time.Time
+		expectedNextRun time.Time
+	}{
+		{"daily adjusts on transition day", "30 2 * * *", false, march7, adjusted},
+		{"daily before transition", "30 2 * * *", false, march2, time.Date(2026, 3, 3, 2, 30, 0, 0, americaNewYork)},
+		{"weekday excludes Sunday", "30 2 * * MON", false, march2, monday},
+		{"weekday includes Sunday", "30 2 * * SUN", false, march2, adjusted},
+		{"day of month excludes eighth", "30 2 9 * *", false, march2, monday},
+		{"day of month includes eighth", "30 2 8 * *", false, march2, adjusted},
+		{"month excludes March", "30 2 * APR *", false, march2, april1},
+		{"month includes March", "30 2 * MAR *", false, march7, adjusted},
+		{"weekday range excludes Sunday", "30 2 * * MON-FRI", false, march7, monday},
+		{"weekday range includes Sunday", "30 2 * * SUN-MON", false, march7, adjusted},
+		{"weekday list excludes Sunday", "30 2 * * MON,WED", false, march7, monday},
+		{"weekday list includes Sunday", "30 2 * * SUN,MON", false, march7, adjusted},
+		{"day of month range excludes eighth", "30 2 9-10 * *", false, march7, monday},
+		{"day of month range includes eighth", "30 2 8-9 * *", false, march7, adjusted},
+		{"day of month list excludes eighth", "30 2 9,15 * *", false, march7, monday},
+		{"day of month list includes eighth", "30 2 8,15 * *", false, march7, adjusted},
+		{"month range excludes March", "30 2 * APR-MAY *", false, march7, april1},
+		{"month range includes March", "30 2 * MAR-APR *", false, march7, adjusted},
+		{"month list excludes March", "30 2 * APR,JUN *", false, march7, april1},
+		{"month list includes March", "30 2 * MAR,JUN *", false, march7, adjusted},
+		{"DOM or DOW matches only DOM", "30 2 8 * MON", false, march7, adjusted},
+		{"DOM or DOW matches only DOW", "30 2 9 * SUN", false, march7, adjusted},
+		{"DOM or DOW matches neither", "30 2 9 * MON", false, march7, monday},
+		{"month still required with DOM or DOW", "30 2 8 APR SUN", false, march7, time.Date(2026, 4, 5, 2, 30, 0, 0, americaNewYork)},
+		{"DOM wildcard bit requires DOW", "30 2 */1 * MON", false, march7, monday},
+		{"DOW wildcard bit requires DOM", "30 2 9 * */1", false, march7, monday},
+		{"question mark wildcard requires DOW", "30 2 ? * MON", false, march7, monday},
+		{"stepped wildcard uses DOM or DOW", "30 2 */2 * SUN", false, march7, adjusted},
+		{"full DOM range uses DOM or DOW", "30 2 1-31 * MON", false, march7, adjusted},
+		{"seconds with excluded day", "15 30 2 9 * MON", true, march7, monday.Add(15 * time.Second)},
+		{"seconds with included day", "15 30 2 8 * MON", true, march7, adjusted.Add(15 * time.Second)},
+		{"optional seconds with excluded day", "30 2 * * MON", true, march7, monday},
+		{"TZ directive includes transition day", "TZ=America/New_York 30 2 * * *", false, march7.UTC(), adjusted.UTC()},
+		{"TZ directive excludes transition day", "TZ=America/New_York 30 2 * * MON", false, march7.UTC(), monday.UTC()},
+		{"CRON_TZ directive includes transition day", "CRON_TZ=America/New_York 30 2 * * *", false, march7.UTC(), adjusted.UTC()},
+		{"CRON_TZ directive excludes transition day", "CRON_TZ=America/New_York 30 2 * * MON", false, march7.UTC(), monday.UTC()},
+		{"UTC directive has no DST gap", "CRON_TZ=UTC 30 2 * * MON", false, march7, time.Date(2026, 3, 9, 2, 30, 0, 0, time.UTC).In(americaNewYork)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cronImpl := newDefaultCronImplementation(tt.withSeconds)
+			err := cronImpl.IsValid(tt.crontab, tt.lastRun.Location(), tt.lastRun.Add(-time.Hour))
+			require.NoError(t, err)
+
+			j := cronJob{
+				crontab:                   tt.crontab,
+				cronSchedule:              cronImpl,
+				daylightSavingsTimePolicy: DaylightSavingsTimeRunAfterTransition,
+			}
+			assert.Equal(t, tt.expectedNextRun, j.next(tt.lastRun))
+		})
+	}
+}
+
+type daylightSavingsTimeTestCron struct {
+	nextRun time.Time
+}
+
+func (daylightSavingsTimeTestCron) IsValid(_ string, _ *time.Location, _ time.Time) error {
+	return nil
+}
+
+func (c daylightSavingsTimeTestCron) Next(_ time.Time) time.Time {
+	return c.nextRun
+}
+
+func TestDaylightSavingsTimePolicy_CronJob_CustomImplementation(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	lastRun := time.Date(2026, 3, 2, 3, 0, 0, 0, americaNewYork)
+	monday := time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork)
+	tests := []struct {
+		name    string
+		crontab string
+		nextRun time.Time
+	}{
+		{"custom syntax", "custom calendar", monday},
+		{"custom semantics for standard syntax", "30 2 * * *", monday},
+		{"custom adjustment", "custom calendar", time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork)},
+		{"exhausted custom schedule", "custom calendar", time.Time{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := cronJob{
+				crontab:                   tt.crontab,
+				cronSchedule:              daylightSavingsTimeTestCron{nextRun: tt.nextRun},
+				daylightSavingsTimePolicy: DaylightSavingsTimeRunAfterTransition,
+			}
+			assert.Equal(t, tt.nextRun, j.next(lastRun))
+		})
+	}
+}
+
+func TestDaylightSavingsTimePolicy_CronJob_Execution(t *testing.T) {
+	americaNewYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	start := time.Date(2026, 3, 7, 3, 0, 0, 0, americaNewYork)
+	tests := []struct {
+		name            string
+		crontab         string
+		expectedNextRun time.Time
+	}{
+		{"Monday job runs on Monday", "30 2 * * MON", time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork)},
+		{"daily job runs after transition", "30 2 * * *", time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer verifyNoGoroutineLeaks(t)
+			clock := clockwork.NewFakeClockAt(start)
+			s := newTestScheduler(t, WithClock(clock), WithLocation(americaNewYork))
+			defer func() { require.NoError(t, s.Shutdown()) }()
+
+			fired := make(chan time.Time, 1)
+			j, err := s.NewJob(
+				CronJob(tt.crontab, false),
+				NewTask(func() { fired <- clock.Now() }),
+				WithDaylightSavingsTimePolicy(DaylightSavingsTimeRunAfterTransition),
+			)
+			require.NoError(t, err)
+			s.Start()
+			next, err := j.NextRun()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedNextRun, next)
+
+			clock.Advance(tt.expectedNextRun.Sub(start))
+			select {
+			case at := <-fired:
+				assert.Equal(t, tt.expectedNextRun, at)
+			case <-time.After(2 * time.Second):
+				t.Fatal("job did not run at its scheduled time")
+			}
+		})
+	}
+}
+
 func TestDaylightSavingsTimePolicy_DailyJob(t *testing.T) {
 	americaNewYork, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
