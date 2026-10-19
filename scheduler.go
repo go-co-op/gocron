@@ -98,6 +98,7 @@ type Scheduler interface {
 	StopJobsWithContext(context.Context) error
 	// Update replaces the existing Job's JobDefinition with the provided
 	// JobDefinition. The Job's Job.ID() remains the same.
+	// If validation fails, the existing Job is left unchanged.
 	Update(uuid.UUID, JobDefinition, Task, ...JobOption) (Job, error)
 	// JobsWaitingInQueue number of jobs waiting in Queue in case of LimitModeWait
 	// In case of LimitModeReschedule or no limit it will be always zero
@@ -982,16 +983,6 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	if id == uuid.Nil {
 		j.id = uuid.New()
 	} else {
-		currentJob := requestJobCtx(s.shutdownCtx, id, s.jobOutRequestCh)
-		if currentJob != nil && currentJob.id != uuid.Nil {
-			select {
-			case <-s.shutdownCtx.Done():
-				return nil, nil
-			case s.removeJobCh <- id:
-				<-currentJob.ctx.Done()
-			}
-		}
-
 		j.id = id
 	}
 
@@ -1065,6 +1056,19 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	if err := definition.setup(&j, s.location, s.exec.clock.Now()); err != nil {
 		j.cancel()
 		return nil, err
+	}
+
+	if id != uuid.Nil {
+		currentJob := requestJobCtx(s.shutdownCtx, id, s.jobOutRequestCh)
+		if currentJob != nil && currentJob.id != uuid.Nil {
+			select {
+			case <-s.shutdownCtx.Done():
+				j.cancel()
+				return nil, nil
+			case s.removeJobCh <- id:
+				<-currentJob.ctx.Done()
+			}
+		}
 	}
 
 	newJobCtx, newJobCancel := context.WithCancel(context.Background())
