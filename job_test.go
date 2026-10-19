@@ -1197,6 +1197,81 @@ func TestJob_NextRuns(t *testing.T) {
 	}
 }
 
+func TestJob_NextRuns_AfterStopJobs(t *testing.T) {
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
+
+	tests := []struct {
+		name    string
+		options []JobOption
+		advance time.Duration
+		first   time.Duration
+	}{
+		{
+			"restarted before the first run",
+			nil,
+			20 * time.Minute,
+			time.Hour,
+		},
+		{
+			"restarted after runs were missed",
+			nil,
+			3*time.Hour + 10*time.Minute,
+			4 * time.Hour,
+		},
+		{
+			"restarted with start immediately",
+			[]JobOption{WithStartAt(WithStartImmediately())},
+			40 * time.Minute,
+			100 * time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClock := clockwork.NewFakeClockAt(testTime)
+
+			s := newTestScheduler(t,
+				WithClock(fakeClock),
+			)
+
+			j, err := s.NewJob(
+				DurationJob(
+					time.Hour,
+				),
+				NewTask(
+					func() {},
+				),
+				tt.options...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			time.Sleep(10 * time.Millisecond)
+			require.NoError(t, s.StopJobs())
+
+			fakeClock.Advance(tt.advance)
+			s.Start()
+			time.Sleep(10 * time.Millisecond)
+
+			want := []time.Time{
+				testTime.Add(tt.first),
+				testTime.Add(tt.first + time.Hour),
+				testTime.Add(tt.first + 2*time.Hour),
+			}
+
+			nextRun, err := j.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, want[0], nextRun)
+
+			nextRuns, err := j.NextRuns(len(want))
+			require.NoError(t, err)
+			assert.Equal(t, want, nextRuns)
+
+			assert.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestJob_NextRuns_StopTime(t *testing.T) {
 	stopTime := time.Now().Add(350 * time.Millisecond)
 
