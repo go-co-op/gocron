@@ -13,7 +13,7 @@ jobs:
       matrix:
         go-version:
           - "oldstable"
-          - "stable"
+          # - "stable" exclude until golangci-lint supports 1.27
     name: lint and test
     runs-on: ubuntu-latest
     steps:
