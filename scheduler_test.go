@@ -1287,6 +1287,36 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			ErrNewJobWrongTypeOfParameters,
 		},
 		{
+			"parameter number does not match - missing variadic fixed argument",
+			NewTask(func(_ int, _ ...string) {}),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter number does not match - missing second variadic fixed argument",
+			NewTask(func(_ int, _ string, _ ...bool) {}, 1),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter number does not match - variadic with injected context",
+			NewTask(func(_ context.Context, _ int, _ ...string) {}),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter number does not match - variadic with explicit context",
+			NewTask(func(_ context.Context, _ int, _ ...string) {}, context.Background()),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"all good minimum arguments - variadic",
+			NewTask(func(_ int, _ ...string) {}, 1),
+			nil,
+		},
+		{
+			"all good minimum arguments - variadic with injected context",
+			NewTask(func(_ context.Context, _ int, _ ...string) {}, 1),
+			nil,
+		},
+		{
 			"all good string - variadic",
 			NewTask(func(_ ...string) {}, "one", "two"),
 			nil,
