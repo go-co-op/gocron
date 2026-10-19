@@ -678,7 +678,7 @@ func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.T
 func removeSliceDuplicatesTimeOnSortedSlice(times []time.Time) []time.Time {
 	ret := make([]time.Time, 0, len(times))
 	for i, t := range times {
-		if i == 0 || t != times[i-1] {
+		if i == 0 || !t.Equal(times[i-1]) {
 			ret = append(ret, t)
 		}
 	}
