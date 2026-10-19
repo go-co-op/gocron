@@ -13,19 +13,19 @@ jobs:
       matrix:
         go-version:
           - "oldstable"
-          - "stable"
+          # - "stable" exclude until golangci-lint supports 1.27
     name: lint and test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Install Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9.3.0
         with:
-          version: v2.12.2
+          version: v2.15.0
       - name: test
         run: make test_ci

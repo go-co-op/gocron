@@ -28,7 +28,7 @@ func (m myElector) IsLeader(_ context.Context) error {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		go func(i int) {
 			elector := &myElector{
 				num: i,
