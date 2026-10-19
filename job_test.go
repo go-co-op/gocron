@@ -1977,6 +1977,55 @@ func TestJob_LastRunCompletedAt(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestJob_LastRunStartedAt(t *testing.T) {
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+	)
+
+	ran := make(chan struct{}, 1)
+
+	j, err := s.NewJob(
+		DurationJob(
+			time.Hour,
+		),
+		NewTask(
+			func() {
+				// the run takes a minute on the injected clock
+				fakeClock.Advance(time.Minute)
+				ran <- struct{}{}
+			},
+		),
+		WithIntervalFromCompletion(),
+		WithStartAt(WithStartImmediately()),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+
+	select {
+	case <-ran:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for job to run")
+	}
+
+	// Poll until the completion update propagates to the scheduler
+	var completedAt time.Time
+	require.Eventually(t, func() bool {
+		completedAt, err = j.LastRunCompletedAt()
+		return err == nil && !completedAt.IsZero()
+	}, 5*time.Second, 10*time.Millisecond)
+
+	startedAt, err := j.LastRunStartedAt()
+	assert.NoError(t, err)
+	assert.Equal(t, testTime, startedAt)
+	assert.Equal(t, testTime.Add(time.Minute), completedAt)
+
+	require.NoError(t, s.Shutdown())
+}
+
 func TestJob_IsRunning(t *testing.T) {
 	s := newTestScheduler(t)
 

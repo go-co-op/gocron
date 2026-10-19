@@ -1768,7 +1768,7 @@ func (j job) LastRunStartedAt() (time.Time, error) {
 	if ij == nil || ij.id == uuid.Nil {
 		return time.Time{}, ErrJobNotFound
 	}
-	return ij.lastRun, nil
+	return ij.lastRunStartedAt, nil
 }
 
 func (j job) Name() string {
