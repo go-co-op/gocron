@@ -339,9 +339,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 						if jIn.shouldSendOut {
 							select {
 							case <-e.ctx.Done():
-								return
 							case <-j.ctx.Done():
-								return
 							case e.jobsOutForRescheduling <- j.id:
 							}
 						}
