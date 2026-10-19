@@ -727,6 +727,9 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 	} else {
 		if next.IsZero() {
 			next = j.next(s.now())
+			if next.IsZero() {
+				return j, true
+			}
 		}
 
 		if next.Before(s.now()) {
