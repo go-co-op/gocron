@@ -1407,15 +1407,12 @@ type dailyJob struct {
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
-	firstPass := true
-	next := d.nextDay(lastRun, firstPass)
+	next := d.nextDay(lastRun, 0)
 	if !next.IsZero() {
 		return next
 	}
-	firstPass = false
-
-	startNextDay := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(d.interval), 0, 0, 0, 0, lastRun.Location())
-	next = d.nextDay(startNextDay, firstPass)
+	dayOffset := int(d.interval)
+	next = d.nextDay(lastRun, dayOffset)
 	if !next.IsZero() {
 		return next
 	}
@@ -1425,19 +1422,21 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 	// interval days until we find a valid next run.
 	if d.daylightSavingsTimePolicy == DaylightSavingsTimeSkip {
 		for next.IsZero() {
-			startNextDay = time.Date(startNextDay.Year(), startNextDay.Month(), startNextDay.Day()+int(d.interval), 0, 0, 0, 0, lastRun.Location())
-			next = d.nextDay(startNextDay, false)
+			dayOffset += int(d.interval)
+			next = d.nextDay(lastRun, dayOffset)
 		}
 	}
 
 	return next
 }
 
-func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
+func (d dailyJob) nextDay(lastRun time.Time, dayOffset int) time.Time {
+	// Keep the calendar date independent of local midnight, which may not exist.
+	date := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+dayOffset, 0, 0, 0, 0, time.UTC)
 	for _, at := range d.atTimes {
 		// sub the at time hour/min/sec onto the lastScheduledRun's values
 		// to use in checks to see if we've got our next run time
-		atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day(), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+		atDate := time.Date(date.Year(), date.Month(), date.Day(), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
 		// Daylight Saving Time spring-forward gap detection: time.Date normalizes a
 		// non-existent wall-clock time, causing the hour/min/sec to
@@ -1451,14 +1450,7 @@ func (d dailyJob) nextDay(lastRun time.Time, firstPass bool) time.Time {
 			}
 		}
 
-		if firstPass && atDate.After(lastRun) {
-			// checking to see if it is after i.e. greater than,
-			// and not greater or equal as our lastScheduledRun day/time
-			// will be in the loop, and we don't want to select it again
-			return atDate
-		} else if !firstPass && !atDate.Before(lastRun) {
-			// now that we're looking at the next day, it's ok to consider
-			// the same at time that was last run (as lastScheduledRun has been incremented)
+		if atDate.After(lastRun) {
 			return atDate
 		}
 	}
@@ -1475,14 +1467,13 @@ type weeklyJob struct {
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
-	next := w.nextWeekDayAtTime(lastRun, true)
+	next := w.nextWeekDayAtTime(lastRun, 0)
 	if !next.IsZero() {
 		return next
 	}
 
-	startOfTheNextIntervalWeek := (lastRun.Day() - int(lastRun.Weekday())) + int(w.interval*7)
-	from := time.Date(lastRun.Year(), lastRun.Month(), startOfTheNextIntervalWeek, 0, 0, 0, 0, lastRun.Location())
-	next = w.nextWeekDayAtTime(from, false)
+	dayOffset := int(w.interval*7) - int(lastRun.Weekday())
+	next = w.nextWeekDayAtTime(lastRun, dayOffset)
 	if !next.IsZero() {
 		return next
 	}
@@ -1491,24 +1482,26 @@ func (w weeklyJob) next(lastRun time.Time) time.Time {
 	// skipped, advance to subsequent interval weeks until we find a valid run.
 	if w.daylightSavingsTimePolicy == DaylightSavingsTimeSkip {
 		for next.IsZero() {
-			from = time.Date(from.Year(), from.Month(), from.Day()+int(w.interval*7), 0, 0, 0, 0, lastRun.Location())
-			next = w.nextWeekDayAtTime(from, false)
+			dayOffset += int(w.interval * 7)
+			next = w.nextWeekDayAtTime(lastRun, dayOffset)
 		}
 	}
 
 	return next
 }
 
-func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Time {
+func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, dayOffset int) time.Time {
+	// A local midnight transition must not change the interval's starting weekday.
+	date := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+dayOffset, 0, 0, 0, 0, time.UTC)
 	for _, wd := range w.daysOfWeek {
 		// checking if we're on the same day or later in the same week
-		if wd >= lastRun.Weekday() {
+		if wd >= date.Weekday() {
 			// weekDayDiff is used to add the correct amount to the atDate day below
-			weekDayDiff := wd - lastRun.Weekday()
+			weekDayDiff := wd - date.Weekday()
 			for _, at := range w.atTimes {
 				// sub the at time hour/min/sec onto the lastScheduledRun's values
 				// to use in checks to see if we've got our next run time
-				atDate := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+				atDate := time.Date(date.Year(), date.Month(), date.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
 				// Daylight Saving Time spring-forward gap detection
 				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
@@ -1520,14 +1513,7 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, firstPass bool) time.Tim
 					}
 				}
 
-				if firstPass && atDate.After(lastRun) {
-					// checking to see if it is after i.e. greater than,
-					// and not greater or equal as our lastScheduledRun day/time
-					// will be in the loop, and we don't want to select it again
-					return atDate
-				} else if !firstPass && !atDate.Before(lastRun) {
-					// now that we're looking at the next week, it's ok to consider
-					// the same at time that was last run (as lastScheduledRun has been incremented)
+				if atDate.After(lastRun) {
 					return atDate
 				}
 			}
