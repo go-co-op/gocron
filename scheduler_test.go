@@ -305,6 +305,91 @@ func TestScheduler_Update(t *testing.T) {
 	}
 }
 
+func TestScheduler_UpdateValidationError(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name       string
+		definition JobDefinition
+		task       Task
+		options    []JobOption
+		err        error
+	}{
+		{
+			name:       "nil task",
+			definition: DurationJob(2 * time.Second),
+			err:        ErrNewJobTaskNil,
+		},
+		{
+			name:       "invalid option",
+			definition: DurationJob(2 * time.Second),
+			task:       NewTask(func() {}),
+			options:    []JobOption{WithName("")},
+			err:        ErrWithNameEmpty,
+		},
+		{
+			name:       "missing argument",
+			definition: DurationJob(2 * time.Second),
+			task:       NewTask(func(int) {}),
+			err:        ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			name:       "invalid interval",
+			definition: DurationJob(0),
+			task:       NewTask(func() {}),
+			err:        ErrDurationJobIntervalZero,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clock := clockwork.NewFakeClock()
+			s := newTestScheduler(t, WithClock(clock))
+			defer func() { require.NoError(t, s.Shutdown()) }()
+
+			release := make(chan struct{})
+			defer close(release)
+			runs := make(chan context.Context, 2)
+			original, err := s.NewJob(DurationJob(time.Second), NewTask(func(ctx context.Context) {
+				runs <- ctx
+				<-release
+			}), WithName("original"))
+			require.NoError(t, err)
+			s.Start()
+			clock.Advance(time.Second)
+
+			var jobCtx context.Context
+			select {
+			case jobCtx = <-runs:
+			case <-time.After(time.Second):
+				t.Fatal("original job did not run")
+			}
+			next, err := original.NextRun()
+			require.NoError(t, err)
+
+			updated, err := s.Update(original.ID(), tt.definition, tt.task, tt.options...)
+			require.ErrorIs(t, err, tt.err)
+			require.Nil(t, updated)
+			assert.NoError(t, jobCtx.Err(), "failed update canceled the original job")
+			jobs := s.Jobs()
+			require.Len(t, jobs, 1, "failed update removed the original job")
+			assert.Equal(t, original.ID(), jobs[0].ID())
+			assert.Equal(t, "original", jobs[0].Name())
+			gotNext, err := original.NextRun()
+			require.NoError(t, err)
+			assert.Equal(t, next, gotNext)
+
+			clock.Advance(time.Second)
+			select {
+			case ctx := <-runs:
+				assert.NoError(t, ctx.Err())
+			case <-time.After(time.Second):
+				t.Fatal("original job did not run after the failed update")
+			}
+		})
+	}
+}
+
 func TestScheduler_StopTimeout(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
@@ -1287,6 +1372,36 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			ErrNewJobWrongTypeOfParameters,
 		},
 		{
+			"parameter number does not match - missing variadic fixed argument",
+			NewTask(func(_ int, _ ...string) {}),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter number does not match - missing second variadic fixed argument",
+			NewTask(func(_ int, _ string, _ ...bool) {}, 1),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter number does not match - variadic with injected context",
+			NewTask(func(_ context.Context, _ int, _ ...string) {}),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"parameter number does not match - variadic with explicit context",
+			NewTask(func(_ context.Context, _ int, _ ...string) {}, context.Background()),
+			ErrNewJobWrongNumberOfParameters,
+		},
+		{
+			"all good minimum arguments - variadic",
+			NewTask(func(_ int, _ ...string) {}, 1),
+			nil,
+		},
+		{
+			"all good minimum arguments - variadic with injected context",
+			NewTask(func(_ context.Context, _ int, _ ...string) {}, 1),
+			nil,
+		},
+		{
 			"all good string - variadic",
 			NewTask(func(_ ...string) {}, "one", "two"),
 			nil,
@@ -2181,8 +2296,8 @@ func TestScheduler_WithEventListeners(t *testing.T) {
 				}
 			} else {
 				select {
-				case <-listenerRunCh:
-					t.Fatal("listener ran when it shouldn't have")
+				case err = <-listenerRunCh:
+					t.Fatal("listener ran when it shouldn't have", err)
 				case <-time.After(time.Millisecond * 100):
 				}
 			}
@@ -2241,8 +2356,8 @@ func TestScheduler_WithLocker_WithEventListeners(t *testing.T) {
 				}
 			} else {
 				select {
-				case <-listenerRunCh:
-					t.Fatal("listener ran when it shouldn't have")
+				case err = <-listenerRunCh:
+					t.Fatal("listener ran when it shouldn't have", err)
 				case <-time.After(time.Millisecond * 100):
 				}
 			}
