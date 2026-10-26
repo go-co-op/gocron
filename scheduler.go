@@ -807,6 +807,8 @@ func (s *scheduler) selectStart() {
 
 	s.started.Store(true)
 	for id, j := range s.jobs {
+		// runs scheduled before a StopJobs no longer apply
+		j.nextScheduled = nil
 		updated, drop := s.prepareFirstRun(j)
 		if drop {
 			s.selectRemoveJob(id)
