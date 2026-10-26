@@ -727,6 +727,9 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 	} else {
 		if next.IsZero() {
 			next = j.next(s.now())
+			if next.IsZero() {
+				return j, true
+			}
 		}
 
 		if next.Before(s.now()) {
@@ -807,6 +810,8 @@ func (s *scheduler) selectStart() {
 
 	s.started.Store(true)
 	for id, j := range s.jobs {
+		// runs scheduled before a StopJobs no longer apply
+		j.nextScheduled = nil
 		updated, drop := s.prepareFirstRun(j)
 		if drop {
 			s.selectRemoveJob(id)
