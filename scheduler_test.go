@@ -3720,6 +3720,48 @@ func TestScheduler_OneTimeJob_PastStartTime_DoesNotSpin(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 }
 
+// A MonthlyJob whose interval is a multiple of 12 only ever looks at the
+// month it starts in. When that month lacks the day (the 31st in April)
+// next() has no run to return, the schedule is exhausted and the job is
+// removed. Searching on forever would freeze the scheduler goroutine.
+func TestScheduler_MonthlyJob_DayMissingFromStartMonth_DoesNotSpin(t *testing.T) {
+	schedulerStart := time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC)
+	yearlyOn31st := MonthlyJob(12, NewDaysOfTheMonth(31), NewAtTimes(NewAtTime(9, 0, 0)))
+
+	for _, startFirst := range []bool{false, true} {
+		name := "added before Start"
+		if startFirst {
+			name = "added after Start"
+		}
+		t.Run(name, func(t *testing.T) {
+			defer verifyNoGoroutineLeaks(t)
+
+			s := newTestScheduler(t, WithClock(clockwork.NewFakeClockAt(schedulerStart)))
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				if startFirst {
+					s.Start()
+				}
+				_, err := s.NewJob(yearlyOn31st, NewTask(func() {}))
+				require.NoError(t, err)
+				if !startFirst {
+					s.Start()
+				}
+			}()
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("Start() or NewJob() did not return within 2s")
+			}
+
+			require.Empty(t, s.Jobs(), "a job with no run should be removed")
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 // TestScheduler_WithStartAtGrace covers the WithStartAtGrace JobOption,
 // which lets callers opt into a bounded tolerance for late first-run
 // dispatch. Without grace, a job whose scheduled start time has already

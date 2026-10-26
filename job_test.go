@@ -842,6 +842,42 @@ func TestMonthlyJob_next(t *testing.T) {
 			time.Date(2024, 2, 29, 5, 30, 0, 0, time.UTC),
 			91 * 24 * time.Hour,
 		},
+		{
+			"every 12 months on Feb 29, skips the years without it",
+			12,
+			[]int{29},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2097, 2, 10, 5, 30, 0, 0, time.UTC),
+			time.Date(2104, 2, 29, 5, 30, 0, 0, time.UTC),
+			2574 * 24 * time.Hour,
+		},
+		{
+			"every 12 months on the 31st, start month has 30 days, no run",
+			12,
+			[]int{31},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2000, 4, 10, 12, 0, 0, 0, time.UTC),
+			time.Time{},
+			0,
+		},
+		{
+			"every 24 months on Feb 29, start year is never a leap year, no run",
+			24,
+			[]int{29},
+			nil,
+			[]time.Time{
+				time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC),
+			},
+			time.Date(2001, 2, 10, 12, 0, 0, 0, time.UTC),
+			time.Time{},
+			0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -855,7 +891,9 @@ func TestMonthlyJob_next(t *testing.T) {
 
 			next := m.next(tt.lastRun)
 			assert.Equal(t, tt.expectedNextRun, next)
-			assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
+			if !next.IsZero() {
+				assert.Equal(t, tt.expectedDurationToNextRun, next.Sub(tt.lastRun))
+			}
 		})
 	}
 }
@@ -1302,6 +1340,46 @@ func TestJob_NextRuns_StopTime(t *testing.T) {
 	}
 
 	require.NoError(t, s.Shutdown())
+}
+
+func TestJob_NextRuns_EndOfSchedule(t *testing.T) {
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	first := now.Add(24 * time.Hour)
+	second := now.Add(48 * time.Hour)
+
+	tests := []struct {
+		name    string
+		jd      JobDefinition
+		options []JobOption
+		want    []time.Time
+	}{
+		{
+			"one time job with fewer runs than asked for",
+			OneTimeJob(OneTimeJobStartDateTimes(first, second)),
+			nil,
+			[]time.Time{first, second},
+		},
+		{
+			"monthly job starting in a month without its day",
+			MonthlyJob(12, NewDaysOfTheMonth(31), NewAtTimes(NewAtTime(9, 0, 0))),
+			[]JobOption{WithStartAt(WithStartDateTime(first))},
+			[]time.Time{first},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t, WithClock(clockwork.NewFakeClockAt(now)))
+			j, err := s.NewJob(tt.jd, NewTask(func() {}), tt.options...)
+			require.NoError(t, err)
+			s.Start()
+
+			runs, err := j.NextRuns(5)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, runs)
+			require.NoError(t, s.Shutdown())
+		})
+	}
 }
 
 func TestJob_PanicOccurred(t *testing.T) {

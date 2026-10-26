@@ -1543,7 +1543,11 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	}
 
 	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
-	for next.IsZero() {
+	// a multiple of 12 months revisits one calendar month, so the day may
+	// never exist (e.g. the 31st every 12 months from April). The leap years
+	// repeat every 400 years, so a stride of whole years repeats within 400
+	// steps: if none matched by then, none will.
+	for i := 0; next.IsZero() && i < 400; i++ {
 		daysFromEnd = m.handleNegativeDays(from, daysList, m.daysFromEnd)
 		next = m.nextMonthDayAtTime(from, daysFromEnd, false)
 		from = from.AddDate(0, int(m.interval), 0)
@@ -1802,6 +1806,9 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 
 		from := out[i-1]
 		next := ij.next(from)
+		if next.IsZero() {
+			return out[:i], nil
+		}
 		if !ij.stopTime.IsZero() && !next.Before(ij.stopTime) {
 			return out[:i], nil
 		}
