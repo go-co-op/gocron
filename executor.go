@@ -442,6 +442,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		if err := e.elector.IsLeader(j.ctx); err != nil {
 			e.sendOutForRescheduling(&jIn)
 			e.incrementJobCounter(j, Skip)
+			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
 	} else if !j.disabledLocker && j.locker != nil {

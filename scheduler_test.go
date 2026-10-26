@@ -2054,6 +2054,33 @@ func TestScheduler_WithDistributed(t *testing.T) {
 	}
 }
 
+// TestScheduler_WithDistributedElector_NotLeaderNextRun asserts that a run
+// skipped because the elector reports another leader leaves the job's next
+// run in the future, as it does for a run skipped by a locker.
+func TestScheduler_WithDistributedElector_NotLeaderNextRun(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	start := time.Date(2024, time.January, 1, 9, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(start)
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithDistributedElector(&testElector{leaderElected: true, notLeader: make(chan struct{}, 1)}),
+	)
+	j, err := s.NewJob(DurationJob(time.Second), NewTask(func() {}))
+	require.NoError(t, err)
+
+	s.Start()
+	fakeClock.Advance(time.Second)
+
+	require.Eventually(t, func() bool {
+		nextRun, err := j.NextRun()
+		return err == nil && nextRun.Equal(start.Add(2*time.Second))
+	}, 3*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, s.Shutdown())
+}
+
 func TestScheduler_RemoveJob(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	tests := []struct {
