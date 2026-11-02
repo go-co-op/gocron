@@ -435,6 +435,7 @@ func (d dailyJobDefinition) setup(j *internalJob, location *time.Location, _ tim
 		interval:                  d.interval,
 		atTimes:                   atTimesDate,
 		daylightSavingsTimePolicy: j.daylightSavingsTimePolicy,
+		location:                  location,
 	}
 	j.jobSchedule = ds
 	return nil
@@ -477,6 +478,7 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ ti
 	}
 	ws.atTimes = atTimesDate
 	ws.daylightSavingsTimePolicy = j.daylightSavingsTimePolicy
+	ws.location = location
 
 	j.jobSchedule = ws
 	return nil
@@ -557,6 +559,7 @@ func (m monthlyJobDefinition) setup(j *internalJob, location *time.Location, _ t
 	}
 	ms.atTimes = atTimesDate
 	ms.daylightSavingsTimePolicy = j.daylightSavingsTimePolicy
+	ms.location = location
 
 	j.jobSchedule = ms
 	return nil
@@ -1398,15 +1401,34 @@ func (j *durationRandomJob) next(lastRun time.Time) time.Time {
 	return lastRun.Add(j.min + time.Duration(r))
 }
 
+// inLocation returns t in the given location, or t unchanged when the
+// location is nil.
+//
+// The daily, weekly and monthly schedules take the calendar date and the
+// at times of the next run from the location of the run they are
+// calculating from. That run can be a start time the caller provided in
+// another location (e.g. WithStartDateTime(time.Now()) on a host whose
+// time.Local differs from the scheduler's WithLocation), so it is moved
+// into the scheduler's location first.
+func inLocation(t time.Time, location *time.Location) time.Time {
+	if location == nil {
+		return t
+	}
+	return t.In(location)
+}
+
 var _ jobSchedule = (*dailyJob)(nil)
 
 type dailyJob struct {
 	interval                  uint
 	atTimes                   []time.Time
 	daylightSavingsTimePolicy DaylightSavingsTimePolicy
+	// location is the scheduler's location, in which the at times apply
+	location *time.Location
 }
 
 func (d dailyJob) next(lastRun time.Time) time.Time {
+	lastRun = inLocation(lastRun, d.location)
 	next := d.nextDay(lastRun, 0)
 	if !next.IsZero() {
 		return next
@@ -1464,9 +1486,12 @@ type weeklyJob struct {
 	daysOfWeek                []time.Weekday
 	atTimes                   []time.Time
 	daylightSavingsTimePolicy DaylightSavingsTimePolicy
+	// location is the scheduler's location, in which the at times apply
+	location *time.Location
 }
 
 func (w weeklyJob) next(lastRun time.Time) time.Time {
+	lastRun = inLocation(lastRun, w.location)
 	next := w.nextWeekDayAtTime(lastRun, 0)
 	if !next.IsZero() {
 		return next
@@ -1530,9 +1555,12 @@ type monthlyJob struct {
 	daysFromEnd               []int
 	atTimes                   []time.Time
 	daylightSavingsTimePolicy DaylightSavingsTimePolicy
+	// location is the scheduler's location, in which the at times apply
+	location *time.Location
 }
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
+	lastRun = inLocation(lastRun, m.location)
 	daysList := make([]int, len(m.days))
 	copy(daysList, m.days)
 
