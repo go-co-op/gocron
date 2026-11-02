@@ -251,7 +251,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				s.selectRemoveJobsByTags(tags)
 
 			case out := <-s.exec.jobOutRequest:
-				s.selectJobOutRequest(out)
+				s.selectExecJobOutRequest(out)
 
 			case out := <-s.jobOutRequestCh:
 				s.selectJobOutRequest(out)
@@ -367,7 +367,7 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 // bounded by defaultRunNowSendTimeout.
 func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	j, ok := s.jobs[run.id]
-	if !ok {
+	if !ok || j.limitReached() {
 		select {
 		case run.outChan <- ErrJobNotFound:
 		case <-s.shutdownCtx.Done():
@@ -508,6 +508,10 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	if !ok {
 		// the job was removed while it was running, and
 		// so we don't need to reschedule it.
+		return
+	}
+	if j.limitReached() {
+		// the job is only waiting for its last run to finish
 		return
 	}
 
@@ -673,7 +677,14 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	// not canceled while the task is still executing. See #925.
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
-		if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+		if j.limitReached() {
+			// No more runs: drop the run that was already scheduled
+			// when this one started. selectExecJobOutRequest keeps
+			// runs that were already dispatched from executing.
+			if j.timer != nil {
+				j.timer.Stop()
+			}
+			j.nextScheduled = nil
 			s.jobs[completed.id] = j
 			return
 		}
@@ -703,7 +714,7 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 	// has finished (completedAt is set), remove the job now. This is done
 	// here rather than in selectExecJobsOutCompleted to avoid canceling
 	// the job's context while the task is still running. See #925.
-	if !update.completedAt.IsZero() && j.limitRunsTo != nil && j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+	if !update.completedAt.IsZero() && j.limitReached() {
 		go func(id uuid.UUID) {
 			select {
 			case <-s.shutdownCtx.Done():
@@ -712,6 +723,19 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 			}
 		}(update.id)
 	}
+}
+
+// selectExecJobOutRequest answers the executor's request for a job it is
+// about to run. A job that has used up its WithLimitedRuns runs is kept
+// until its last run returns, but it is reported as not found here so that
+// runs that were already dispatched (a timer that had fired, queued
+// singleton runs, RunNow) are dropped instead of going over the limit.
+func (s *scheduler) selectExecJobOutRequest(out *jobOutRequest) {
+	if j, ok := s.jobs[out.id]; ok && j.limitReached() {
+		close(out.outChan)
+		return
+	}
+	s.selectJobOutRequest(out)
 }
 
 // selectJobOutRequest handles Job.X() accessor queries (LastRun,

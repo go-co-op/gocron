@@ -108,6 +108,12 @@ func (j *internalJob) stop() {
 	j.cancel()
 }
 
+// limitReached reports whether the job has used up the runs
+// allowed by WithLimitedRuns.
+func (j *internalJob) limitReached() bool {
+	return j.limitRunsTo != nil && j.limitRunsTo.runCount >= j.limitRunsTo.limit
+}
+
 func (j *internalJob) stopTimeReached(now time.Time) bool {
 	if j.stopTime.IsZero() {
 		return false
