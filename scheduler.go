@@ -570,7 +570,11 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	}
 
 	if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
-		s.selectRemoveJob(id)
+		// The run that asked for this reschedule may still be waiting in a
+		// singleton or limit mode queue, or be executing right now. Removing
+		// the job here would cancel it, so remove it once the stop time is
+		// reached instead.
+		s.removeJobAtStopTime(j)
 		return
 	}
 
@@ -595,6 +599,28 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 		}
 	})
 	// update the job with its new next and last run times and timer.
+	s.jobs[id] = j
+}
+
+// removeJobAtStopTime removes the job when its stop time is reached, or
+// right away if the stop time has already passed.
+func (s *scheduler) removeJobAtStopTime(j internalJob) {
+	delay := j.stopTime.Sub(s.now())
+	if delay <= 0 {
+		s.selectRemoveJob(j.id)
+		return
+	}
+
+	if j.timer != nil {
+		j.timer.Stop()
+	}
+	id := j.id
+	j.timer = s.exec.clock.AfterFunc(delay, func() {
+		select {
+		case <-s.shutdownCtx.Done():
+		case s.removeJobCh <- id:
+		}
+	})
 	s.jobs[id] = j
 }
 

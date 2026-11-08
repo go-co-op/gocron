@@ -3410,6 +3410,69 @@ func TestScheduler_WithStopDateTime_JobRemovedAfterStopTime(t *testing.T) {
 	})
 }
 
+func TestScheduler_WithStopDateTime_LastRunBeforeStopTime(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name             string
+		schedulerOptions []SchedulerOption
+		jobOptions       []JobOption
+	}{
+		{
+			"no limit",
+			nil,
+			nil,
+		},
+		{
+			"singleton mode reschedule",
+			nil,
+			[]JobOption{WithSingletonMode(LimitModeReschedule)},
+		},
+		{
+			"singleton mode wait",
+			nil,
+			[]JobOption{WithSingletonMode(LimitModeWait)},
+		},
+		{
+			"limit concurrent jobs reschedule",
+			[]SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)},
+			nil,
+		},
+		{
+			"limit concurrent jobs wait",
+			[]SchedulerOption{WithLimitConcurrentJobs(1, LimitModeWait)},
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t, tt.schedulerOptions...)
+
+			var runs atomic.Int32
+			// runs are due at 100ms and 200ms; the next one (300ms) is past the stop time
+			opts := append([]JobOption{
+				WithStopAt(WithStopDateTime(time.Now().Add(250 * time.Millisecond))),
+			}, tt.jobOptions...)
+			_, err := s.NewJob(
+				DurationJob(100*time.Millisecond),
+				NewTask(func() { runs.Add(1) }),
+				opts...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			require.Eventually(t, func() bool {
+				return len(s.Jobs()) == 0
+			}, time.Second, 10*time.Millisecond, "job should be removed after stop time")
+			assert.Equal(t, int32(2), runs.Load())
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 // TestScheduler_WithLimitedRuns_ContextNotCanceledDuringTask asserts that the
 // context passed to a task running under WithLimitedRuns is not canceled
 // while the task function is still executing. Regression test for #925.
