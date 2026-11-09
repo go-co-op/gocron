@@ -727,7 +727,7 @@ func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 		if j.limitRunsTo != nil {
 			limit := new(limitRunsTo)
 			*limit = *j.limitRunsTo
-			j.limitRunsTo = &limit
+			j.limitRunsTo = limit
 		}
 		select {
 		case out.outChan <- j:
