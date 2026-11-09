@@ -193,7 +193,10 @@ func (e *executor) start() {
 						// to work through the channel backlog. A hard limit of 1000 is in place
 						// at which point this call would block.
 						// TODO when metrics are added, this should increment a wait metric
-						e.sendOutForRescheduling(&jIn)
+						// For intervalFromCompletion, skip rescheduling here - it will happen after job completes
+						if j := requestJobCtx(ctx, jIn.id, e.jobOutRequest); j == nil || !j.intervalFromCompletion {
+							e.sendOutForRescheduling(&jIn)
+						}
 						e.limitMode.in <- jIn
 					}
 				} else {
@@ -459,7 +462,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
-		defer func() { _ = lock.Unlock(j.ctx) }()
+		defer func() { _ = lock.Unlock(context.WithoutCancel(j.ctx)) }()
 	} else if !j.disabledLocker && e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
@@ -469,7 +472,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
-		defer func() { _ = lock.Unlock(j.ctx) }()
+		defer func() { _ = lock.Unlock(context.WithoutCancel(j.ctx)) }()
 	}
 
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
