@@ -960,6 +960,65 @@ func TestJob_RunNow_Error(t *testing.T) {
 	assert.EqualError(t, j.RunNow(), ErrJobRunNowFailed.Error())
 }
 
+func TestJob_RunNow_SchedulerNotRunning(t *testing.T) {
+	tests := []struct {
+		name string
+		stop func(t *testing.T, s Scheduler)
+	}{
+		{
+			"before start",
+			func(_ *testing.T, _ Scheduler) {},
+		},
+		{
+			"after stop jobs",
+			func(t *testing.T, s Scheduler) {
+				s.Start()
+				require.NoError(t, s.StopJobs())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			ran := make(chan struct{}, 1)
+			j, err := s.NewJob(
+				DurationJob(time.Hour),
+				NewTask(func() {
+					ran <- struct{}{}
+				}),
+			)
+			require.NoError(t, err)
+
+			tt.stop(t, s)
+
+			assert.EqualError(t, j.RunNow(), ErrJobRunNowFailed.Error())
+
+			// the scheduler must still accept requests after the failed RunNow
+			started := make(chan struct{})
+			go func() {
+				s.Start()
+				close(started)
+			}()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for the scheduler to start")
+			}
+
+			require.NoError(t, j.RunNow())
+			select {
+			case <-ran:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for the job to run")
+			}
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestJob_LastRun(t *testing.T) {
 	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
 	fakeClock := clockwork.NewFakeClockAt(testTime)
