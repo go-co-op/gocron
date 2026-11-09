@@ -1900,6 +1900,61 @@ func TestWithIntervalFromCompletion_FirstRun(t *testing.T) {
 		"First run should happen quickly with WithStartImmediately")
 }
 
+func TestWithIntervalFromCompletion_LimitConcurrentJobs(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []SchedulerOption
+	}{
+		{
+			"no limit",
+			nil,
+		},
+		{
+			"limit mode reschedule",
+			[]SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)},
+		},
+		{
+			"limit mode wait",
+			[]SchedulerOption{WithLimitConcurrentJobs(1, LimitModeWait)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+			fakeClock := clockwork.NewFakeClockAt(testTime)
+
+			s := newTestScheduler(t,
+				append([]SchedulerOption{WithClock(fakeClock), WithLocation(time.UTC)}, tt.opts...)...,
+			)
+
+			j, err := s.NewJob(
+				DurationJob(time.Hour),
+				NewTask(func() {
+					// the run takes a minute on the injected clock
+					fakeClock.Advance(time.Minute)
+				}),
+				WithIntervalFromCompletion(),
+				WithStartAt(WithStartImmediately()),
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			var nextRun time.Time
+			require.Eventually(t, func() bool {
+				nextRun, err = j.NextRun()
+				return err == nil && nextRun.After(testTime)
+			}, 5*time.Second, 10*time.Millisecond)
+
+			// the next run is an hour after the run completed
+			assert.Equal(t, testTime.Add(time.Minute+time.Hour), nextRun)
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestJob_NextRun_MultipleJobsSimultaneously(t *testing.T) {
 	// This test reproduces the bug where multiple jobs completing simultaneously
 	// would cause NextRun() to return stale values due to race conditions in
