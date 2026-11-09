@@ -374,6 +374,15 @@ func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 		}
 		return
 	}
+	if !s.started.Load() {
+		// the executor is not running, so nothing would receive from
+		// jobsIn and this goroutine would block until shutdown.
+		select {
+		case run.outChan <- ErrJobRunNowFailed:
+		case <-s.shutdownCtx.Done():
+		}
+		return
+	}
 	select {
 	case <-s.shutdownCtx.Done():
 		select {
