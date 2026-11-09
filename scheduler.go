@@ -716,7 +716,8 @@ func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 		// keeps updating as the job runs. Hand the caller its own copy
 		// so accessors like NextRuns read a snapshot, not the live counter.
 		if j.limitRunsTo != nil {
-			limit := *j.limitRunsTo
+			limit := new(limitRunsTo)
+			*limit = *j.limitRunsTo
 			j.limitRunsTo = &limit
 		}
 		select {
