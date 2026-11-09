@@ -3,6 +3,7 @@ package gocron
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -4394,4 +4395,34 @@ func TestScheduler_ExecutionTimeUsesInjectedClock(t *testing.T) {
 	// With the wall-clock bug it would be sub-millisecond.
 	require.GreaterOrEqual(t, execTimes[0], jobDuration,
 		"execution time must be measured on the injected clock (got %s, want >= %s)", execTimes[0], jobDuration)
+}
+
+func TestScheduler_VariadicTaskExecution(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	for _, args := range [][]any{nil, {1}, {1, 2, 3}} {
+		t.Run(fmt.Sprint(args), func(t *testing.T) {
+			s := newTestScheduler(t)
+			defer func() { require.NoError(t, s.Shutdown()) }()
+			result := make(chan []int, 1)
+			failed := make(chan error, 1)
+			_, err := s.NewJob(DurationJob(time.Hour), NewTask(func(values ...int) {
+				result <- values
+			}, args...), WithStartAt(WithStartImmediately()), WithEventListeners(
+				AfterJobRunsWithError(func(_ uuid.UUID, _ string, err error) { failed <- err }),
+			))
+			require.NoError(t, err)
+			s.Start()
+			select {
+			case got := <-result:
+				require.Len(t, got, len(args))
+				for i, value := range got {
+					require.Equal(t, args[i], value)
+				}
+			case err := <-failed:
+				t.Fatalf("variadic task did not execute: %v", err)
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for variadic task")
+			}
+		})
+	}
 }
