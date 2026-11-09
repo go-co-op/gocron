@@ -2314,3 +2314,59 @@ func TestSchedulerNextRunsMidnightTransition(t *testing.T) {
 		})
 	}
 }
+
+func TestCalendarJobNextMidnightGapRunAfterTransition(t *testing.T) {
+	// America/Santiago springs forward at local midnight on 2026-09-06, so
+	// 00:30 does not exist that day and time.Date normalizes it to 23:30 on
+	// the previous day. The job must run on the requested day at the
+	// clock-adjusted time and keep its regular schedule afterwards (#972).
+	location, err := time.LoadLocation("America/Santiago")
+	require.NoError(t, err)
+	atTimes := NewAtTimes(NewAtTime(0, 30, 0))
+	adjusted := time.Date(2026, 9, 6, 1, 30, 0, 0, location)
+	tests := []struct {
+		name       string
+		definition JobDefinition
+		lastRun    time.Time
+		afterGap   time.Time
+	}{
+		{"daily", DailyJob(1, atTimes), time.Date(2026, 9, 5, 0, 30, 0, 0, location), time.Date(2026, 9, 7, 0, 30, 0, 0, location)},
+		{"daily interval two", DailyJob(2, atTimes), time.Date(2026, 9, 4, 0, 30, 0, 0, location), time.Date(2026, 9, 8, 0, 30, 0, 0, location)},
+		{"weekly", WeeklyJob(1, NewWeekdays(time.Sunday), atTimes), time.Date(2026, 8, 30, 0, 30, 0, 0, location), time.Date(2026, 9, 13, 0, 30, 0, 0, location)},
+		{"monthly", MonthlyJob(1, NewDaysOfTheMonth(6), atTimes), time.Date(2026, 8, 6, 0, 30, 0, 0, location), time.Date(2026, 10, 6, 0, 30, 0, 0, location)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, policy := range []DaylightSavingsTimePolicy{
+				DaylightSavingsTimeDefault,
+				DaylightSavingsTimeRunAfterTransition,
+			} {
+				j := &internalJob{daylightSavingsTimePolicy: policy}
+				require.NoError(t, tt.definition.setup(j, location, tt.lastRun))
+				next := j.next(tt.lastRun)
+				require.Equal(t, adjusted, next, "policy %v", policy)
+				require.Equal(t, tt.afterGap, j.next(next), "policy %v", policy)
+			}
+		})
+	}
+}
+
+func TestSchedulerNextRunsMidnightGap(t *testing.T) {
+	location, err := time.LoadLocation("America/Santiago")
+	require.NoError(t, err)
+	clock := clockwork.NewFakeClockAt(time.Date(2026, 9, 4, 12, 0, 0, 0, location))
+	s, err := NewScheduler(WithClock(clock), WithLocation(location))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+	j, err := s.NewJob(DailyJob(1, NewAtTimes(NewAtTime(0, 30, 0))), NewTask(func() {}))
+	require.NoError(t, err)
+	s.Start()
+	next, err := j.NextRuns(4)
+	require.NoError(t, err)
+	require.Equal(t, []time.Time{
+		time.Date(2026, 9, 5, 0, 30, 0, 0, location),
+		time.Date(2026, 9, 6, 1, 30, 0, 0, location),
+		time.Date(2026, 9, 7, 0, 30, 0, 0, location),
+		time.Date(2026, 9, 8, 0, 30, 0, 0, location),
+	}, next)
+}

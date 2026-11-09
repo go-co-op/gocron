@@ -3129,7 +3129,7 @@ func TestScheduler_WithStartAtDateTimePast(t *testing.T) {
 
 	fakeClock := clockwork.NewFakeClockAt(testTime)
 
-	s := newTestScheduler(t, WithClock(fakeClock))
+	s := newTestScheduler(t, WithClock(fakeClock), WithLocation(time.UTC))
 	j, err := s.NewJob(
 		WeeklyJob(2, NewWeekdays(time.Sunday), NewAtTimes(NewAtTime(10, 0, 0))),
 		NewTask(func() {}),
@@ -3150,6 +3150,91 @@ func TestScheduler_WithStartAtDateTimePast(t *testing.T) {
 	// Because the start time was in the past - we expect it to schedule 2 intervals ahead, pasing the first available Sunday
 	// which was in the past Dec 31, 2023, so the next is Jan 7, 2024
 	assert.Equal(t, time.Date(2024, time.January, 7, 10, 0, 0, 0, time.UTC), nextRun)
+}
+
+func TestScheduler_WithStartAt_DifferentLocation(t *testing.T) {
+	newYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+
+	// Monday, Jan 1 2024 09:00 UTC (04:00 in New York)
+	testTime := time.Date(2024, time.January, 1, 9, 0, 0, 0, time.UTC)
+	// the start time is given in UTC, while the scheduler runs in New York
+	start := testTime.Add(time.Hour)
+
+	atNine := NewAtTimes(NewAtTime(9, 0, 0))
+	tests := []struct {
+		name          string
+		definition    JobDefinition
+		startAtOption StartAtOption
+		expected      []time.Time
+	}{
+		{
+			"daily, start in the future",
+			DailyJob(1, atNine),
+			WithStartDateTime(start),
+			[]time.Time{
+				start,
+				time.Date(2024, time.January, 1, 9, 0, 0, 0, newYork),
+				time.Date(2024, time.January, 2, 9, 0, 0, 0, newYork),
+			},
+		},
+		{
+			"daily, start in the past",
+			DailyJob(1, atNine),
+			// a start time in the past is advanced to the first run after now
+			WithStartDateTimePast(testTime.Add(-time.Hour)),
+			[]time.Time{
+				time.Date(2024, time.January, 1, 9, 0, 0, 0, newYork),
+				time.Date(2024, time.January, 2, 9, 0, 0, 0, newYork),
+			},
+		},
+		{
+			"weekly",
+			WeeklyJob(1, NewWeekdays(time.Monday, time.Wednesday), atNine),
+			WithStartDateTime(start),
+			[]time.Time{
+				start,
+				time.Date(2024, time.January, 1, 9, 0, 0, 0, newYork),
+				time.Date(2024, time.January, 3, 9, 0, 0, 0, newYork),
+			},
+		},
+		{
+			"monthly",
+			MonthlyJob(1, NewDaysOfTheMonth(1, 15), atNine),
+			WithStartDateTime(start),
+			[]time.Time{
+				start,
+				time.Date(2024, time.January, 1, 9, 0, 0, 0, newYork),
+				time.Date(2024, time.January, 15, 9, 0, 0, 0, newYork),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer verifyNoGoroutineLeaks(t)
+
+			s := newTestScheduler(t,
+				WithClock(clockwork.NewFakeClockAt(testTime)),
+				WithLocation(newYork),
+			)
+			j, err := s.NewJob(tt.definition, NewTask(func() {}), WithStartAt(tt.startAtOption))
+			require.NoError(t, err)
+
+			s.Start()
+
+			// the runs after the start time follow the at-times
+			// in the scheduler's location
+			nextRuns, err := j.NextRuns(len(tt.expected))
+			require.NoError(t, err)
+			require.NoError(t, s.Shutdown())
+
+			require.Len(t, nextRuns, len(tt.expected))
+			for i, expected := range tt.expected {
+				assert.Truef(t, expected.Equal(nextRuns[i]), "run %d: expected %s, got %s", i, expected.In(newYork), nextRuns[i].In(newYork))
+			}
+		})
+	}
 }
 
 func BenchmarkSchedulerJobs(b *testing.B) {
