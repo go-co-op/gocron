@@ -459,7 +459,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
-		defer func() { _ = lock.Unlock(j.ctx) }()
+		defer func() { _ = lock.Unlock(context.WithoutCancel(j.ctx)) }()
 	} else if !j.disabledLocker && e.locker != nil {
 		lock, err := e.locker.Lock(j.ctx, j.name)
 		if err != nil {
@@ -469,7 +469,7 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 			e.sendOutForNextRunUpdate(&jIn)
 			return
 		}
-		defer func() { _ = lock.Unlock(j.ctx) }()
+		defer func() { _ = lock.Unlock(context.WithoutCancel(j.ctx)) }()
 	}
 
 	_ = callJobFuncWithParams(j.beforeJobRuns, j.id, j.name)
