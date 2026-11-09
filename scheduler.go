@@ -674,7 +674,11 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
 		if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
-			s.jobs[completed.id] = j
+			if j.intervalFromCompletion {
+				s.selectRemoveJob(completed.id)
+			} else {
+				s.jobs[completed.id] = j
+			}
 			return
 		}
 	}
