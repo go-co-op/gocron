@@ -983,16 +983,8 @@ func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicSta
 func (s *scheduler) verifyNonVariadic(taskFunc reflect.Value, tsk task, length int) error {
 	for i := range length {
 		argumentType := reflect.TypeOf(tsk.parameters[i])
-		t1 := argumentType.Kind()
-		if t1 == reflect.Interface || t1 == reflect.Pointer {
-			t1 = argumentType.Elem().Kind()
-		}
 		parameterType := taskFunc.Type().In(i)
-		t2 := reflect.New(parameterType).Elem().Kind()
-		if t2 == reflect.Interface || t2 == reflect.Pointer {
-			t2 = reflect.Indirect(reflect.ValueOf(parameterType)).Kind()
-		}
-		if t1 != t2 {
+		if argumentType == nil || !argumentType.AssignableTo(parameterType) {
 			return ErrNewJobWrongTypeOfParameters
 		}
 	}
