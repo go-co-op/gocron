@@ -2054,6 +2054,81 @@ func TestScheduler_WithDistributed(t *testing.T) {
 	}
 }
 
+var _ Locker = (*ctxRecordingLocker)(nil)
+
+type ctxRecordingLocker struct {
+	unlockCtxErr chan error
+}
+
+func (l *ctxRecordingLocker) Lock(_ context.Context, _ string) (Lock, error) {
+	return &ctxRecordingLock{unlockCtxErr: l.unlockCtxErr}, nil
+}
+
+var _ Lock = (*ctxRecordingLock)(nil)
+
+type ctxRecordingLock struct {
+	unlockCtxErr chan error
+}
+
+func (l *ctxRecordingLock) Unlock(ctx context.Context) error {
+	l.unlockCtxErr <- ctx.Err()
+	return ctx.Err()
+}
+
+func TestScheduler_WithDistributedLocker_UnlockAfterShutdown(t *testing.T) {
+	tests := []struct {
+		name          string
+		schedulerOpts func(Locker) []SchedulerOption
+		jobOpts       func(Locker) []JobOption
+	}{
+		{
+			"scheduler locker",
+			func(l Locker) []SchedulerOption { return []SchedulerOption{WithDistributedLocker(l)} },
+			func(_ Locker) []JobOption { return nil },
+		},
+		{
+			"job locker",
+			func(_ Locker) []SchedulerOption { return nil },
+			func(l Locker) []JobOption { return []JobOption{WithDistributedJobLocker(l)} },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			locker := &ctxRecordingLocker{unlockCtxErr: make(chan error, 1)}
+			s := newTestScheduler(t, tt.schedulerOpts(locker)...)
+
+			started := make(chan struct{}, 1)
+			_, err := s.NewJob(
+				DurationJob(time.Hour),
+				NewTask(func(ctx context.Context) {
+					started <- struct{}{}
+					// return once the scheduler cancels the job's context
+					<-ctx.Done()
+				}),
+				append([]JobOption{WithStartAt(WithStartImmediately())}, tt.jobOpts(locker)...)...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for the job to start")
+			}
+
+			require.NoError(t, s.Shutdown())
+
+			select {
+			case err := <-locker.unlockCtxErr:
+				assert.NoError(t, err, "the lock must be released with a usable context")
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for the lock to be released")
+			}
+		})
+	}
+}
+
 // TestScheduler_WithDistributedElector_NotLeaderNextRun asserts that a run
 // skipped because the elector reports another leader leaves the job's next
 // run in the future, as it does for a run skipped by a locker.
