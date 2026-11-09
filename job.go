@@ -1287,6 +1287,12 @@ func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedHo
 	offset := time.Duration(requestedHour-normalized.Hour())*time.Hour +
 		time.Duration(requestedMin-normalized.Minute())*time.Minute +
 		time.Duration(requestedSec-normalized.Second())*time.Second
+	if offset < 0 && normalized.Hour() > requestedHour {
+		// A gap that starts at local midnight normalizes the requested time
+		// onto the previous calendar day (e.g. 00:30 becomes 23:30 the day
+		// before), so the wall-clock difference wraps around midnight.
+		offset += 24 * time.Hour
+	}
 	if offset <= 0 {
 		// Safety guard: if the offset is not positive, the normalized time
 		// was not in a spring-forward gap (e.g., fall-back scenario). Return
@@ -1294,6 +1300,26 @@ func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedHo
 		return normalized
 	}
 	return normalized.Add(offset)
+}
+
+// daylightSavingsTimeGapAdjust applies the Daylight Saving Time policy to an
+// at-time whose wall-clock value does not exist on the requested day. It
+// reports false when the occurrence should be skipped. The default policy keeps
+// Go's normalized time, unless that normalization moved the run onto an earlier
+// calendar day (a gap at local midnight); then the job runs at the
+// clock-adjusted time after the transition on the requested day.
+func daylightSavingsTimeGapAdjust(atDate time.Time, requestedDay int, at time.Time, policy DaylightSavingsTimePolicy) (time.Time, bool) {
+	switch policy {
+	case DaylightSavingsTimeSkip:
+		return atDate, false
+	case DaylightSavingsTimeRunAfterTransition:
+		return daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second()), true
+	default:
+		if atDate.Day() != requestedDay {
+			return daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second()), true
+		}
+		return atDate, true
+	}
 }
 
 var _ jobSchedule = (*cronJob)(nil)
@@ -1442,11 +1468,9 @@ func (d dailyJob) nextDay(lastRun time.Time, dayOffset int) time.Time {
 		// non-existent wall-clock time, causing the hour/min/sec to
 		// differ from what was requested.
 		if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-			switch d.daylightSavingsTimePolicy {
-			case DaylightSavingsTimeSkip:
+			var ok bool
+			if atDate, ok = daylightSavingsTimeGapAdjust(atDate, date.Day(), at, d.daylightSavingsTimePolicy); !ok {
 				continue
-			case DaylightSavingsTimeRunAfterTransition:
-				atDate = daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
 			}
 		}
 
@@ -1505,11 +1529,10 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, dayOffset int) time.Time
 
 				// Daylight Saving Time spring-forward gap detection
 				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					switch w.daylightSavingsTimePolicy {
-					case DaylightSavingsTimeSkip:
+					requestedDay := date.AddDate(0, 0, int(weekDayDiff)).Day()
+					var ok bool
+					if atDate, ok = daylightSavingsTimeGapAdjust(atDate, requestedDay, at, w.daylightSavingsTimePolicy); !ok {
 						continue
-					case DaylightSavingsTimeRunAfterTransition:
-						atDate = daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
 					}
 				}
 
@@ -1587,11 +1610,9 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass 
 
 				// Daylight Saving Time spring-forward gap detection
 				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					switch m.daylightSavingsTimePolicy {
-					case DaylightSavingsTimeSkip:
+					var ok bool
+					if atDate, ok = daylightSavingsTimeGapAdjust(atDate, day, at, m.daylightSavingsTimePolicy); !ok {
 						continue
-					case DaylightSavingsTimeRunAfterTransition:
-						atDate = daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second())
 					}
 				}
 
