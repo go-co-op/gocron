@@ -1382,6 +1382,75 @@ func TestJob_NextRuns_EndOfSchedule(t *testing.T) {
 	}
 }
 
+func TestJob_NextRuns_LimitedRuns(t *testing.T) {
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		jd    JobDefinition
+		limit uint
+		count int
+		want  []time.Time
+	}{
+		{
+			"duration job with fewer runs left than asked for",
+			DurationJob(time.Hour),
+			2,
+			5,
+			[]time.Time{now.Add(time.Hour), now.Add(2 * time.Hour)},
+		},
+		{
+			"daily job with fewer runs left than asked for",
+			DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))),
+			3,
+			5,
+			[]time.Time{
+				time.Date(2026, time.April, 2, 9, 0, 0, 0, time.UTC),
+				time.Date(2026, time.April, 3, 9, 0, 0, 0, time.UTC),
+				time.Date(2026, time.April, 4, 9, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			"duration job with more runs left than asked for",
+			DurationJob(time.Hour),
+			10,
+			2,
+			[]time.Time{now.Add(time.Hour), now.Add(2 * time.Hour)},
+		},
+		{
+			"zero count",
+			DurationJob(time.Hour),
+			2,
+			0,
+			nil,
+		},
+		{
+			"negative count",
+			DurationJob(time.Hour),
+			2,
+			-1,
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t,
+				WithClock(clockwork.NewFakeClockAt(now)),
+				WithLocation(time.UTC),
+			)
+			j, err := s.NewJob(tt.jd, NewTask(func() {}), WithLimitedRuns(tt.limit))
+			require.NoError(t, err)
+			s.Start()
+
+			runs, err := j.NextRuns(tt.count)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, runs)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestJob_PanicOccurred(t *testing.T) {
 	gotCh := make(chan any)
 	errCh := make(chan error)
