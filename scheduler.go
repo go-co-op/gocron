@@ -1045,7 +1045,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 
 	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()
-	j.function = tsk.function
+	j.function = taskFunc.Interface()
 	// Defensive copy: stopScheduler rewrites j.parameters[0] to swap
 	// in a refreshed context whenever j.parameters[0] happens to be
 	// the old j.ctx. Today, all code paths that produce that state
