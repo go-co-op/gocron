@@ -3668,6 +3668,51 @@ func TestScheduler_WithLimitedRuns_ContextNotCanceledDuringTask(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 }
 
+// TestScheduler_WithLimitedRuns_TaskOutlastsInterval asserts that a job
+// whose task runs longer than its interval still runs exactly the number
+// of times allowed by WithLimitedRuns, and is removed once the last run
+// has finished.
+func TestScheduler_WithLimitedRuns_TaskOutlastsInterval(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name          string
+		schedulerOpts []SchedulerOption
+		jobOpts       []JobOption
+	}{
+		{"default", nil, nil},
+		{"singleton wait", nil, []JobOption{WithSingletonMode(LimitModeWait)}},
+		{"singleton reschedule", nil, []JobOption{WithSingletonMode(LimitModeReschedule)}},
+		{"limit concurrent jobs wait", []SchedulerOption{WithLimitConcurrentJobs(1, LimitModeWait)}, nil},
+		{"limit concurrent jobs reschedule", []SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t, tt.schedulerOpts...)
+
+			var runs atomic.Int32
+			jobOpts := append([]JobOption{WithLimitedRuns(2)}, tt.jobOpts...)
+			_, err := s.NewJob(
+				DurationJob(10*time.Millisecond),
+				NewTask(func() {
+					runs.Add(1)
+					time.Sleep(50 * time.Millisecond)
+				}),
+				jobOpts...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			time.Sleep(400 * time.Millisecond)
+			assert.Empty(t, s.Jobs(), "job should be removed after its last run")
+			require.NoError(t, s.Shutdown())
+
+			assert.Equal(t, int32(2), runs.Load())
+		})
+	}
+}
+
 // zeroNextCron is a pathological Cron implementation whose Next always
 // returns the zero time. Used to verify the scheduler does not hang when
 // a custom Cron implementation fails to produce a forward-progressing time.
