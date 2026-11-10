@@ -1729,6 +1729,8 @@ type Job interface {
 	// NextRuns returns the requested number of calculated next run values.
 	// These values are only available once the scheduler has been started
 	// with Scheduler.Start(). Before that, it returns nil.
+	// For a job with WithLimitedRuns, it returns no more than the runs
+	// the job has left. A count of zero or less returns nil.
 	NextRuns(int) ([]time.Time, error)
 	// RunNow runs the job once, now. This does not alter
 	// the existing run schedule, and will respect all job
@@ -1837,6 +1839,19 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 	}
 	if ij == nil || ij.id == uuid.Nil {
 		return nil, ErrJobNotFound
+	}
+	if count <= 0 {
+		return nil, nil
+	}
+	// a job with WithLimitedRuns is removed once it has run limit times,
+	// so it never has more upcoming runs than the runs it has left
+	if ij.limitRunsTo != nil {
+		if ij.limitRunsTo.runCount >= ij.limitRunsTo.limit {
+			return nil, nil
+		}
+		if remaining := ij.limitRunsTo.limit - ij.limitRunsTo.runCount; uint(count) > remaining {
+			count = int(remaining)
+		}
 	}
 
 	lengthNextScheduled := len(ij.nextScheduled)
