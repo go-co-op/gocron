@@ -1431,6 +1431,23 @@ func TestScheduler_NewJobTask(t *testing.T) {
 			NewTask(func(_ ...io.Reader) {}, os.Stdout, any(3.0)),
 			ErrNewJobWrongTypeOfParameters,
 		},
+		{"string to any", NewTask(func(any) {}, "value"), nil},
+		{"integer pointer", NewTask(func(*int) {}, &n), nil},
+		{"nested pointer", NewTask(func(**int) {}, &pointer), nil},
+		{"implemented interface", NewTask(func(fmt.Stringer) {}, time.Second), nil},
+		{"typed nil pointer", NewTask(func(*int) {}, (*int)(nil)), nil},
+		{"receive channel", NewTask(func(<-chan int) {}, make(chan int)), nil},
+		{"named integer", NewTask(func(count) {}, count(1)), nil},
+		{"variadic fixed pointer", NewTask(func(*int, ...string) {}, &n, "value"), nil},
+		{"different struct", NewTask(func(struct{ A int }) {}, struct{ B int }{}), ErrNewJobWrongTypeOfParameters},
+		{"different slice", NewTask(func([]int) {}, []string{}), ErrNewJobWrongTypeOfParameters},
+		{"different map", NewTask(func(map[string]int) {}, map[string]string{}), ErrNewJobWrongTypeOfParameters},
+		{"different function", NewTask(func(func(int)) {}, func(string) {}), ErrNewJobWrongTypeOfParameters},
+		{"different pointer", NewTask(func(*int) {}, new(string)), ErrNewJobWrongTypeOfParameters},
+		{"unimplemented interface", NewTask(func(fmt.Stringer) {}, struct{}{}), ErrNewJobWrongTypeOfParameters},
+		{"convertible integer", NewTask(func(count) {}, 1), ErrNewJobWrongTypeOfParameters},
+		{"wrong channel direction", NewTask(func(chan int) {}, make(<-chan int)), ErrNewJobWrongTypeOfParameters},
+		{"untyped nil", NewTask(func(any) {}, nil), ErrNewJobWrongTypeOfParameters},
 	}
 
 	for _, tt := range tests {
