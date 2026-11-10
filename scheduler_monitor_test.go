@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -511,4 +512,66 @@ func TestSchedulerMonitor_IntegrationWithJobs(t *testing.T) {
 	err = s.Shutdown()
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), monitor.getShutdownCount())
+}
+
+type completionUpdateMonitor struct {
+	*testSchedulerMonitor
+
+	observed chan error
+}
+
+func (m *completionUpdateMonitor) JobCompleted(job Job) {
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		completed, err := job.LastRunCompletedAt()
+		if errors.Is(err, ErrJobNotFound) || !completed.IsZero() {
+			m.observed <- nil
+			return
+		}
+		if err != nil {
+			m.observed <- err
+			return
+		}
+	}
+	m.observed <- errors.New("completion timing update was not observed")
+}
+
+func TestScheduler_LimitedRunsAfterCompletionUpdate(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	modes := []struct {
+		name             string
+		schedulerOptions []SchedulerOption
+		jobOptions       []JobOption
+	}{
+		{name: "standard"},
+		{name: "singleton wait", jobOptions: []JobOption{WithSingletonMode(LimitModeWait)}},
+		{name: "singleton reschedule", jobOptions: []JobOption{WithSingletonMode(LimitModeReschedule)}},
+		{name: "limit wait", schedulerOptions: []SchedulerOption{WithLimitConcurrentJobs(1, LimitModeWait)}},
+		{name: "limit reschedule", schedulerOptions: []SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)}},
+	}
+	for _, mode := range modes {
+		for _, fromCompletion := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/completion=%v", mode.name, fromCompletion), func(t *testing.T) {
+				monitor := &completionUpdateMonitor{testSchedulerMonitor: newTestSchedulerMonitor(), observed: make(chan error, 1)}
+				schedulerOptions := append([]SchedulerOption{WithSchedulerMonitor(monitor)}, mode.schedulerOptions...)
+				s := newTestScheduler(t, schedulerOptions...)
+				defer func() { require.NoError(t, s.Shutdown()) }()
+				options := append([]JobOption{WithLimitedRuns(1), WithStartAt(WithStartImmediately())}, mode.jobOptions...)
+				if fromCompletion {
+					options = append(options, WithIntervalFromCompletion())
+				}
+				_, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), options...)
+				require.NoError(t, err)
+				s.Start()
+				select {
+				case err := <-monitor.observed:
+					require.NoError(t, err)
+				case <-time.After(2 * time.Second):
+					t.Fatal("timed out waiting for task completion")
+				}
+				require.Eventually(t, func() bool { return len(s.Jobs()) == 0 }, time.Second, time.Millisecond,
+					"job remained scheduled after its only allowed run completed")
+			})
+		}
+	}
 }

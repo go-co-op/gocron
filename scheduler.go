@@ -674,7 +674,11 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
 		if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
-			s.jobs[completed.id] = j
+			if j.intervalFromCompletion {
+				s.selectRemoveJob(completed.id)
+			} else {
+				s.jobs[completed.id] = j
+			}
 			return
 		}
 	}
@@ -721,6 +725,14 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 // requestJob timeout (surfaced as ErrSchedulerBusy).
 func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 	if j, ok := s.jobs[out.id]; ok {
+		// j is a copy, but limitRunsTo is a pointer that the scheduler
+		// keeps updating as the job runs. Hand the caller its own copy
+		// so accessors like NextRuns read a snapshot, not the live counter.
+		if j.limitRunsTo != nil {
+			limit := new(limitRunsTo)
+			*limit = *j.limitRunsTo
+			j.limitRunsTo = limit
+		}
 		select {
 		case out.outChan <- j:
 		case <-s.shutdownCtx.Done():
