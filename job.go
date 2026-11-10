@@ -986,7 +986,8 @@ type StopAtOption func(*internalJob, time.Time) error
 
 // WithStopDateTime sets the final date & time after which the job should stop.
 // This must be in the future and should be after the startTime (if specified).
-// The job's final run may be at the stop time, but not after.
+// A run that would start at or after the stop time is not scheduled, so the
+// job's final run is the last one before the stop time.
 func WithStopDateTime(end time.Time) StopAtOption {
 	return func(j *internalJob, now time.Time) error {
 		if end.IsZero() || end.Before(now) {

@@ -1294,6 +1294,36 @@ func TestJob_NextRuns(t *testing.T) {
 	}
 }
 
+func TestJob_NextRuns_StopTimeOnRunBoundary(t *testing.T) {
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC),
+	)
+
+	// The stop time lands exactly on the third run, which must not be scheduled.
+	j, err := s.NewJob(
+		DurationJob(time.Second),
+		NewTask(func() {}),
+		WithStopAt(WithStopDateTime(testTime.Add(3*time.Second))),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	time.Sleep(10 * time.Millisecond)
+
+	nextRuns, err := j.NextRuns(5)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{
+		testTime.Add(time.Second),
+		testTime.Add(2 * time.Second),
+	}, nextRuns)
+
+	assert.NoError(t, s.Shutdown())
+}
+
 func TestJob_NextRuns_AfterStopJobs(t *testing.T) {
 	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
 
