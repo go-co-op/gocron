@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -61,6 +62,42 @@ func TestCallJobFuncWithParams(t *testing.T) {
 			"wrong number of params",
 			func(_ string, _ int) {},
 			[]any{"one"},
+			ErrJobParameterMismatch,
+		},
+		{
+			"variadic no arguments",
+			func(values ...int) error { return errors.New(fmt.Sprint(values)) },
+			nil,
+			errors.New("[]"),
+		},
+		{
+			"variadic one argument",
+			func(values ...int) error { return errors.New(fmt.Sprint(values)) },
+			[]any{1},
+			errors.New("[1]"),
+		},
+		{
+			"variadic multiple arguments",
+			func(values ...int) error { return errors.New(fmt.Sprint(values)) },
+			[]any{1, 2, 3},
+			errors.New("[1 2 3]"),
+		},
+		{
+			"variadic fixed argument only",
+			func(prefix string, values ...int) error { return errors.New(fmt.Sprint(prefix, values)) },
+			[]any{"prefix"},
+			errors.New("prefix[]"),
+		},
+		{
+			"variadic fixed and multiple arguments",
+			func(prefix string, values ...int) error { return errors.New(fmt.Sprint(prefix, values)) },
+			[]any{"prefix", 1, 2},
+			errors.New("prefix[1 2]"),
+		},
+		{
+			"variadic missing fixed argument",
+			func(_ string, _ ...int) {},
+			nil,
 			ErrJobParameterMismatch,
 		},
 		{
