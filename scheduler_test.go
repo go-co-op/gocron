@@ -1282,156 +1282,61 @@ func TestScheduler_NewJobTask(t *testing.T) {
 	testFuncWithParams := func(_, _ string) {}
 	testStruct := struct{}{}
 
+	type count int
+	n := 1
+	pointer := &n
+	
 	tests := []struct {
 		name string
 		tsk  Task
 		err  error
 	}{
-		{
-			"task nil",
-			nil,
-			ErrNewJobTaskNil,
-		},
-		{
-			"task not func - nil",
-			NewTask(nil),
-			ErrNewJobTaskNotFunc,
-		},
-		{
-			"task not func - string",
-			NewTask("not a func"),
-			ErrNewJobTaskNotFunc,
-		},
-		{
-			"task func is pointer",
-			NewTask(&testFuncPtr),
-			nil,
-		},
-		{
-			"parameter number does not match",
-			NewTask(testFuncWithParams, "one"),
-			ErrNewJobWrongNumberOfParameters,
-		},
-		{
-			"parameter type does not match",
-			NewTask(testFuncWithParams, "one", 2),
-			ErrNewJobWrongTypeOfParameters,
-		},
-		{
-			"parameter number does not match - ptr",
-			NewTask(&testFuncWithParams, "one"),
-			ErrNewJobWrongNumberOfParameters,
-		},
-		{
-			"parameter type does not match - ptr",
-			NewTask(&testFuncWithParams, "one", 2),
-			ErrNewJobWrongTypeOfParameters,
-		},
-		{
-			"all good struct",
-			NewTask(func(_ struct{}) {}, struct{}{}),
-			nil,
-		},
-		{
-			"all good interface",
-			NewTask(func(_ any) {}, struct{}{}),
-			nil,
-		},
-		{
-			"all good any",
-			NewTask(func(_ any) {}, struct{}{}),
-			nil,
-		},
-		{
-			"all good slice",
-			NewTask(func(_ []struct{}) {}, []struct{}{}),
-			nil,
-		},
-		{
-			"all good chan",
-			NewTask(func(_ chan struct{}) {}, make(chan struct{})),
-			nil,
-		},
-		{
-			"all good pointer",
-			NewTask(func(_ *struct{}) {}, &testStruct),
-			nil,
-		},
-		{
-			"all good map",
-			NewTask(func(_ map[string]struct{}) {}, make(map[string]struct{})),
-			nil,
-		},
-		{
-			"all good",
-			NewTask(&testFuncWithParams, "one", "two"),
-			nil,
-		},
-		{
-			"parameter type does not match - different argument types against variadic parameters",
-			NewTask(func(_ ...string) {}, "one", 2),
-			ErrNewJobWrongTypeOfParameters,
-		},
-		{
-			"parameter number does not match - missing variadic fixed argument",
-			NewTask(func(_ int, _ ...string) {}),
-			ErrNewJobWrongNumberOfParameters,
-		},
-		{
-			"parameter number does not match - missing second variadic fixed argument",
-			NewTask(func(_ int, _ string, _ ...bool) {}, 1),
-			ErrNewJobWrongNumberOfParameters,
-		},
-		{
-			"parameter number does not match - variadic with injected context",
-			NewTask(func(_ context.Context, _ int, _ ...string) {}),
-			ErrNewJobWrongNumberOfParameters,
-		},
-		{
-			"parameter number does not match - variadic with explicit context",
-			NewTask(func(_ context.Context, _ int, _ ...string) {}, context.Background()),
-			ErrNewJobWrongNumberOfParameters,
-		},
-		{
-			"all good minimum arguments - variadic",
-			NewTask(func(_ int, _ ...string) {}, 1),
-			nil,
-		},
-		{
-			"all good minimum arguments - variadic with injected context",
-			NewTask(func(_ context.Context, _ int, _ ...string) {}, 1),
-			nil,
-		},
-		{
-			"all good string - variadic",
-			NewTask(func(_ ...string) {}, "one", "two"),
-			nil,
-		},
-		{
-			"all good mixed variadic",
-			NewTask(func(_ int, _ ...string) {}, 1, "one", "two"),
-			nil,
-		},
-		{
-			"all good struct - variadic",
-			NewTask(func(_ ...any) {}, struct{}{}),
-			nil,
-		},
-		{
-			"all good no arguments passed in - variadic",
-			NewTask(func(_ ...any) {}),
-			nil,
-		},
-		{
-			"all good - interface variadic, int, string",
-			NewTask(func(_ ...any) {}, 1, "2", 3.0),
-			nil,
-		},
-		{
-			"parameter type does not match - different argument types against interface variadic parameters",
-			NewTask(func(_ ...io.Reader) {}, os.Stdout, any(3.0)),
-			ErrNewJobWrongTypeOfParameters,
-		},
+		{"task nil", nil, ErrNewJobTaskNil},
+		{"task not func - nil", NewTask(nil), ErrNewJobTaskNotFunc},
+		{"task not func - string", NewTask("not a func"), ErrNewJobTaskNotFunc},
+		{"task func is pointer", NewTask(&testFuncPtr), nil},
+		{"parameter number does not match", NewTask(testFuncWithParams, "one"), ErrNewJobWrongNumberOfParameters},
+		{"parameter type does not match", NewTask(testFuncWithParams, "one", 2), ErrNewJobWrongTypeOfParameters},
+		{"parameter number does not match - ptr", NewTask(&testFuncWithParams, "one"), ErrNewJobWrongNumberOfParameters},
+		{"parameter type does not match - ptr", NewTask(&testFuncWithParams, "one", 2), ErrNewJobWrongTypeOfParameters},
+		{"all good struct", NewTask(func(_ struct{}) {}, struct{}{}), nil},
+		{"all good interface", NewTask(func(_ any) {}, struct{}{}), nil},
+		{"all good any", NewTask(func(_ any) {}, struct{}{}), nil},
+		{"all good slice", NewTask(func(_ []struct{}) {}, []struct{}{}), nil},
+		{"all good chan", NewTask(func(_ chan struct{}) {}, make(chan struct{})), nil},
+		{"all good pointer", NewTask(func(_ *struct{}) {}, &testStruct), nil},
+		{"all good map", NewTask(func(_ map[string]struct{}) {}, make(map[string]struct{})), nil},
+		{"all good", NewTask(&testFuncWithParams, "one", "two"), nil},
+		{"parameter type does not match - different argument types against variadic parameters", NewTask(func(_ ...string) {}, "one", 2), ErrNewJobWrongTypeOfParameters},
+		{"parameter number does not match - missing variadic fixed argument", NewTask(func(_ int, _ ...string) {}), ErrNewJobWrongNumberOfParameters},
+		{"parameter number does not match - missing second variadic fixed argument", NewTask(func(_ int, _ string, _ ...bool) {}, 1), ErrNewJobWrongNumberOfParameters},
+		{"parameter number does not match - variadic with injected context", NewTask(func(_ context.Context, _ int, _ ...string) {}), ErrNewJobWrongNumberOfParameters},
+		{"parameter number does not match - variadic with explicit context", NewTask(func(_ context.Context, _ int, _ ...string) {}, context.Background()), ErrNewJobWrongNumberOfParameters},
+		{"all good minimum arguments - variadic", NewTask(func(_ int, _ ...string) {}, 1), nil},
+		{"all good minimum arguments - variadic with injected context", NewTask(func(_ context.Context, _ int, _ ...string) {}, 1), nil},
+		{"all good string - variadic", NewTask(func(_ ...string) {}, "one", "two"), nil},
+		{"all good mixed variadic", NewTask(func(_ int, _ ...string) {}, 1, "one", "two"), nil},
+		{"all good struct - variadic", NewTask(func(_ ...any) {}, struct{}{}), nil},
+		{"all good no arguments passed in - variadic", NewTask(func(_ ...any) {}), nil},
+		{"all good - interface variadic, int, string", NewTask(func(_ ...any) {}, 1, "2", 3.0), nil},
+		{"parameter type does not match - different argument types against interface variadic parameters", NewTask(func(_ ...io.Reader) {}, os.Stdout, any(3.0)), ErrNewJobWrongTypeOfParameters},
+		{"string to any", NewTask(func(any) {}, "value"), nil},
+		{"integer pointer", NewTask(func(*int) {}, &n), nil},
+		{"nested pointer", NewTask(func(**int) {}, &pointer), nil},
+		{"implemented interface", NewTask(func(fmt.Stringer) {}, time.Second), nil},
+		{"typed nil pointer", NewTask(func(*int) {}, (*int)(nil)), nil},
+		{"receive channel", NewTask(func(<-chan int) {}, make(chan int)), nil},
+		{"named integer", NewTask(func(count) {}, count(1)), nil},
+		{"variadic fixed pointer", NewTask(func(*int, ...string) {}, &n, "value"), nil},
+		{"different struct", NewTask(func(struct{ A int }) {}, struct{ B int }{}), ErrNewJobWrongTypeOfParameters},
+		{"different slice", NewTask(func([]int) {}, []string{}), ErrNewJobWrongTypeOfParameters},
+		{"different map", NewTask(func(map[string]int) {}, map[string]string{}), ErrNewJobWrongTypeOfParameters},
+		{"different function", NewTask(func(func(int)) {}, func(string) {}), ErrNewJobWrongTypeOfParameters},
+		{"different pointer", NewTask(func(*int) {}, new(string)), ErrNewJobWrongTypeOfParameters},
+		{"unimplemented interface", NewTask(func(fmt.Stringer) {}, struct{}{}), ErrNewJobWrongTypeOfParameters},
+		{"convertible integer", NewTask(func(count) {}, 1), ErrNewJobWrongTypeOfParameters},
+		{"wrong channel direction", NewTask(func(chan int) {}, make(<-chan int)), ErrNewJobWrongTypeOfParameters},
+		{"untyped nil", NewTask(func(any) {}, nil), ErrNewJobWrongTypeOfParameters},
 	}
 
 	for _, tt := range tests {
