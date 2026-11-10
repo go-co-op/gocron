@@ -1294,6 +1294,36 @@ func TestJob_NextRuns(t *testing.T) {
 	}
 }
 
+func TestJob_NextRuns_StopTimeOnRunBoundary(t *testing.T) {
+	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(testTime)
+
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC),
+	)
+
+	// The stop time lands exactly on the third run, which must not be scheduled.
+	j, err := s.NewJob(
+		DurationJob(time.Second),
+		NewTask(func() {}),
+		WithStopAt(WithStopDateTime(testTime.Add(3*time.Second))),
+	)
+	require.NoError(t, err)
+
+	s.Start()
+	time.Sleep(10 * time.Millisecond)
+
+	nextRuns, err := j.NextRuns(5)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{
+		testTime.Add(time.Second),
+		testTime.Add(2 * time.Second),
+	}, nextRuns)
+
+	assert.NoError(t, s.Shutdown())
+}
+
 func TestJob_NextRuns_AfterStopJobs(t *testing.T) {
 	testTime := time.Date(2000, 1, 1, 0, 0, 0, 0, time.Local)
 
@@ -1439,6 +1469,210 @@ func TestJob_NextRuns_EndOfSchedule(t *testing.T) {
 			require.NoError(t, s.Shutdown())
 		})
 	}
+}
+
+func TestJob_NextRuns_LimitedRuns(t *testing.T) {
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		jd    JobDefinition
+		limit uint
+		count int
+		want  []time.Time
+	}{
+		{
+			"duration job with fewer runs left than asked for",
+			DurationJob(time.Hour),
+			2,
+			5,
+			[]time.Time{now.Add(time.Hour), now.Add(2 * time.Hour)},
+		},
+		{
+			"daily job with fewer runs left than asked for",
+			DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))),
+			3,
+			5,
+			[]time.Time{
+				time.Date(2026, time.April, 2, 9, 0, 0, 0, time.UTC),
+				time.Date(2026, time.April, 3, 9, 0, 0, 0, time.UTC),
+				time.Date(2026, time.April, 4, 9, 0, 0, 0, time.UTC),
+			},
+		},
+		{
+			"duration job with more runs left than asked for",
+			DurationJob(time.Hour),
+			10,
+			2,
+			[]time.Time{now.Add(time.Hour), now.Add(2 * time.Hour)},
+		},
+		{
+			"zero count",
+			DurationJob(time.Hour),
+			2,
+			0,
+			nil,
+		},
+		{
+			"negative count",
+			DurationJob(time.Hour),
+			2,
+			-1,
+			nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t,
+				WithClock(clockwork.NewFakeClockAt(now)),
+				WithLocation(time.UTC),
+			)
+			j, err := s.NewJob(tt.jd, NewTask(func() {}), WithLimitedRuns(tt.limit))
+			require.NoError(t, err)
+			s.Start()
+
+			runs, err := j.NextRuns(tt.count)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, runs)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestJob_NextRuns_LimitedRuns_RemainingBudget(t *testing.T) {
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(now)
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC),
+	)
+
+	ran := make(chan struct{}, 3)
+	j, err := s.NewJob(
+		DurationJob(time.Hour),
+		NewTask(func() { ran <- struct{}{} }),
+		WithLimitedRuns(3),
+	)
+	require.NoError(t, err)
+	s.Start()
+
+	runs, err := j.NextRuns(5)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{now.Add(time.Hour), now.Add(2 * time.Hour), now.Add(3 * time.Hour)}, runs)
+
+	// run the job once; NextRuns should then list only the two runs it has left
+	fakeClock.Advance(time.Hour)
+	select {
+	case <-ran:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for the job to run")
+	}
+
+	want := []time.Time{now.Add(2 * time.Hour), now.Add(3 * time.Hour)}
+	require.Eventually(t, func() bool {
+		runs, err = j.NextRuns(5)
+		return err == nil && assert.ObjectsAreEqual(want, runs)
+	}, 3*time.Second, 10*time.Millisecond, "got %v, want %v", runs, want)
+
+	require.NoError(t, s.Shutdown())
+}
+
+func TestJob_NextRuns_LimitedRuns_Exhausted(t *testing.T) {
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(now)
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC),
+	)
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	j, err := s.NewJob(
+		DurationJob(time.Hour),
+		NewTask(func() {
+			close(started)
+			<-release
+		}),
+		WithLimitedRuns(1),
+	)
+	require.NoError(t, err)
+	s.Start()
+
+	runs, err := j.NextRuns(5)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{now.Add(time.Hour)}, runs)
+
+	// start the final run and hold it open: the job is only removed once
+	// the task returns, so NextRuns can still be queried and should report
+	// that no runs are left
+	fakeClock.Advance(time.Hour)
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for the job to run")
+	}
+
+	require.Eventually(t, func() bool {
+		runs, err = j.NextRuns(5)
+		return err == nil && runs == nil
+	}, 3*time.Second, 10*time.Millisecond, "got %v, %v", runs, err)
+
+	close(release)
+	require.NoError(t, s.Shutdown())
+}
+
+// TestJob_NextRuns_LimitedRuns_ConcurrentRuns queries NextRuns while a
+// limited job keeps running, so `go test -race` catches NextRuns reading
+// the run counter while the scheduler updates it.
+func TestJob_NextRuns_LimitedRuns_ConcurrentRuns(t *testing.T) {
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	fakeClock := clockwork.NewFakeClockAt(now)
+	s := newTestScheduler(t,
+		WithClock(fakeClock),
+		WithLocation(time.UTC),
+	)
+
+	const limit = 20
+	ran := make(chan struct{}, limit)
+	j, err := s.NewJob(
+		DurationJob(time.Minute),
+		NewTask(func() { ran <- struct{}{} }),
+		WithLimitedRuns(limit),
+	)
+	require.NoError(t, err)
+	s.Start()
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			runs, err := j.NextRuns(limit + 5)
+			if err == nil && len(runs) > limit {
+				t.Errorf("NextRuns returned %d runs, want at most %d", len(runs), limit)
+				return
+			}
+		}
+	}()
+
+	for i := range limit {
+		fakeClock.Advance(time.Minute)
+		select {
+		case <-ran:
+		case <-time.After(3 * time.Second):
+			t.Fatalf("timed out waiting for run %d", i+1)
+		}
+	}
+	close(stop)
+	<-done
+
+	require.NoError(t, s.Shutdown())
 }
 
 func TestJob_PanicOccurred(t *testing.T) {

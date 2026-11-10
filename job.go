@@ -986,7 +986,8 @@ type StopAtOption func(*internalJob, time.Time) error
 
 // WithStopDateTime sets the final date & time after which the job should stop.
 // This must be in the future and should be after the startTime (if specified).
-// The job's final run may be at the stop time, but not after.
+// A run that would start at or after the stop time is not scheduled, so the
+// job's final run is the last one before the stop time.
 func WithStopDateTime(end time.Time) StopAtOption {
 	return func(j *internalJob, now time.Time) error {
 		if end.IsZero() || end.Before(now) {
@@ -1729,6 +1730,8 @@ type Job interface {
 	// NextRuns returns the requested number of calculated next run values.
 	// These values are only available once the scheduler has been started
 	// with Scheduler.Start(). Before that, it returns nil.
+	// For a job with WithLimitedRuns, it returns no more than the runs
+	// the job has left. A count of zero or less returns nil.
 	NextRuns(int) ([]time.Time, error)
 	// RunNow runs the job once, now. This does not alter
 	// the existing run schedule, and will respect all job
@@ -1837,6 +1840,19 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 	}
 	if ij == nil || ij.id == uuid.Nil {
 		return nil, ErrJobNotFound
+	}
+	if count <= 0 {
+		return nil, nil
+	}
+	// a job with WithLimitedRuns is removed once it has run limit times,
+	// so it never has more upcoming runs than the runs it has left
+	if ij.limitRunsTo != nil {
+		if ij.limitRunsTo.runCount >= ij.limitRunsTo.limit {
+			return nil, nil
+		}
+		if remaining := ij.limitRunsTo.limit - ij.limitRunsTo.runCount; uint(count) > remaining {
+			count = int(remaining)
+		}
 	}
 
 	lengthNextScheduled := len(ij.nextScheduled)
