@@ -1585,10 +1585,10 @@ type monthlyJob struct {
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
 	lastRun = inLocation(lastRun, m.location)
-	daysList := make([]int, len(m.days))
-	copy(daysList, m.days)
-
-	daysFromEnd := m.handleNegativeDays(lastRun, daysList, m.daysFromEnd)
+	// Reuse one stack buffer for the day list of each month. append grows it
+	// when a job has more than 32 days.
+	var buf [32]int
+	daysFromEnd := m.handleNegativeDays(lastRun, m.days, m.daysFromEnd, buf[:0])
 	next := m.nextMonthDayAtTime(lastRun, daysFromEnd, true)
 	if !next.IsZero() {
 		return next
@@ -1600,7 +1600,7 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	// repeat every 400 years, so a stride of whole years repeats within 400
 	// steps: if none matched by then, none will.
 	for i := 0; next.IsZero() && i < 400; i++ {
-		daysFromEnd = m.handleNegativeDays(from, daysList, m.daysFromEnd)
+		daysFromEnd = m.handleNegativeDays(from, m.days, m.daysFromEnd, buf[:0])
 		next = m.nextMonthDayAtTime(from, daysFromEnd, false)
 		from = from.AddDate(0, int(m.interval), 0)
 	}
@@ -1608,14 +1608,16 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	return next
 }
 
-func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays []int) []int {
-	var out []int
+func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays, out []int) []int {
+	out = out[:0]
 	// getting a list of the days from the end of the following month
 	// -1 == the last day of the month
-	firstDayNextMonth := time.Date(from.Year(), from.Month()+1, 1, 0, 0, 0, 0, from.Location())
-	for _, daySub := range negativeDays {
-		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
-		out = append(out, day)
+	if len(negativeDays) > 0 {
+		firstDayNextMonth := time.Date(from.Year(), from.Month()+1, 1, 0, 0, 0, 0, from.Location())
+		for _, daySub := range negativeDays {
+			day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
+			out = append(out, day)
+		}
 	}
 	out = append(out, days...)
 	slices.Sort(out)
