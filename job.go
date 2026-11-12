@@ -1277,30 +1277,31 @@ type jobSchedule interface {
 }
 
 // daylightSavingsTimeRunAfterTransitionTime computes the post-transition equivalent
-// of a time that was normalized by time.Date into the pre-transition period.
-// When Go's time.Date encounters a non-existent wall-clock time during a
-// Daylight Saving Time spring-forward gap, it normalizes the time backwards.
-// This function adjusts the normalized time forward to the post-transition
-// equivalent by adding back the difference between the requested and actual
-// wall-clock values.
+// of a time that was normalized by time.Date because its wall-clock value falls
+// in a Daylight Saving Time spring-forward gap. Depending on the zone, Go's
+// time.Date normalizes such a time backwards into the pre-transition period
+// (e.g. America/New_York) or forwards past the transition (e.g. Europe/Berlin).
+// A time normalized backwards is moved forward by the difference between the
+// requested and actual wall-clock values. A time normalized forwards on the
+// requested day is already the post-transition equivalent and is returned as is.
 //
 // This function should only be called when a Daylight Saving Time spring-forward
 // gap has been detected (i.e., the normalized time's wall-clock values differ from
-// the requested values, with the normalized time being earlier).
-func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin, requestedSec int) time.Time {
+// the requested values).
+func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedDay, requestedHour, requestedMin, requestedSec int) time.Time {
 	offset := time.Duration(requestedHour-normalized.Hour())*time.Hour +
 		time.Duration(requestedMin-normalized.Minute())*time.Minute +
 		time.Duration(requestedSec-normalized.Second())*time.Second
-	if offset < 0 && normalized.Hour() > requestedHour {
+	if offset < 0 && normalized.Day() != requestedDay {
 		// A gap that starts at local midnight normalizes the requested time
 		// onto the previous calendar day (e.g. 00:30 becomes 23:30 the day
 		// before), so the wall-clock difference wraps around midnight.
 		offset += 24 * time.Hour
 	}
 	if offset <= 0 {
-		// Safety guard: if the offset is not positive, the normalized time
-		// was not in a spring-forward gap (e.g., fall-back scenario). Return
-		// the normalized time unchanged to preserve existing behavior.
+		// The normalized time is already after the transition (time.Date
+		// moved it forward on the requested day), or it was not in a
+		// spring-forward gap (e.g., fall-back scenario). Return it unchanged.
 		return normalized
 	}
 	return normalized.Add(offset)
@@ -1317,10 +1318,10 @@ func daylightSavingsTimeGapAdjust(atDate time.Time, requestedDay int, at time.Ti
 	case DaylightSavingsTimeSkip:
 		return atDate, false
 	case DaylightSavingsTimeRunAfterTransition:
-		return daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second()), true
+		return daylightSavingsTimeRunAfterTransitionTime(atDate, requestedDay, at.Hour(), at.Minute(), at.Second()), true
 	default:
 		if atDate.Day() != requestedDay {
-			return daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second()), true
+			return daylightSavingsTimeRunAfterTransitionTime(atDate, requestedDay, at.Hour(), at.Minute(), at.Second()), true
 		}
 		return atDate, true
 	}
@@ -1392,7 +1393,7 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 				if !wallSchedule.Next(wallTime.Add(-time.Second)).Equal(wallTime) {
 					continue
 				}
-				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second())
+				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, day.Day(), nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second())
 				if candidate.After(lastRun) && candidate.Before(next) {
 					return candidate.In(lastRun.Location())
 				}
