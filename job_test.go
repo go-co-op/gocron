@@ -2699,6 +2699,36 @@ func TestCalendarJobNextMidnightGapRunAfterTransition(t *testing.T) {
 	}
 }
 
+func TestCalendarJobNextForwardGapRunAfterTransition(t *testing.T) {
+	// Europe/Berlin springs forward from 02:00 to 03:00 on 2026-03-29. East of
+	// UTC, time.Date normalizes 02:30 forward to 03:30 on the same day, which is
+	// already the time after the transition, so the job must run then (#987).
+	location, err := time.LoadLocation("Europe/Berlin")
+	require.NoError(t, err)
+	atTimes := NewAtTimes(NewAtTime(2, 30, 0))
+	adjusted := time.Date(2026, 3, 29, 3, 30, 0, 0, location)
+	tests := []struct {
+		name       string
+		definition JobDefinition
+		lastRun    time.Time
+		afterGap   time.Time
+	}{
+		{"daily", DailyJob(1, atTimes), time.Date(2026, 3, 28, 2, 30, 0, 0, location), time.Date(2026, 3, 30, 2, 30, 0, 0, location)},
+		{"weekly", WeeklyJob(1, NewWeekdays(time.Sunday), atTimes), time.Date(2026, 3, 22, 2, 30, 0, 0, location), time.Date(2026, 4, 5, 2, 30, 0, 0, location)},
+		{"monthly", MonthlyJob(1, NewDaysOfTheMonth(29), atTimes), time.Date(2026, 1, 29, 2, 30, 0, 0, location), time.Date(2026, 4, 29, 2, 30, 0, 0, location)},
+		{"cron", CronJob("30 2 * * *", false), time.Date(2026, 3, 28, 2, 30, 0, 0, location), time.Date(2026, 3, 30, 2, 30, 0, 0, location)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &internalJob{daylightSavingsTimePolicy: DaylightSavingsTimeRunAfterTransition}
+			require.NoError(t, tt.definition.setup(j, location, tt.lastRun))
+			next := j.next(tt.lastRun)
+			require.Equal(t, adjusted, next)
+			require.Equal(t, tt.afterGap, j.next(next))
+		})
+	}
+}
+
 func TestSchedulerNextRunsMidnightGap(t *testing.T) {
 	location, err := time.LoadLocation("America/Santiago")
 	require.NoError(t, err)
