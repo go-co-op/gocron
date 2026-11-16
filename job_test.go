@@ -2718,3 +2718,26 @@ func TestSchedulerNextRunsMidnightGap(t *testing.T) {
 		time.Date(2026, 9, 8, 0, 30, 0, 0, location),
 	}, next)
 }
+
+func BenchmarkMonthlyJob_next(b *testing.B) {
+	at := []time.Time{time.Date(0, 0, 0, 5, 30, 0, 0, time.UTC)}
+	lastRun := time.Date(2026, 6, 15, 10, 30, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		job     monthlyJob
+		lastRun time.Time
+	}{
+		{"same month", monthlyJob{interval: 1, days: []int{20}, atTimes: at}, lastRun},
+		{"next month", monthlyJob{interval: 1, days: []int{1, 5, 10}, atTimes: at}, lastRun},
+		{"days from end", monthlyJob{interval: 1, days: []int{3}, daysFromEnd: []int{-1, -3}, atTimes: at}, lastRun},
+		{"31st every 12 months", monthlyJob{interval: 12, days: []int{31}, atTimes: at}, time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)},
+	}
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = tt.job.next(tt.lastRun)
+			}
+		})
+	}
+}
