@@ -956,36 +956,14 @@ func (s *scheduler) NewJob(jobDefinition JobDefinition, task Task, options ...Jo
 	return s.addOrUpdateJob(uuid.Nil, jobDefinition, task, options)
 }
 
-func (s *scheduler) verifyInterfaceVariadic(taskFunc reflect.Value, tsk task, variadicStart int) error {
-	ifaceType := taskFunc.Type().In(variadicStart).Elem()
-	for i := variadicStart; i < len(tsk.parameters); i++ {
-		if !reflect.TypeOf(tsk.parameters[i]).Implements(ifaceType) {
-			return ErrNewJobWrongTypeOfParameters
-		}
-	}
-	return nil
-}
-
 func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicStart int) error {
 	if err := s.verifyNonVariadic(taskFunc, tsk, variadicStart); err != nil {
 		return err
 	}
-	parameterType := taskFunc.Type().In(variadicStart)
-	parameterTypeKind := parameterType.Elem().Kind()
-	if parameterTypeKind == reflect.Interface {
-		return s.verifyInterfaceVariadic(taskFunc, tsk, variadicStart)
-	}
-	if parameterTypeKind == reflect.Pointer {
-		parameterTypeKind = reflect.Indirect(reflect.ValueOf(parameterType)).Kind()
-	}
-
+	elemType := taskFunc.Type().In(variadicStart).Elem()
 	for i := variadicStart; i < len(tsk.parameters); i++ {
 		argumentType := reflect.TypeOf(tsk.parameters[i])
-		argumentTypeKind := argumentType.Kind()
-		if argumentTypeKind == reflect.Interface || argumentTypeKind == reflect.Pointer {
-			argumentTypeKind = argumentType.Elem().Kind()
-		}
-		if argumentTypeKind != parameterTypeKind {
+		if argumentType == nil || !argumentType.AssignableTo(elemType) {
 			return ErrNewJobWrongTypeOfParameters
 		}
 	}
