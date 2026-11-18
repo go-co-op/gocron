@@ -1279,13 +1279,16 @@ func TestScheduler_NewJobTask(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
 	testFuncPtr := func() {}
+	var nilFunc func()
+	var nilCtxFunc func(context.Context)
+	var nilFuncPtr *func()
 	testFuncWithParams := func(_, _ string) {}
 	testStruct := struct{}{}
 
 	type count int
 	n := 1
 	pointer := &n
-	
+
 	tests := []struct {
 		name string
 		tsk  Task
@@ -1293,6 +1296,11 @@ func TestScheduler_NewJobTask(t *testing.T) {
 	}{
 		{"task nil", nil, ErrNewJobTaskNil},
 		{"task not func - nil", NewTask(nil), ErrNewJobTaskNotFunc},
+		{"task not func - typed nil func", NewTask((func())(nil)), ErrNewJobTaskNotFunc},
+		{"task not func - typed nil func var", NewTask(nilFunc), ErrNewJobTaskNotFunc},
+		{"task not func - pointer to nil func", NewTask(&nilFunc), ErrNewJobTaskNotFunc},
+		{"task not func - nil func pointer", NewTask(nilFuncPtr), ErrNewJobTaskNotFunc},
+		{"task not func - typed nil context func", NewTask(nilCtxFunc), ErrNewJobTaskNotFunc},
 		{"task not func - string", NewTask("not a func"), ErrNewJobTaskNotFunc},
 		{"task func is pointer", NewTask(&testFuncPtr), nil},
 		{"parameter number does not match", NewTask(testFuncWithParams, "one"), ErrNewJobWrongNumberOfParameters},
