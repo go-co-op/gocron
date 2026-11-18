@@ -2204,6 +2204,17 @@ func TestScheduler_RemoveLotsOfJobs(t *testing.T) {
 	}
 }
 
+func TestScheduler_RemoveByTagsCopiesTags(t *testing.T) {
+	s := &scheduler{
+		shutdownCtx:        context.Background(),
+		removeJobsByTagsCh: make(chan []string, 1),
+	}
+	tags := []string{"batch"}
+	s.RemoveByTags(tags...)
+	tags[0] = "keep"
+	assert.Equal(t, []string{"batch"}, <-s.removeJobsByTagsCh)
+}
+
 func TestScheduler_RemoveJob_RemoveSelf(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	s := newTestScheduler(t)
