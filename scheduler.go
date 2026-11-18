@@ -1120,7 +1120,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 func (s *scheduler) RemoveByTags(tags ...string) {
 	select {
 	case <-s.shutdownCtx.Done():
-	case s.removeJobsByTagsCh <- tags:
+	case s.removeJobsByTagsCh <- slices.Clone(tags):
 	}
 }
 
