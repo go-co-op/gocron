@@ -651,10 +651,10 @@ type oneTimeJobDefinition struct {
 }
 
 func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.Time) error {
-	sortedTimes := o.startAt(j)
+	sortedTimes := append([]time.Time{}, o.startAt(j)...)
 	slices.SortStableFunc(sortedTimes, ascendingTime)
 	// deduplicate the times
-	sortedTimes = removeSliceDuplicatesTimeOnSortedSlice(sortedTimes)
+	sortedTimes = slices.CompactFunc(sortedTimes, time.Time.Equal)
 	// keep only schedules that are in the future
 	idx, found := slices.BinarySearchFunc(sortedTimes, now, ascendingTime)
 	if found {
@@ -676,16 +676,6 @@ func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.T
 	}
 	j.jobSchedule = oneTimeJob{sortedTimes: sortedTimes}
 	return nil
-}
-
-func removeSliceDuplicatesTimeOnSortedSlice(times []time.Time) []time.Time {
-	ret := make([]time.Time, 0, len(times))
-	for i, t := range times {
-		if i == 0 || !t.Equal(times[i-1]) {
-			ret = append(ret, t)
-		}
-	}
-	return ret
 }
 
 // OneTimeJobStartAtOption defines when the one time job is run

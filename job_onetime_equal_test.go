@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -56,8 +57,10 @@ func TestOneTimeJobEqualInstants(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestScheduler(t, WithClock(clockwork.NewFakeClockAt(now)))
 			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+			input := slices.Clone(tt.times)
 			j, err := s.NewJob(OneTimeJob(OneTimeJobStartDateTimes(tt.times...)), NewTask(func() {}))
 			require.NoError(t, err)
+			require.Equal(t, input, tt.times, "registration changed the input times")
 			require.Equal(t, tt.want, j.Schedule().(OneTimeJobSchedule).StartAt)
 
 			s.Start()
