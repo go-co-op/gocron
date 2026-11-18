@@ -1589,26 +1589,31 @@ func (m monthlyJob) next(lastRun time.Time) time.Time {
 	// Reuse one stack buffer for the day list of each month. append grows it
 	// when a job has more than 32 days.
 	var buf [32]int
-	daysFromEnd := m.handleNegativeDays(lastRun, m.days, m.daysFromEnd, buf[:0])
-	next := m.nextMonthDayAtTime(lastRun, daysFromEnd, true)
+	// Keep the calendar month independent of local midnight, which may not
+	// exist (a Daylight Saving Time change at 00:00 on the first of a month
+	// would otherwise put the month start on the last day of the month before).
+	month := time.Date(lastRun.Year(), lastRun.Month(), 1, 0, 0, 0, 0, time.UTC)
+	daysFromEnd := m.handleNegativeDays(month, m.days, m.daysFromEnd, buf[:0])
+	next := m.nextMonthDayAtTime(lastRun, month, lastRun.Day(), daysFromEnd)
 	if !next.IsZero() {
 		return next
 	}
 
-	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
 	// a multiple of 12 months revisits one calendar month, so the day may
 	// never exist (e.g. the 31st every 12 months from April). The leap years
 	// repeat every 400 years, so a stride of whole years repeats within 400
 	// steps: if none matched by then, none will.
 	for i := 0; next.IsZero() && i < 400; i++ {
-		daysFromEnd = m.handleNegativeDays(from, m.days, m.daysFromEnd, buf[:0])
-		next = m.nextMonthDayAtTime(from, daysFromEnd, false)
-		from = from.AddDate(0, int(m.interval), 0)
+		month = month.AddDate(0, int(m.interval), 0)
+		daysFromEnd = m.handleNegativeDays(month, m.days, m.daysFromEnd, buf[:0])
+		next = m.nextMonthDayAtTime(lastRun, month, 1, daysFromEnd)
 	}
 
 	return next
 }
 
+// handleNegativeDays returns the sorted days of the month of from, a UTC date,
+// with the days counted from the end of the month resolved.
 func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays, out []int) []int {
 	out = out[:0]
 	// getting a list of the days from the end of the following month
@@ -1625,41 +1630,38 @@ func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays, out [
 	return out
 }
 
-func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass bool) time.Time {
+// nextMonthDayAtTime returns the first run after lastRun on or after firstDay of
+// month, a UTC date, or the zero time if there is none in that month.
+func (m monthlyJob) nextMonthDayAtTime(lastRun, month time.Time, firstDay int, days []int) time.Time {
 	// find the next day in the month that should run and then check for an at time
 	for _, day := range days {
-		if day >= lastRun.Day() {
-			for _, at := range m.atTimes {
-				// sub the day, and the at time hour/min/sec onto the lastScheduledRun's values
-				// to use in checks to see if we've got our next run time
-				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+		if day < firstDay {
+			continue
+		}
+		if time.Date(month.Year(), month.Month(), day, 0, 0, 0, 0, time.UTC).Month() != month.Month() {
+			// this check handles if we're setting a day not in the current month
+			// e.g. setting day 31 in Feb results in March 2nd
+			continue
+		}
+		for _, at := range m.atTimes {
+			// sub the day, and the at time hour/min/sec onto the month's values
+			// to use in checks to see if we've got our next run time
+			atDate := time.Date(month.Year(), month.Month(), day, at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
-				if atDate.Month() != lastRun.Month() {
-					// this check handles if we're setting a day not in the current month
-					// e.g. setting day 31 in Feb results in March 2nd
+			// Daylight Saving Time spring-forward gap detection
+			if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
+				var ok bool
+				if atDate, ok = daylightSavingsTimeGapAdjust(atDate, day, at, m.daylightSavingsTimePolicy); !ok {
 					continue
 				}
-
-				// Daylight Saving Time spring-forward gap detection
-				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					var ok bool
-					if atDate, ok = daylightSavingsTimeGapAdjust(atDate, day, at, m.daylightSavingsTimePolicy); !ok {
-						continue
-					}
-				}
-
-				if firstPass && atDate.After(lastRun) {
-					// checking to see if it is after i.e. greater than,
-					// and not greater or equal as our lastScheduledRun day/time
-					// will be in the loop, and we don't want to select it again
-					return atDate
-				} else if !firstPass && !atDate.Before(lastRun) {
-					// now that we're looking at the next month, it's ok to consider
-					// the same at time that was  lastScheduledRun (as lastScheduledRun has been incremented)
-					return atDate
-				}
 			}
-			continue
+
+			// checking to see if it is after i.e. greater than, and not
+			// greater or equal, as lastRun's own day/time will be in the loop
+			// of its month, and we don't want to select it again
+			if atDate.After(lastRun) {
+				return atDate
+			}
 		}
 	}
 	return time.Time{}
@@ -1862,7 +1864,7 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 	if lengthNextScheduled == 0 {
 		return nil, nil
 	} else if count <= lengthNextScheduled {
-		return ij.nextScheduled[:count], nil
+		return slices.Clone(ij.nextScheduled[:count]), nil
 	}
 
 	out := make([]time.Time, count)

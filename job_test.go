@@ -1,6 +1,7 @@
 package gocron
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -2699,6 +2700,51 @@ func TestCalendarJobNextMidnightGapRunAfterTransition(t *testing.T) {
 	}
 }
 
+func TestMonthlyJobNextMidnightGapOnFirstOfMonth(t *testing.T) {
+	// America/Asuncion sprang forward at local midnight on 2023-10-01, so the
+	// first of October had no 00:00 and time.Date normalizes it to 23:00 on
+	// 2023-09-30. The month after September must still be October.
+	location, err := time.LoadLocation("America/Asuncion")
+	require.NoError(t, err)
+	at10 := NewAtTimes(NewAtTime(10, 0, 0))
+	at0030 := NewAtTimes(NewAtTime(0, 30, 0))
+	tests := []struct {
+		name       string
+		definition JobDefinition
+		policy     DaylightSavingsTimePolicy
+		lastRun    time.Time
+		expected   time.Time
+	}{
+		{"first day", MonthlyJob(1, NewDaysOfTheMonth(1), at10), DaylightSavingsTimeDefault, time.Date(2023, 9, 1, 10, 0, 0, 0, location), time.Date(2023, 10, 1, 10, 0, 0, 0, location)},
+		{"mid month", MonthlyJob(1, NewDaysOfTheMonth(15), at10), DaylightSavingsTimeDefault, time.Date(2023, 9, 15, 10, 0, 0, 0, location), time.Date(2023, 10, 15, 10, 0, 0, 0, location)},
+		{"first and last", MonthlyJob(1, NewDaysOfTheMonth(1, 31), at10), DaylightSavingsTimeDefault, time.Date(2023, 9, 1, 10, 0, 0, 0, location), time.Date(2023, 10, 1, 10, 0, 0, 0, location)},
+		{"last day of the month", MonthlyJob(1, NewDaysOfTheMonth(-1), at10), DaylightSavingsTimeDefault, time.Date(2023, 8, 31, 10, 0, 0, 0, location), time.Date(2023, 9, 30, 10, 0, 0, 0, location)},
+		{"interval two", MonthlyJob(2, NewDaysOfTheMonth(5), at10), DaylightSavingsTimeDefault, time.Date(2023, 8, 5, 10, 0, 0, 0, location), time.Date(2023, 10, 5, 10, 0, 0, 0, location)},
+		{"at time in the gap", MonthlyJob(1, NewDaysOfTheMonth(1), at0030), DaylightSavingsTimeDefault, time.Date(2023, 9, 1, 0, 30, 0, 0, location), time.Date(2023, 10, 1, 1, 30, 0, 0, location)},
+		{"at time in the gap run after transition", MonthlyJob(1, NewDaysOfTheMonth(1), at0030), DaylightSavingsTimeRunAfterTransition, time.Date(2023, 9, 1, 0, 30, 0, 0, location), time.Date(2023, 10, 1, 1, 30, 0, 0, location)},
+		{"at time in the gap skip", MonthlyJob(1, NewDaysOfTheMonth(1), at0030), DaylightSavingsTimeSkip, time.Date(2023, 9, 1, 0, 30, 0, 0, location), time.Date(2023, 11, 1, 0, 30, 0, 0, location)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &internalJob{daylightSavingsTimePolicy: tt.policy}
+			require.NoError(t, tt.definition.setup(j, location, tt.lastRun))
+			assert.Equal(t, tt.expected, j.next(tt.lastRun))
+		})
+	}
+}
+
+func TestMonthlyJobNextLastDayMidnightGap(t *testing.T) {
+	// Atlantic/Azores springs forward at local midnight on 2030-03-31, the last
+	// day of March, so counting back from 2030-04-01 must not land on the 30th.
+	location, err := time.LoadLocation("Atlantic/Azores")
+	require.NoError(t, err)
+	j := &internalJob{}
+	require.NoError(t, MonthlyJob(1, NewDaysOfTheMonth(-1), NewAtTimes(NewAtTime(10, 0, 0))).setup(j, location, time.Time{}))
+	next := j.next(time.Date(2030, 2, 28, 10, 0, 0, 0, location))
+	assert.Equal(t, time.Date(2030, 3, 31, 10, 0, 0, 0, location), next)
+	assert.Equal(t, time.Date(2030, 4, 30, 10, 0, 0, 0, location), j.next(next))
+}
+
 func TestCalendarJobNextForwardGapRunAfterTransition(t *testing.T) {
 	// Europe/Berlin springs forward from 02:00 to 03:00 on 2026-03-29. East of
 	// UTC, time.Date normalizes 02:30 forward to 03:30 on the same day, which is
@@ -2768,6 +2814,64 @@ func BenchmarkMonthlyJob_next(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				_ = tt.job.next(tt.lastRun)
 			}
+		})
+	}
+}
+
+func TestJobNextRunsDoesNotExposeSchedulerStorage(t *testing.T) {
+	for _, count := range []int{1, 2} {
+		t.Run(fmt.Sprintf("count_%d", count), func(t *testing.T) {
+			now := time.Date(2026, time.November, 17, 12, 0, 0, 0, time.UTC)
+			s, err := NewScheduler(WithClock(clockwork.NewFakeClockAt(now)))
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}))
+			require.NoError(t, err)
+			s.Start()
+			first, err := j.NextRuns(count)
+			require.NoError(t, err)
+			require.Len(t, first, count)
+			expected := first[0]
+			first[0] = now.Add(-time.Hour)
+			next, err := j.NextRun()
+			require.NoError(t, err)
+			require.Equal(t, expected, next)
+			second, err := j.NextRuns(count)
+			require.NoError(t, err)
+			require.Equal(t, expected, second[0])
+		})
+	}
+}
+
+func TestJobNextRunsOwnsQueuedResults(t *testing.T) {
+	for _, count := range []int{1, 2, 3} {
+		t.Run(fmt.Sprintf("count_%d", count), func(t *testing.T) {
+			now := time.Date(2026, time.November, 17, 12, 0, 0, 0, time.UTC)
+			expected := []time.Time{now.Add(time.Hour), now.Add(2 * time.Hour)}
+			queued := append([]time.Time(nil), expected...)
+			requests := make(chan *jobOutRequest)
+			j := job{id: uuid.New(), jobOutRequest: requests}
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				request := <-requests
+				request.outChan <- internalJob{
+					id:            j.id,
+					jobSchedule:   &durationJob{duration: time.Hour},
+					nextScheduled: queued,
+				}
+				close(request.outChan)
+			}()
+			runs, err := j.NextRuns(count)
+			<-done
+			require.NoError(t, err)
+			require.Len(t, runs, count)
+			require.Equal(t, expected[:min(count, len(expected))], runs[:min(count, len(expected))])
+			if count > len(expected) {
+				require.Equal(t, now.Add(3*time.Hour), runs[2])
+			}
+			runs[count-1] = time.Time{}
+			require.Equal(t, expected, queued, "returned values must not change queued times")
 		})
 	}
 }
