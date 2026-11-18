@@ -1018,7 +1018,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		taskFunc = taskFunc.Elem()
 	}
 
-	if taskFunc.Kind() != reflect.Func {
+	if taskFunc.Kind() != reflect.Func || taskFunc.IsNil() {
 		return nil, ErrNewJobTaskNotFunc
 	}
 
@@ -1057,7 +1057,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 	j.ctx, j.cancel = context.WithCancel(j.parentCtx)
 
-	if !taskFunc.IsZero() && taskFunc.Type().NumIn() > 0 {
+	if taskFunc.Type().NumIn() > 0 {
 		// if the first parameter is a context.Context and params have no context.Context, add current ctx to the params
 		if taskFunc.Type().In(0) == contextType {
 			if len(tsk.parameters) == 0 {
