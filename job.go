@@ -1006,7 +1006,7 @@ func WithStopDateTime(end time.Time) StopAtOption {
 // multiple jobs by tag.
 func WithTags(tags ...string) JobOption {
 	return func(j *internalJob, _ time.Time) error {
-		j.tags = tags
+		j.tags = slices.Clone(tags)
 		return nil
 	}
 }
