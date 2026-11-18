@@ -2700,6 +2700,51 @@ func TestCalendarJobNextMidnightGapRunAfterTransition(t *testing.T) {
 	}
 }
 
+func TestMonthlyJobNextMidnightGapOnFirstOfMonth(t *testing.T) {
+	// America/Asuncion sprang forward at local midnight on 2023-10-01, so the
+	// first of October had no 00:00 and time.Date normalizes it to 23:00 on
+	// 2023-09-30. The month after September must still be October.
+	location, err := time.LoadLocation("America/Asuncion")
+	require.NoError(t, err)
+	at10 := NewAtTimes(NewAtTime(10, 0, 0))
+	at0030 := NewAtTimes(NewAtTime(0, 30, 0))
+	tests := []struct {
+		name       string
+		definition JobDefinition
+		policy     DaylightSavingsTimePolicy
+		lastRun    time.Time
+		expected   time.Time
+	}{
+		{"first day", MonthlyJob(1, NewDaysOfTheMonth(1), at10), DaylightSavingsTimeDefault, time.Date(2023, 9, 1, 10, 0, 0, 0, location), time.Date(2023, 10, 1, 10, 0, 0, 0, location)},
+		{"mid month", MonthlyJob(1, NewDaysOfTheMonth(15), at10), DaylightSavingsTimeDefault, time.Date(2023, 9, 15, 10, 0, 0, 0, location), time.Date(2023, 10, 15, 10, 0, 0, 0, location)},
+		{"first and last", MonthlyJob(1, NewDaysOfTheMonth(1, 31), at10), DaylightSavingsTimeDefault, time.Date(2023, 9, 1, 10, 0, 0, 0, location), time.Date(2023, 10, 1, 10, 0, 0, 0, location)},
+		{"last day of the month", MonthlyJob(1, NewDaysOfTheMonth(-1), at10), DaylightSavingsTimeDefault, time.Date(2023, 8, 31, 10, 0, 0, 0, location), time.Date(2023, 9, 30, 10, 0, 0, 0, location)},
+		{"interval two", MonthlyJob(2, NewDaysOfTheMonth(5), at10), DaylightSavingsTimeDefault, time.Date(2023, 8, 5, 10, 0, 0, 0, location), time.Date(2023, 10, 5, 10, 0, 0, 0, location)},
+		{"at time in the gap", MonthlyJob(1, NewDaysOfTheMonth(1), at0030), DaylightSavingsTimeDefault, time.Date(2023, 9, 1, 0, 30, 0, 0, location), time.Date(2023, 10, 1, 1, 30, 0, 0, location)},
+		{"at time in the gap run after transition", MonthlyJob(1, NewDaysOfTheMonth(1), at0030), DaylightSavingsTimeRunAfterTransition, time.Date(2023, 9, 1, 0, 30, 0, 0, location), time.Date(2023, 10, 1, 1, 30, 0, 0, location)},
+		{"at time in the gap skip", MonthlyJob(1, NewDaysOfTheMonth(1), at0030), DaylightSavingsTimeSkip, time.Date(2023, 9, 1, 0, 30, 0, 0, location), time.Date(2023, 11, 1, 0, 30, 0, 0, location)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &internalJob{daylightSavingsTimePolicy: tt.policy}
+			require.NoError(t, tt.definition.setup(j, location, tt.lastRun))
+			assert.Equal(t, tt.expected, j.next(tt.lastRun))
+		})
+	}
+}
+
+func TestMonthlyJobNextLastDayMidnightGap(t *testing.T) {
+	// Atlantic/Azores springs forward at local midnight on 2030-03-31, the last
+	// day of March, so counting back from 2030-04-01 must not land on the 30th.
+	location, err := time.LoadLocation("Atlantic/Azores")
+	require.NoError(t, err)
+	j := &internalJob{}
+	require.NoError(t, MonthlyJob(1, NewDaysOfTheMonth(-1), NewAtTimes(NewAtTime(10, 0, 0))).setup(j, location, time.Time{}))
+	next := j.next(time.Date(2030, 2, 28, 10, 0, 0, 0, location))
+	assert.Equal(t, time.Date(2030, 3, 31, 10, 0, 0, 0, location), next)
+	assert.Equal(t, time.Date(2030, 4, 30, 10, 0, 0, 0, location), j.next(next))
+}
+
 func TestCalendarJobNextForwardGapRunAfterTransition(t *testing.T) {
 	// Europe/Berlin springs forward from 02:00 to 03:00 on 2026-03-29. East of
 	// UTC, time.Date normalizes 02:30 forward to 03:30 on the same day, which is
