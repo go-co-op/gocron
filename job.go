@@ -1864,7 +1864,7 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 	if lengthNextScheduled == 0 {
 		return nil, nil
 	} else if count <= lengthNextScheduled {
-		return ij.nextScheduled[:count], nil
+		return slices.Clone(ij.nextScheduled[:count]), nil
 	}
 
 	out := make([]time.Time, count)
