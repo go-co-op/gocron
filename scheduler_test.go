@@ -727,6 +727,35 @@ func TestScheduler_StopJobsWithContext(t *testing.T) {
 		require.NoError(t, s.StopJobsWithContext(ctx))
 		require.NoError(t, s.Shutdown()) // clean up
 	})
+	t.Run("canceled stop does not pass its timeout to the next stop", func(t *testing.T) {
+		clock := clockwork.NewFakeClock()
+		s := newTestScheduler(t, WithClock(clock), WithStopTimeout(time.Second))
+		defer func() { assert.NoError(t, s.Shutdown()) }()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		started := make(chan struct{})
+		release := make(chan struct{})
+		_, err := s.NewJob(DurationJob(time.Hour), NewTask(func(jobCtx context.Context) {
+			close(started)
+			<-jobCtx.Done()
+			cancel()
+			<-release
+		}), WithStartAt(WithStartImmediately()))
+		require.NoError(t, err)
+		defer close(release)
+
+		s.Start()
+		<-started
+		require.ErrorIs(t, s.StopJobsWithContext(ctx), context.Canceled)
+
+		// Wait for the executor timeout and scheduler watchdog to be armed.
+		waitCtx, stopWaiting := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopWaiting()
+		require.NoError(t, clock.BlockUntilContext(waitCtx, 2))
+		clock.Advance(time.Second)
+		require.NoError(t, s.StopJobs())
+	})
 }
 
 func TestScheduler_Start(t *testing.T) {
