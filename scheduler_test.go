@@ -4425,7 +4425,7 @@ func TestWithTagsInputDoesNotChangeRegisteredJobs(t *testing.T) {
 			name = "Update"
 		}
 		t.Run(name, func(t *testing.T) {
-			newTestScheduler(t)
+			s := newTestScheduler(t)
 			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
 			tags := []string{"keep"}
 			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags(tags...))
@@ -4456,7 +4456,7 @@ func TestWithTagsInputDoesNotChangeRegisteredJobs(t *testing.T) {
 
 func TestWithTagsSharedOptionInputDoesNotChangeJobs(t *testing.T) {
 	tags := []string{"shared"}
-	newTestScheduler(t)
+	s := newTestScheduler(t)
 	t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
 	ids := make(map[uuid.UUID]bool)
 	for range 2 {
@@ -4484,7 +4484,7 @@ func TestWithTagsPreservesValues(t *testing.T) {
 		{name: "ordered duplicates", tags: []string{"second", "first", "second"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			newTestScheduler(t)
+			s := newTestScheduler(t)
 			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
 			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags(tc.tags...))
 			require.NoError(t, err)
