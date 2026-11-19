@@ -1473,26 +1473,41 @@ func (d dailyJob) next(lastRun time.Time) time.Time {
 func (d dailyJob) nextDay(lastRun time.Time, dayOffset int) time.Time {
 	// Keep the calendar date independent of local midnight, which may not exist.
 	date := time.Date(lastRun.Year(), lastRun.Month(), lastRun.Day()+dayOffset, 0, 0, 0, 0, time.UTC)
-	for _, at := range d.atTimes {
-		// sub the at time hour/min/sec onto the lastScheduledRun's values
-		// to use in checks to see if we've got our next run time
-		atDate := time.Date(date.Year(), date.Month(), date.Day(), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+	return nextAtTime(lastRun, date, d.atTimes, d.daylightSavingsTimePolicy)
+}
 
-		// Daylight Saving Time spring-forward gap detection: time.Date normalizes a
-		// non-existent wall-clock time, causing the hour/min/sec to
-		// differ from what was requested.
-		if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
+func nextAtTime(lastRun, date time.Time, atTimes []time.Time, policy DaylightSavingsTimePolicy) time.Time {
+	year, month, day := date.Date()
+	var next time.Time
+	for i, at := range atTimes {
+		hour, minute, second := at.Clock()
+		candidate := time.Date(year, month, day, hour, minute, second, 0, lastRun.Location())
+		if candidate.Hour() != hour || candidate.Minute() != minute || candidate.Second() != second {
 			var ok bool
-			if atDate, ok = daylightSavingsTimeGapAdjust(atDate, date.Day(), at, d.daylightSavingsTimePolicy); !ok {
+			if candidate, ok = daylightSavingsTimeGapAdjust(candidate, day, at, policy); !ok {
 				continue
 			}
 		}
-
-		if atDate.After(lastRun) {
-			return atDate
+		if !candidate.After(lastRun) {
+			continue
+		}
+		if next.IsZero() {
+			next = candidate
+			if i == len(atTimes)-1 {
+				break
+			}
+			// Away from a zone transition the sorted wall times are already chronological.
+			// Near a transition, normalizing a missing time can put it before or after a neighbor.
+			start, end := candidate.ZoneBounds()
+			if (start.IsZero() || candidate.Sub(start) >= 24*time.Hour) &&
+				(end.IsZero() || end.Sub(candidate) >= 24*time.Hour) {
+				break
+			}
+		} else if candidate.Before(next) {
+			next = candidate
 		}
 	}
-	return time.Time{}
+	return next
 }
 
 var _ jobSchedule = (*weeklyJob)(nil)
@@ -1537,25 +1552,9 @@ func (w weeklyJob) nextWeekDayAtTime(lastRun time.Time, dayOffset int) time.Time
 	for _, wd := range w.daysOfWeek {
 		// checking if we're on the same day or later in the same week
 		if wd >= date.Weekday() {
-			// weekDayDiff is used to add the correct amount to the atDate day below
-			weekDayDiff := wd - date.Weekday()
-			for _, at := range w.atTimes {
-				// sub the at time hour/min/sec onto the lastScheduledRun's values
-				// to use in checks to see if we've got our next run time
-				atDate := time.Date(date.Year(), date.Month(), date.Day()+int(weekDayDiff), at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
-
-				// Daylight Saving Time spring-forward gap detection
-				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					requestedDay := date.AddDate(0, 0, int(weekDayDiff)).Day()
-					var ok bool
-					if atDate, ok = daylightSavingsTimeGapAdjust(atDate, requestedDay, at, w.daylightSavingsTimePolicy); !ok {
-						continue
-					}
-				}
-
-				if atDate.After(lastRun) {
-					return atDate
-				}
+			weekday := date.AddDate(0, 0, int(wd-date.Weekday()))
+			if next := nextAtTime(lastRun, weekday, w.atTimes, w.daylightSavingsTimePolicy); !next.IsZero() {
+				return next
 			}
 		}
 	}
@@ -1628,30 +1627,14 @@ func (m monthlyJob) nextMonthDayAtTime(lastRun, month time.Time, firstDay int, d
 		if day < firstDay {
 			continue
 		}
-		if time.Date(month.Year(), month.Month(), day, 0, 0, 0, 0, time.UTC).Month() != month.Month() {
+		date := time.Date(month.Year(), month.Month(), day, 0, 0, 0, 0, time.UTC)
+		if date.Month() != month.Month() {
 			// this check handles if we're setting a day not in the current month
 			// e.g. setting day 31 in Feb results in March 2nd
 			continue
 		}
-		for _, at := range m.atTimes {
-			// sub the day, and the at time hour/min/sec onto the month's values
-			// to use in checks to see if we've got our next run time
-			atDate := time.Date(month.Year(), month.Month(), day, at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
-
-			// Daylight Saving Time spring-forward gap detection
-			if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-				var ok bool
-				if atDate, ok = daylightSavingsTimeGapAdjust(atDate, day, at, m.daylightSavingsTimePolicy); !ok {
-					continue
-				}
-			}
-
-			// checking to see if it is after i.e. greater than, and not
-			// greater or equal, as lastRun's own day/time will be in the loop
-			// of its month, and we don't want to select it again
-			if atDate.After(lastRun) {
-				return atDate
-			}
+		if next := nextAtTime(lastRun, date, m.atTimes, m.daylightSavingsTimePolicy); !next.IsZero() {
+			return next
 		}
 	}
 	return time.Time{}
