@@ -678,6 +678,13 @@ func (e *executor) stop(standardJobsWg, singletonJobsWg, limitModeJobsWg *waitGr
 			}
 		}
 		timer.Stop()
+
+		// reset before reporting done: the scheduler can start the executor
+		// again as soon as it receives from e.done.
+		if e.limitMode != nil {
+			e.limitMode.started = false
+		}
+
 		if count < 3 {
 			e.done <- ErrStopJobsTimedOut
 			e.logger.Debug("gocron: executor stopped - timed out")
@@ -686,9 +693,5 @@ func (e *executor) stop(standardJobsWg, singletonJobsWg, limitModeJobsWg *waitGr
 			e.logger.Debug("gocron: executor stopped")
 		}
 		waiterCancel()
-
-		if e.limitMode != nil {
-			e.limitMode.started = false
-		}
 	})
 }
