@@ -4478,17 +4478,16 @@ func TestWithTagsInputDoesNotChangeRegisteredJobs(t *testing.T) {
 			name = "Update"
 		}
 		t.Run(name, func(t *testing.T) {
-			s, err := gocron.NewScheduler()
-			require.NoError(t, err)
+			s := newTestScheduler(t)
 			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
 			tags := []string{"keep"}
-			j, err := s.NewJob(gocron.DurationJob(time.Hour), gocron.NewTask(func() {}), gocron.WithTags(tags...))
+			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags(tags...))
 			require.NoError(t, err)
 			if update {
-				j, err = s.Update(j.ID(), gocron.DurationJob(time.Hour), gocron.NewTask(func() {}), gocron.WithTags(tags...))
+				j, err = s.Update(j.ID(), DurationJob(time.Hour), NewTask(func() {}), WithTags(tags...))
 				require.NoError(t, err)
 			}
-			other, err := s.NewJob(gocron.DurationJob(time.Hour), gocron.NewTask(func() {}), gocron.WithTags("remove"))
+			other, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags("remove"))
 			require.NoError(t, err)
 
 			// Reuse the caller's input storage only after registration returns.
@@ -4510,12 +4509,11 @@ func TestWithTagsInputDoesNotChangeRegisteredJobs(t *testing.T) {
 
 func TestWithTagsSharedOptionInputDoesNotChangeJobs(t *testing.T) {
 	tags := []string{"shared"}
-	s, err := gocron.NewScheduler(gocron.WithGlobalJobOptions(gocron.WithTags(tags...)))
-	require.NoError(t, err)
+	s := newTestScheduler(t, WithGlobalJobOptions(WithTags(tags...)))
 	t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
 	ids := make(map[uuid.UUID]bool)
 	for range 2 {
-		j, addErr := s.NewJob(gocron.DurationJob(time.Hour), gocron.NewTask(func() {}))
+		j, addErr := s.NewJob(DurationJob(time.Hour), NewTask(func() {}))
 		require.NoError(t, addErr)
 		ids[j.ID()] = true
 	}
@@ -4539,10 +4537,9 @@ func TestWithTagsPreservesValues(t *testing.T) {
 		{name: "ordered duplicates", tags: []string{"second", "first", "second"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := gocron.NewScheduler()
-			require.NoError(t, err)
+			s := newTestScheduler(t)
 			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
-			j, err := s.NewJob(gocron.DurationJob(time.Hour), gocron.NewTask(func() {}), gocron.WithTags(tc.tags...))
+			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags(tc.tags...))
 			require.NoError(t, err)
 			require.Equal(t, tc.tags, j.Tags())
 		})
