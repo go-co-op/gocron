@@ -35,4 +35,4 @@ Please always make sure a pull request has been:
 
 ## Writing Tests
 
-Tests should follow the [table driven test pattern](https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go). See other tests in the code base for additional examples.
+Tests should follow the [table driven test pattern](https://dave.cheney.net/2013/06/09/writing-table-driven-tests-in-go). See other tests in the code base for additional examples. Add tests to the existing test files rather than creating new test files, placing them in the file that covers the relevant functionality.
