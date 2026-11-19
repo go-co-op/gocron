@@ -634,6 +634,29 @@ func TestDailyJob_next(t *testing.T) {
 	}
 }
 
+func TestWeeklyJobOwnsWeekdayInput(t *testing.T) {
+	now := time.Date(2024, 1, 7, 0, 0, 0, 0, time.UTC) // Sunday
+	s := newTestScheduler(t, WithClock(clockwork.NewFakeClockAt(now)), WithLocation(time.UTC))
+	t.Cleanup(func() { assert.NoError(t, s.Shutdown()) })
+
+	days := []time.Weekday{time.Friday, time.Monday}
+	j, err := s.NewJob(
+		WeeklyJob(1, func() []time.Weekday { return days }, NewAtTimes(NewAtTime(9, 0, 0))),
+		NewTask(func() {}),
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Weekday{time.Friday, time.Monday}, days, "registration reordered caller weekdays")
+
+	days[0], days[1] = time.Tuesday, time.Thursday
+	s.Start()
+	runs, err := j.NextRuns(2)
+	require.NoError(t, err)
+	assert.Equal(t, []time.Time{
+		time.Date(2024, 1, 8, 9, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 12, 9, 0, 0, 0, time.UTC),
+	}, runs, "changing caller weekdays changed the registered schedule")
+}
+
 func TestWeeklyJob_next(t *testing.T) {
 	americaChicago, err := time.LoadLocation("America/Chicago")
 	require.NoError(t, err)
