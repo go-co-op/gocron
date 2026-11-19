@@ -1483,6 +1483,71 @@ func TestScheduler_Singleton(t *testing.T) {
 	}
 }
 
+func TestScheduler_Singleton_UpdateLimitMode(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	tests := []struct {
+		name    string
+		initial LimitMode
+		updated LimitMode
+	}{
+		{
+			"reschedule updated to wait",
+			LimitModeReschedule,
+			LimitModeWait,
+		},
+		{
+			"wait updated to reschedule",
+			LimitModeWait,
+			LimitModeReschedule,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			jobRanCh := make(chan struct{}, 1000)
+			task := NewTask(func() {
+				jobRanCh <- struct{}{}
+			})
+
+			s := newTestScheduler(t)
+
+			j, err := s.NewJob(
+				DurationJob(10*time.Millisecond),
+				task,
+				WithSingletonMode(tt.initial),
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			select {
+			case <-jobRanCh:
+			case <-time.After(time.Second):
+				t.Fatalf("timed out waiting for the job to run before the update")
+			}
+
+			_, err = s.Update(
+				j.ID(),
+				DurationJob(10*time.Millisecond),
+				task,
+				WithSingletonMode(tt.updated),
+			)
+			require.NoError(t, err)
+
+			// more runs than could have been buffered before the update
+			for runCount := 0; runCount < 5; runCount++ {
+				select {
+				case <-jobRanCh:
+				case <-time.After(time.Second):
+					t.Fatalf("job stopped running after the update, runs seen: %d", runCount)
+				}
+			}
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestScheduler_LimitMode(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	tests := []struct {
