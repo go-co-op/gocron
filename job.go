@@ -460,8 +460,7 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ ti
 		return ErrWeeklyJobDaysOfTheWeekNil
 	}
 
-	daysOfTheWeek := w.daysOfTheWeek()
-
+	daysOfTheWeek := slices.Clone(w.daysOfTheWeek())
 	slices.Sort(daysOfTheWeek)
 	ws.daysOfWeek = daysOfTheWeek
 
