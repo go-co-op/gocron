@@ -4456,7 +4456,7 @@ func TestWithTagsInputDoesNotChangeRegisteredJobs(t *testing.T) {
 
 func TestWithTagsSharedOptionInputDoesNotChangeJobs(t *testing.T) {
 	tags := []string{"shared"}
-	s := newTestScheduler(t)
+	s := newTestScheduler(t, WithGlobalJobOptions(WithTags(tags...)))
 	t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
 	ids := make(map[uuid.UUID]bool)
 	for range 2 {
