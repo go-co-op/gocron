@@ -142,6 +142,13 @@ func TestConvertAtTimesToDateTime(t *testing.T) {
 			errAtTimesNil,
 		},
 		{
+			"atTimes is empty",
+			func() []AtTime { return nil },
+			time.UTC,
+			nil,
+			errAtTimesNil,
+		},
+		{
 			"atTime is nil",
 			NewAtTimes(nil),
 			time.UTC,
