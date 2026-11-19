@@ -1338,12 +1338,21 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 	// on the same calendar day.  Because cron.Next always advances at
 	// least one second in absolute time, identical wall-clock date+time
 	// can only happen during a Daylight Saving Time fall-back.  Skip ahead when detected.
-	if lastRun.Year() == next.Year() &&
-		lastRun.Month() == next.Month() &&
-		lastRun.Day() == next.Day() &&
-		lastRun.Hour() == next.Hour() &&
-		lastRun.Minute() == next.Minute() &&
-		lastRun.Second() == next.Second() {
+	// The wall clocks are read in the time zone the crontab is evaluated in,
+	// which a TZ=/CRON_TZ= prefix can make differ from the scheduler's location.
+	loc := lastRun.Location()
+	if cronImpl, ok := j.cronSchedule.(*defaultCron); ok {
+		if spec, ok := cronImpl.cronSchedule.(*cron.SpecSchedule); ok && spec.Location != time.Local {
+			loc = spec.Location
+		}
+	}
+	lastWall, nextWall := lastRun.In(loc), next.In(loc)
+	if lastWall.Year() == nextWall.Year() &&
+		lastWall.Month() == nextWall.Month() &&
+		lastWall.Day() == nextWall.Day() &&
+		lastWall.Hour() == nextWall.Hour() &&
+		lastWall.Minute() == nextWall.Minute() &&
+		lastWall.Second() == nextWall.Second() {
 		return j.cronSchedule.Next(next)
 	}
 
