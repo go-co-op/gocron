@@ -2070,6 +2070,79 @@ func TestScheduler_WithDistributedElector_NotLeaderNextRun(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 }
 
+// TestScheduler_LimitModeReschedule_SkippedRunNextRun asserts that a run
+// skipped because the job is still running leaves the job's next run in the
+// future, as it does for a run skipped by a locker or an elector.
+func TestScheduler_LimitModeReschedule_SkippedRunNextRun(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	tests := []struct {
+		name         string
+		schedulerOpt []SchedulerOption
+		jobOpt       []JobOption
+	}{
+		{
+			"singleton mode reschedule",
+			nil,
+			[]JobOption{WithSingletonMode(LimitModeReschedule)},
+		},
+		{
+			"limit mode reschedule",
+			[]SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)},
+			nil,
+		},
+		{
+			"limit mode reschedule with singleton mode",
+			[]SchedulerOption{WithLimitConcurrentJobs(2, LimitModeReschedule)},
+			[]JobOption{WithSingletonMode(LimitModeReschedule)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := time.Date(2024, time.January, 1, 9, 0, 0, 0, time.UTC)
+			fakeClock := clockwork.NewFakeClockAt(start)
+
+			s := newTestScheduler(t, append(tt.schedulerOpt, WithClock(fakeClock))...)
+
+			jobStarted := make(chan struct{}, 1)
+			jobRelease := make(chan struct{})
+			j, err := s.NewJob(
+				DurationJob(time.Second),
+				NewTask(func() {
+					jobStarted <- struct{}{}
+					<-jobRelease
+				}),
+				tt.jobOpt...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			fakeClock.Advance(time.Second)
+
+			select {
+			case <-jobStarted:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for the job to start")
+			}
+			require.Eventually(t, func() bool {
+				nextRun, err := j.NextRun()
+				return err == nil && nextRun.Equal(start.Add(2*time.Second))
+			}, 3*time.Second, 10*time.Millisecond)
+
+			// the job is still running, so this run is skipped
+			fakeClock.Advance(time.Second)
+
+			require.Eventually(t, func() bool {
+				nextRun, err := j.NextRun()
+				return err == nil && nextRun.Equal(start.Add(3*time.Second))
+			}, 3*time.Second, 10*time.Millisecond)
+
+			close(jobRelease)
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestScheduler_RemoveJob(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	tests := []struct {
