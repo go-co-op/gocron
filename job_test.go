@@ -82,6 +82,22 @@ func TestCronJob_next_DaylightSavingsTime(t *testing.T) {
 			time.Date(2026, 6, 15, 1, 30, 0, 0, americaNewYork),
 			time.Date(2026, 6, 16, 1, 30, 0, 0, americaNewYork),
 		},
+		{
+			// The scheduler runs in UTC and the crontab names New York.
+			// 05:30 UTC is 01:30 EDT and 06:30 UTC is 01:30 EST.
+			"fall back - crontab time zone differs from the scheduler, should not run twice",
+			"CRON_TZ=America/New_York 30 1 * * *",
+			time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC),
+			time.Date(2026, 11, 2, 6, 30, 0, 0, time.UTC),
+		},
+		{
+			// The scheduler runs in New York and the crontab names UTC, which
+			// has no fall-back. 05:30 UTC and 06:30 UTC are both 01:30 in New York.
+			"fall back - crontab in UTC keeps both runs",
+			"TZ=UTC 30 5,6 * * *",
+			time.Date(2026, 11, 1, 1, 30, 0, 0, americaNewYork),              // 05:30 UTC
+			time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC).In(americaNewYork), // 01:30 EST
+		},
 	}
 
 	for _, tt := range tests {
@@ -89,7 +105,7 @@ func TestCronJob_next_DaylightSavingsTime(t *testing.T) {
 			cronImpl := newDefaultCronImplementation(false)
 			// IsValid needs a "now" before the first expected match so the
 			// parsed schedule can find at least one future occurrence.
-			err := cronImpl.IsValid(tt.crontab, americaNewYork, tt.lastRun.Add(-time.Hour))
+			err := cronImpl.IsValid(tt.crontab, tt.lastRun.Location(), tt.lastRun.Add(-time.Hour))
 			require.NoError(t, err)
 
 			j := cronJob{crontab: tt.crontab, cronSchedule: cronImpl}
