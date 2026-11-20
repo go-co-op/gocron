@@ -678,6 +678,10 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
 		if j.limitReached() {
+			if j.intervalFromCompletion {
+				s.selectRemoveJob(completed.id)
+				return
+			}
 			// No more runs: drop the run that was already scheduled
 			// when this one started. selectExecJobOutRequest keeps
 			// runs that were already dispatched from executing.
@@ -976,36 +980,14 @@ func (s *scheduler) NewJob(jobDefinition JobDefinition, task Task, options ...Jo
 	return s.addOrUpdateJob(uuid.Nil, jobDefinition, task, options)
 }
 
-func (s *scheduler) verifyInterfaceVariadic(taskFunc reflect.Value, tsk task, variadicStart int) error {
-	ifaceType := taskFunc.Type().In(variadicStart).Elem()
-	for i := variadicStart; i < len(tsk.parameters); i++ {
-		if !reflect.TypeOf(tsk.parameters[i]).Implements(ifaceType) {
-			return ErrNewJobWrongTypeOfParameters
-		}
-	}
-	return nil
-}
-
 func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicStart int) error {
 	if err := s.verifyNonVariadic(taskFunc, tsk, variadicStart); err != nil {
 		return err
 	}
-	parameterType := taskFunc.Type().In(variadicStart)
-	parameterTypeKind := parameterType.Elem().Kind()
-	if parameterTypeKind == reflect.Interface {
-		return s.verifyInterfaceVariadic(taskFunc, tsk, variadicStart)
-	}
-	if parameterTypeKind == reflect.Pointer {
-		parameterTypeKind = reflect.Indirect(reflect.ValueOf(parameterType)).Kind()
-	}
-
+	elemType := taskFunc.Type().In(variadicStart).Elem()
 	for i := variadicStart; i < len(tsk.parameters); i++ {
 		argumentType := reflect.TypeOf(tsk.parameters[i])
-		argumentTypeKind := argumentType.Kind()
-		if argumentTypeKind == reflect.Interface || argumentTypeKind == reflect.Pointer {
-			argumentTypeKind = argumentType.Elem().Kind()
-		}
-		if argumentTypeKind != parameterTypeKind {
+		if argumentType == nil || !argumentType.AssignableTo(elemType) {
 			return ErrNewJobWrongTypeOfParameters
 		}
 	}
@@ -1015,16 +997,8 @@ func (s *scheduler) verifyVariadic(taskFunc reflect.Value, tsk task, variadicSta
 func (s *scheduler) verifyNonVariadic(taskFunc reflect.Value, tsk task, length int) error {
 	for i := range length {
 		argumentType := reflect.TypeOf(tsk.parameters[i])
-		t1 := argumentType.Kind()
-		if t1 == reflect.Interface || t1 == reflect.Pointer {
-			t1 = argumentType.Elem().Kind()
-		}
 		parameterType := taskFunc.Type().In(i)
-		t2 := reflect.New(parameterType).Elem().Kind()
-		if t2 == reflect.Interface || t2 == reflect.Pointer {
-			t2 = reflect.Indirect(reflect.ValueOf(parameterType)).Kind()
-		}
-		if t1 != t2 {
+		if argumentType == nil || !argumentType.AssignableTo(parameterType) {
 			return ErrNewJobWrongTypeOfParameters
 		}
 	}
@@ -1068,12 +1042,12 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		taskFunc = taskFunc.Elem()
 	}
 
-	if taskFunc.Kind() != reflect.Func {
+	if taskFunc.Kind() != reflect.Func || taskFunc.IsNil() {
 		return nil, ErrNewJobTaskNotFunc
 	}
 
 	j.name = runtime.FuncForPC(taskFunc.Pointer()).Name()
-	j.function = tsk.function
+	j.function = taskFunc.Interface()
 	// Defensive copy: stopScheduler rewrites j.parameters[0] to swap
 	// in a refreshed context whenever j.parameters[0] happens to be
 	// the old j.ctx. Today, all code paths that produce that state
@@ -1107,7 +1081,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 	}
 	j.ctx, j.cancel = context.WithCancel(j.parentCtx)
 
-	if !taskFunc.IsZero() && taskFunc.Type().NumIn() > 0 {
+	if taskFunc.Type().NumIn() > 0 {
 		// if the first parameter is a context.Context and params have no context.Context, add current ctx to the params
 		if taskFunc.Type().In(0) == contextType {
 			if len(tsk.parameters) == 0 {
@@ -1170,7 +1144,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 func (s *scheduler) RemoveByTags(tags ...string) {
 	select {
 	case <-s.shutdownCtx.Done():
-	case s.removeJobsByTagsCh <- tags:
+	case s.removeJobsByTagsCh <- slices.Clone(tags):
 	}
 }
 

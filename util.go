@@ -18,7 +18,9 @@ func callJobFuncWithParams(jobFunc any, params ...any) error {
 	if f.IsZero() {
 		return nil
 	}
-	if len(params) != f.Type().NumIn() {
+	numIn := f.Type().NumIn()
+	variadic := f.Type().IsVariadic()
+	if (!variadic && len(params) != numIn) || (variadic && len(params) < numIn-1) {
 		return ErrJobParameterMismatch
 	}
 	in := make([]reflect.Value, len(params))

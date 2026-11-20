@@ -657,10 +657,10 @@ type oneTimeJobDefinition struct {
 }
 
 func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.Time) error {
-	sortedTimes := o.startAt(j)
+	sortedTimes := append([]time.Time{}, o.startAt(j)...)
 	slices.SortStableFunc(sortedTimes, ascendingTime)
 	// deduplicate the times
-	sortedTimes = removeSliceDuplicatesTimeOnSortedSlice(sortedTimes)
+	sortedTimes = slices.CompactFunc(sortedTimes, time.Time.Equal)
 	// keep only schedules that are in the future
 	idx, found := slices.BinarySearchFunc(sortedTimes, now, ascendingTime)
 	if found {
@@ -682,16 +682,6 @@ func (o oneTimeJobDefinition) setup(j *internalJob, _ *time.Location, now time.T
 	}
 	j.jobSchedule = oneTimeJob{sortedTimes: sortedTimes}
 	return nil
-}
-
-func removeSliceDuplicatesTimeOnSortedSlice(times []time.Time) []time.Time {
-	ret := make([]time.Time, 0, len(times))
-	for i, t := range times {
-		if i == 0 || !t.Equal(times[i-1]) {
-			ret = append(ret, t)
-		}
-	}
-	return ret
 }
 
 // OneTimeJobStartAtOption defines when the one time job is run
@@ -992,7 +982,8 @@ type StopAtOption func(*internalJob, time.Time) error
 
 // WithStopDateTime sets the final date & time after which the job should stop.
 // This must be in the future and should be after the startTime (if specified).
-// The job's final run may be at the stop time, but not after.
+// A run that would start at or after the stop time is not scheduled, so the
+// job's final run is the last one before the stop time.
 func WithStopDateTime(end time.Time) StopAtOption {
 	return func(j *internalJob, now time.Time) error {
 		if end.IsZero() || end.Before(now) {
@@ -1011,7 +1002,7 @@ func WithStopDateTime(end time.Time) StopAtOption {
 // multiple jobs by tag.
 func WithTags(tags ...string) JobOption {
 	return func(j *internalJob, _ time.Time) error {
-		j.tags = tags
+		j.tags = slices.Clone(tags)
 		return nil
 	}
 }
@@ -1282,30 +1273,31 @@ type jobSchedule interface {
 }
 
 // daylightSavingsTimeRunAfterTransitionTime computes the post-transition equivalent
-// of a time that was normalized by time.Date into the pre-transition period.
-// When Go's time.Date encounters a non-existent wall-clock time during a
-// Daylight Saving Time spring-forward gap, it normalizes the time backwards.
-// This function adjusts the normalized time forward to the post-transition
-// equivalent by adding back the difference between the requested and actual
-// wall-clock values.
+// of a time that was normalized by time.Date because its wall-clock value falls
+// in a Daylight Saving Time spring-forward gap. Depending on the zone, Go's
+// time.Date normalizes such a time backwards into the pre-transition period
+// (e.g. America/New_York) or forwards past the transition (e.g. Europe/Berlin).
+// A time normalized backwards is moved forward by the difference between the
+// requested and actual wall-clock values. A time normalized forwards on the
+// requested day is already the post-transition equivalent and is returned as is.
 //
 // This function should only be called when a Daylight Saving Time spring-forward
 // gap has been detected (i.e., the normalized time's wall-clock values differ from
-// the requested values, with the normalized time being earlier).
-func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedHour, requestedMin, requestedSec int) time.Time {
+// the requested values).
+func daylightSavingsTimeRunAfterTransitionTime(normalized time.Time, requestedDay, requestedHour, requestedMin, requestedSec int) time.Time {
 	offset := time.Duration(requestedHour-normalized.Hour())*time.Hour +
 		time.Duration(requestedMin-normalized.Minute())*time.Minute +
 		time.Duration(requestedSec-normalized.Second())*time.Second
-	if offset < 0 && normalized.Hour() > requestedHour {
+	if offset < 0 && normalized.Day() != requestedDay {
 		// A gap that starts at local midnight normalizes the requested time
 		// onto the previous calendar day (e.g. 00:30 becomes 23:30 the day
 		// before), so the wall-clock difference wraps around midnight.
 		offset += 24 * time.Hour
 	}
 	if offset <= 0 {
-		// Safety guard: if the offset is not positive, the normalized time
-		// was not in a spring-forward gap (e.g., fall-back scenario). Return
-		// the normalized time unchanged to preserve existing behavior.
+		// The normalized time is already after the transition (time.Date
+		// moved it forward on the requested day), or it was not in a
+		// spring-forward gap (e.g., fall-back scenario). Return it unchanged.
 		return normalized
 	}
 	return normalized.Add(offset)
@@ -1322,10 +1314,10 @@ func daylightSavingsTimeGapAdjust(atDate time.Time, requestedDay int, at time.Ti
 	case DaylightSavingsTimeSkip:
 		return atDate, false
 	case DaylightSavingsTimeRunAfterTransition:
-		return daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second()), true
+		return daylightSavingsTimeRunAfterTransitionTime(atDate, requestedDay, at.Hour(), at.Minute(), at.Second()), true
 	default:
 		if atDate.Day() != requestedDay {
-			return daylightSavingsTimeRunAfterTransitionTime(atDate, at.Hour(), at.Minute(), at.Second()), true
+			return daylightSavingsTimeRunAfterTransitionTime(atDate, requestedDay, at.Hour(), at.Minute(), at.Second()), true
 		}
 		return atDate, true
 	}
@@ -1397,7 +1389,7 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 				if !wallSchedule.Next(wallTime.Add(-time.Second)).Equal(wallTime) {
 					continue
 				}
-				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second())
+				candidate = daylightSavingsTimeRunAfterTransitionTime(candidate, day.Day(), nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second())
 				if candidate.After(lastRun) && candidate.Before(next) {
 					return candidate.In(lastRun.Location())
 				}
@@ -1590,78 +1582,82 @@ type monthlyJob struct {
 
 func (m monthlyJob) next(lastRun time.Time) time.Time {
 	lastRun = inLocation(lastRun, m.location)
-	daysList := make([]int, len(m.days))
-	copy(daysList, m.days)
-
-	daysFromEnd := m.handleNegativeDays(lastRun, daysList, m.daysFromEnd)
-	next := m.nextMonthDayAtTime(lastRun, daysFromEnd, true)
+	// Reuse one stack buffer for the day list of each month. append grows it
+	// when a job has more than 32 days.
+	var buf [32]int
+	// Keep the calendar month independent of local midnight, which may not
+	// exist (a Daylight Saving Time change at 00:00 on the first of a month
+	// would otherwise put the month start on the last day of the month before).
+	month := time.Date(lastRun.Year(), lastRun.Month(), 1, 0, 0, 0, 0, time.UTC)
+	daysFromEnd := m.handleNegativeDays(month, m.days, m.daysFromEnd, buf[:0])
+	next := m.nextMonthDayAtTime(lastRun, month, lastRun.Day(), daysFromEnd)
 	if !next.IsZero() {
 		return next
 	}
 
-	from := time.Date(lastRun.Year(), lastRun.Month()+time.Month(m.interval), 1, 0, 0, 0, 0, lastRun.Location())
 	// a multiple of 12 months revisits one calendar month, so the day may
 	// never exist (e.g. the 31st every 12 months from April). The leap years
 	// repeat every 400 years, so a stride of whole years repeats within 400
 	// steps: if none matched by then, none will.
 	for i := 0; next.IsZero() && i < 400; i++ {
-		daysFromEnd = m.handleNegativeDays(from, daysList, m.daysFromEnd)
-		next = m.nextMonthDayAtTime(from, daysFromEnd, false)
-		from = from.AddDate(0, int(m.interval), 0)
+		month = month.AddDate(0, int(m.interval), 0)
+		daysFromEnd = m.handleNegativeDays(month, m.days, m.daysFromEnd, buf[:0])
+		next = m.nextMonthDayAtTime(lastRun, month, 1, daysFromEnd)
 	}
 
 	return next
 }
 
-func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays []int) []int {
-	var out []int
+// handleNegativeDays returns the sorted days of the month of from, a UTC date,
+// with the days counted from the end of the month resolved.
+func (m monthlyJob) handleNegativeDays(from time.Time, days, negativeDays, out []int) []int {
+	out = out[:0]
 	// getting a list of the days from the end of the following month
 	// -1 == the last day of the month
-	firstDayNextMonth := time.Date(from.Year(), from.Month()+1, 1, 0, 0, 0, 0, from.Location())
-	for _, daySub := range negativeDays {
-		day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
-		out = append(out, day)
+	if len(negativeDays) > 0 {
+		firstDayNextMonth := time.Date(from.Year(), from.Month()+1, 1, 0, 0, 0, 0, from.Location())
+		for _, daySub := range negativeDays {
+			day := firstDayNextMonth.AddDate(0, 0, daySub).Day()
+			out = append(out, day)
+		}
 	}
 	out = append(out, days...)
 	slices.Sort(out)
 	return out
 }
 
-func (m monthlyJob) nextMonthDayAtTime(lastRun time.Time, days []int, firstPass bool) time.Time {
+// nextMonthDayAtTime returns the first run after lastRun on or after firstDay of
+// month, a UTC date, or the zero time if there is none in that month.
+func (m monthlyJob) nextMonthDayAtTime(lastRun, month time.Time, firstDay int, days []int) time.Time {
 	// find the next day in the month that should run and then check for an at time
 	for _, day := range days {
-		if day >= lastRun.Day() {
-			for _, at := range m.atTimes {
-				// sub the day, and the at time hour/min/sec onto the lastScheduledRun's values
-				// to use in checks to see if we've got our next run time
-				atDate := time.Date(lastRun.Year(), lastRun.Month(), day, at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
+		if day < firstDay {
+			continue
+		}
+		if time.Date(month.Year(), month.Month(), day, 0, 0, 0, 0, time.UTC).Month() != month.Month() {
+			// this check handles if we're setting a day not in the current month
+			// e.g. setting day 31 in Feb results in March 2nd
+			continue
+		}
+		for _, at := range m.atTimes {
+			// sub the day, and the at time hour/min/sec onto the month's values
+			// to use in checks to see if we've got our next run time
+			atDate := time.Date(month.Year(), month.Month(), day, at.Hour(), at.Minute(), at.Second(), 0, lastRun.Location())
 
-				if atDate.Month() != lastRun.Month() {
-					// this check handles if we're setting a day not in the current month
-					// e.g. setting day 31 in Feb results in March 2nd
+			// Daylight Saving Time spring-forward gap detection
+			if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
+				var ok bool
+				if atDate, ok = daylightSavingsTimeGapAdjust(atDate, day, at, m.daylightSavingsTimePolicy); !ok {
 					continue
 				}
-
-				// Daylight Saving Time spring-forward gap detection
-				if atDate.Hour() != at.Hour() || atDate.Minute() != at.Minute() || atDate.Second() != at.Second() {
-					var ok bool
-					if atDate, ok = daylightSavingsTimeGapAdjust(atDate, day, at, m.daylightSavingsTimePolicy); !ok {
-						continue
-					}
-				}
-
-				if firstPass && atDate.After(lastRun) {
-					// checking to see if it is after i.e. greater than,
-					// and not greater or equal as our lastScheduledRun day/time
-					// will be in the loop, and we don't want to select it again
-					return atDate
-				} else if !firstPass && !atDate.Before(lastRun) {
-					// now that we're looking at the next month, it's ok to consider
-					// the same at time that was  lastScheduledRun (as lastScheduledRun has been incremented)
-					return atDate
-				}
 			}
-			continue
+
+			// checking to see if it is after i.e. greater than, and not
+			// greater or equal, as lastRun's own day/time will be in the loop
+			// of its month, and we don't want to select it again
+			if atDate.After(lastRun) {
+				return atDate
+			}
 		}
 	}
 	return time.Time{}
@@ -1864,7 +1860,7 @@ func (j job) NextRuns(count int) ([]time.Time, error) {
 	if lengthNextScheduled == 0 {
 		return nil, nil
 	} else if count <= lengthNextScheduled {
-		return ij.nextScheduled[:count], nil
+		return slices.Clone(ij.nextScheduled[:count]), nil
 	}
 
 	out := make([]time.Time, count)
