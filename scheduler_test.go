@@ -3721,6 +3721,73 @@ func TestScheduler_WithGlobalJobOptions_MultipleCallsAppend(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 }
 
+// TestScheduler_WithLimitedRuns_ConcurrentRunNow asserts that runs
+// started at the same time by RunNow can't go over WithLimitedRuns: both
+// calls are accepted while the job has a run left, but only one of the
+// runs may call the task function.
+func TestScheduler_WithLimitedRuns_ConcurrentRunNow(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name    string
+		jobOpts []JobOption
+	}{
+		{"default", nil},
+		{"interval from completion", []JobOption{WithIntervalFromCompletion()}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			var runs atomic.Int64
+			entered := make(chan struct{}, 2)
+			release := make(chan struct{})
+
+			opts := append([]JobOption{
+				WithLimitedRuns(1),
+				WithEventListeners(BeforeJobRuns(func(_ uuid.UUID, _ string) {
+					// hold both runs here until each has been
+					// dispatched, then let them go together
+					entered <- struct{}{}
+					<-release
+				})),
+			}, tt.jobOpts...)
+			j, err := s.NewJob(
+				DurationJob(time.Hour),
+				NewTask(func() {
+					runs.Add(1)
+				}),
+				opts...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			require.NoError(t, j.RunNow())
+			require.NoError(t, j.RunNow())
+			for range 2 {
+				select {
+				case <-entered:
+				case <-time.After(2 * time.Second):
+					t.Fatal("timed out waiting for the runs to reach BeforeJobRuns")
+				}
+			}
+			close(release)
+
+			require.Eventually(t, func() bool {
+				return len(s.Jobs()) == 0
+			}, 2*time.Second, 10*time.Millisecond, "job should be removed after its last run")
+			// give a run that got past the limit time to finish
+			time.Sleep(50 * time.Millisecond)
+			assert.Equal(t, int64(1), runs.Load())
+			assert.ErrorIs(t, j.RunNow(), ErrJobNotFound)
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 // TestScheduler_WithLimitedRuns_SkippedRunsDoNotConsumeBudget asserts
 // that runs aborted before the task function executes (for example,
 // by BeforeJobRunsSkipIfBeforeFuncErrors returning an error) do not
