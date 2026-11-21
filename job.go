@@ -461,6 +461,9 @@ func (w weeklyJobDefinition) setup(j *internalJob, location *time.Location, _ ti
 	}
 
 	daysOfTheWeek := w.daysOfTheWeek()
+	if len(daysOfTheWeek) == 0 {
+		return ErrWeeklyJobDaysOfTheWeekNil
+	}
 
 	slices.Sort(daysOfTheWeek)
 	ws.daysOfWeek = daysOfTheWeek
