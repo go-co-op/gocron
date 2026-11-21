@@ -762,6 +762,37 @@ func TestScheduler_Start(t *testing.T) {
 
 		assert.Contains(t, []int{9, 10}, counter)
 	})
+
+	t.Run("start returns when shutdown runs concurrently", func(t *testing.T) {
+		// Regression test for #1011: Start used to block forever when
+		// Shutdown ran while the scheduler loop was confirming the start.
+		for i := range 1000 {
+			s := newTestScheduler(t)
+
+			_, err := s.NewJob(
+				DurationJob(
+					time.Hour,
+				),
+				NewTask(
+					func() {},
+				),
+			)
+			require.NoError(t, err)
+
+			started := make(chan struct{})
+			go func() {
+				s.Start()
+				close(started)
+			}()
+			require.NoError(t, s.Shutdown())
+
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("iteration %d: Start still blocked 5s after Shutdown returned", i)
+			}
+		}
+	})
 }
 
 func TestScheduler_NewJob(t *testing.T) {
