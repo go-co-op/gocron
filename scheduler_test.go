@@ -335,6 +335,18 @@ func TestScheduler_UpdateValidationError(t *testing.T) {
 			err:        ErrNewJobWrongNumberOfParameters,
 		},
 		{
+			name:       "weekly weekdays nil result",
+			definition: WeeklyJob(1, func() []time.Weekday { return nil }, NewAtTimes(NewAtTime(1, 0, 0))),
+			task:       NewTask(func() {}),
+			err:        ErrWeeklyJobDaysOfTheWeekNil,
+		},
+		{
+			name:       "weekly weekdays empty result",
+			definition: WeeklyJob(1, func() []time.Weekday { return []time.Weekday{} }, NewAtTimes(NewAtTime(1, 0, 0))),
+			task:       NewTask(func() {}),
+			err:        ErrWeeklyJobDaysOfTheWeekNil,
+		},
+		{
 			name:       "invalid interval",
 			definition: DurationJob(0),
 			task:       NewTask(func() {}),
@@ -1027,6 +1039,18 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrWeeklyJobDaysOfTheWeekNil,
 		},
 		{
+			"weekly job weekdays nil result",
+			WeeklyJob(1, func() []time.Weekday { return nil }, NewAtTimes(NewAtTime(1, 0, 0))),
+			nil,
+			ErrWeeklyJobDaysOfTheWeekNil,
+		},
+		{
+			"weekly job weekdays empty result",
+			WeeklyJob(1, func() []time.Weekday { return []time.Weekday{} }, NewAtTimes(NewAtTime(1, 0, 0))),
+			nil,
+			ErrWeeklyJobDaysOfTheWeekNil,
+		},
+		{
 			"weekly job hours out of range",
 			WeeklyJob(
 				1,
@@ -1271,6 +1295,36 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			_, err := s.NewJob(tt.jd, NewTask(func() {}))
 			assert.ErrorIs(t, err, tt.err)
 			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
+func TestScheduler_WeeklyJobEmptyWeekdaysStarted(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	for _, tc := range []struct {
+		name string
+		days []time.Weekday
+	}{
+		{"nil", nil},
+		{"empty", []time.Weekday{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			defer func() { require.NoError(t, s.Shutdown()) }()
+			s.Start()
+			calls := 0
+			job, err := s.NewJob(
+				WeeklyJob(1, func() []time.Weekday {
+					calls++
+					return tc.days
+				}, NewAtTimes(NewAtTime(1, 0, 0))),
+				NewTask(func() {}),
+				WithDaylightSavingsTimePolicy(DaylightSavingsTimeSkip),
+			)
+			require.ErrorIs(t, err, ErrWeeklyJobDaysOfTheWeekNil)
+			assert.Nil(t, job)
+			assert.Empty(t, s.Jobs())
+			assert.Equal(t, 1, calls)
 		})
 	}
 }
