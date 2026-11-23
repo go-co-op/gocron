@@ -186,6 +186,7 @@ func (e *executor) start() {
 								}
 							}
 							e.sendOutForRescheduling(&jIn)
+							e.sendOutForNextRunUpdate(&jIn)
 						}
 					} else {
 						// since we're not using LimitModeReschedule, but instead using LimitModeWait
@@ -242,6 +243,7 @@ func (e *executor) start() {
 								// which means we just skip it here and do nothing
 								e.incrementJobCounter(*j, SingletonRescheduled)
 								e.sendOutForRescheduling(&jIn)
+								e.sendOutForNextRunUpdate(&jIn)
 								// Notify concurrency limit reached if monitor is configured
 								if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 									e.scheduler.notifyConcurrencyLimitReached("singleton", e.scheduler.jobFromInternalJob(*j))
@@ -346,6 +348,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 							case e.jobsOutForRescheduling <- j.id:
 							}
 						}
+						e.sendOutForNextRunUpdate(&jIn)
 						// remove the limiter block, as this particular job
 						// was a singleton already running, and we want to
 						// allow another job to be scheduled

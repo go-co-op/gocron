@@ -727,6 +727,59 @@ func TestScheduler_StopJobsWithContext(t *testing.T) {
 		require.NoError(t, s.StopJobsWithContext(ctx))
 		require.NoError(t, s.Shutdown()) // clean up
 	})
+	cancelPendingStop := func(t *testing.T) (Scheduler, *clockwork.FakeClock) {
+		t.Helper()
+		clock := clockwork.NewFakeClock()
+		s := newTestScheduler(t, WithClock(clock), WithStopTimeout(time.Second))
+		t.Cleanup(func() { assert.NoError(t, s.Shutdown()) })
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		started := make(chan struct{})
+		release := make(chan struct{})
+		_, err := s.NewJob(DurationJob(time.Hour), NewTask(func(jobCtx context.Context) {
+			close(started)
+			<-jobCtx.Done()
+			cancel()
+			<-release
+		}), WithStartAt(WithStartImmediately()))
+		require.NoError(t, err)
+		t.Cleanup(func() { close(release) })
+
+		s.Start()
+		<-started
+		require.ErrorIs(t, s.StopJobsWithContext(ctx), context.Canceled)
+
+		// Wait for the executor timeout and scheduler watchdog to be armed.
+		waitCtx, stopWaiting := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopWaiting()
+		require.NoError(t, clock.BlockUntilContext(waitCtx, 2))
+		return s, clock
+	}
+
+	t.Run("canceled stop does not pass its timeout to the next stop", func(t *testing.T) {
+		s, clock := cancelPendingStop(t)
+		clock.Advance(time.Second)
+		require.NoError(t, s.StopJobs())
+	})
+
+	t.Run("canceled stop does not pass its timeout to shutdown", func(t *testing.T) {
+		s, clock := cancelPendingStop(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		shutdownCtx := &observedDoneContext{Context: ctx, observed: make(chan struct{})}
+		result := make(chan error, 1)
+		go func() { result <- s.ShutdownWithContext(shutdownCtx) }()
+
+		// Advance time only after shutdown is waiting for its result.
+		select {
+		case <-shutdownCtx.observed:
+		case <-ctx.Done():
+			t.Fatal("shutdown did not wait for its result")
+		}
+		clock.Advance(time.Second)
+		require.NoError(t, <-result)
+	})
 }
 
 func TestScheduler_Start(t *testing.T) {
@@ -761,6 +814,37 @@ func TestScheduler_Start(t *testing.T) {
 		require.NoError(t, s.Shutdown())
 
 		assert.Contains(t, []int{9, 10}, counter)
+	})
+
+	t.Run("start returns when shutdown runs concurrently", func(t *testing.T) {
+		// Regression test for #1011: Start used to block forever when
+		// Shutdown ran while the scheduler loop was confirming the start.
+		for i := range 1000 {
+			s := newTestScheduler(t)
+
+			_, err := s.NewJob(
+				DurationJob(
+					time.Hour,
+				),
+				NewTask(
+					func() {},
+				),
+			)
+			require.NoError(t, err)
+
+			started := make(chan struct{})
+			go func() {
+				s.Start()
+				close(started)
+			}()
+			require.NoError(t, s.Shutdown())
+
+			select {
+			case <-started:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("iteration %d: Start still blocked 5s after Shutdown returned", i)
+			}
+		}
 	})
 }
 
@@ -2097,6 +2181,79 @@ func TestScheduler_WithDistributedElector_NotLeaderNextRun(t *testing.T) {
 	}, 3*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, s.Shutdown())
+}
+
+// TestScheduler_LimitModeReschedule_SkippedRunNextRun asserts that a run
+// skipped because the job is still running leaves the job's next run in the
+// future, as it does for a run skipped by a locker or an elector.
+func TestScheduler_LimitModeReschedule_SkippedRunNextRun(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	tests := []struct {
+		name         string
+		schedulerOpt []SchedulerOption
+		jobOpt       []JobOption
+	}{
+		{
+			"singleton mode reschedule",
+			nil,
+			[]JobOption{WithSingletonMode(LimitModeReschedule)},
+		},
+		{
+			"limit mode reschedule",
+			[]SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)},
+			nil,
+		},
+		{
+			"limit mode reschedule with singleton mode",
+			[]SchedulerOption{WithLimitConcurrentJobs(2, LimitModeReschedule)},
+			[]JobOption{WithSingletonMode(LimitModeReschedule)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := time.Date(2024, time.January, 1, 9, 0, 0, 0, time.UTC)
+			fakeClock := clockwork.NewFakeClockAt(start)
+
+			s := newTestScheduler(t, append(tt.schedulerOpt, WithClock(fakeClock))...)
+
+			jobStarted := make(chan struct{}, 1)
+			jobRelease := make(chan struct{})
+			j, err := s.NewJob(
+				DurationJob(time.Second),
+				NewTask(func() {
+					jobStarted <- struct{}{}
+					<-jobRelease
+				}),
+				tt.jobOpt...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			fakeClock.Advance(time.Second)
+
+			select {
+			case <-jobStarted:
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for the job to start")
+			}
+			require.Eventually(t, func() bool {
+				nextRun, err := j.NextRun()
+				return err == nil && nextRun.Equal(start.Add(2*time.Second))
+			}, 3*time.Second, 10*time.Millisecond)
+
+			// the job is still running, so this run is skipped
+			fakeClock.Advance(time.Second)
+
+			require.Eventually(t, func() bool {
+				nextRun, err := j.NextRun()
+				return err == nil && nextRun.Equal(start.Add(3*time.Second))
+			}, 3*time.Second, 10*time.Millisecond)
+
+			close(jobRelease)
+			require.NoError(t, s.Shutdown())
+		})
+	}
 }
 
 func TestScheduler_RemoveJob(t *testing.T) {
