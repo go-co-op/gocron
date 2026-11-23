@@ -727,6 +727,59 @@ func TestScheduler_StopJobsWithContext(t *testing.T) {
 		require.NoError(t, s.StopJobsWithContext(ctx))
 		require.NoError(t, s.Shutdown()) // clean up
 	})
+	cancelPendingStop := func(t *testing.T) (Scheduler, *clockwork.FakeClock) {
+		t.Helper()
+		clock := clockwork.NewFakeClock()
+		s := newTestScheduler(t, WithClock(clock), WithStopTimeout(time.Second))
+		t.Cleanup(func() { assert.NoError(t, s.Shutdown()) })
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		started := make(chan struct{})
+		release := make(chan struct{})
+		_, err := s.NewJob(DurationJob(time.Hour), NewTask(func(jobCtx context.Context) {
+			close(started)
+			<-jobCtx.Done()
+			cancel()
+			<-release
+		}), WithStartAt(WithStartImmediately()))
+		require.NoError(t, err)
+		t.Cleanup(func() { close(release) })
+
+		s.Start()
+		<-started
+		require.ErrorIs(t, s.StopJobsWithContext(ctx), context.Canceled)
+
+		// Wait for the executor timeout and scheduler watchdog to be armed.
+		waitCtx, stopWaiting := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopWaiting()
+		require.NoError(t, clock.BlockUntilContext(waitCtx, 2))
+		return s, clock
+	}
+
+	t.Run("canceled stop does not pass its timeout to the next stop", func(t *testing.T) {
+		s, clock := cancelPendingStop(t)
+		clock.Advance(time.Second)
+		require.NoError(t, s.StopJobs())
+	})
+
+	t.Run("canceled stop does not pass its timeout to shutdown", func(t *testing.T) {
+		s, clock := cancelPendingStop(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		shutdownCtx := &observedDoneContext{Context: ctx, observed: make(chan struct{})}
+		result := make(chan error, 1)
+		go func() { result <- s.ShutdownWithContext(shutdownCtx) }()
+
+		// Advance time only after shutdown is waiting for its result.
+		select {
+		case <-shutdownCtx.observed:
+		case <-ctx.Done():
+			t.Fatal("shutdown did not wait for its result")
+		}
+		clock.Advance(time.Second)
+		require.NoError(t, <-result)
+	})
 }
 
 func TestScheduler_Start(t *testing.T) {
@@ -4351,6 +4404,34 @@ func TestScheduler_VariadicTaskExecution(t *testing.T) {
 	}
 }
 
+func TestNewJobVariadicArgumentValidation(t *testing.T) {
+	type count int
+	tests := []struct {
+		name string
+		fn   any
+		arg  any
+	}{
+		{"named int for variadic of different named type", func(...count) {}, 1},
+		{"wrong slice type", func(...[]int) {}, []string{"x"}},
+		{"nil argument for interface variadic", func(...any) {}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			defer func() { require.NoError(t, s.Shutdown()) }()
+			defer func() {
+				if p := recover(); p != nil {
+					t.Errorf("NewJob panicked: %v", p)
+				}
+			}()
+			_, err := s.NewJob(DurationJob(time.Hour), NewTask(tc.fn, tc.arg))
+			if !errors.Is(err, ErrNewJobWrongTypeOfParameters) {
+				t.Errorf("expected ErrNewJobWrongTypeOfParameters, got %v", err)
+			}
+		})
+	}
+}
+
 func TestScheduler_TaskFunctionPointer(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	for depth := range 3 {
@@ -4386,6 +4467,81 @@ func TestScheduler_TaskFunctionPointer(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("task function did not execute")
 			}
+		})
+	}
+}
+
+func TestWithTagsInputDoesNotChangeRegisteredJobs(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		name := "NewJob"
+		if update {
+			name = "Update"
+		}
+		t.Run(name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+			tags := []string{"keep"}
+			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags(tags...))
+			require.NoError(t, err)
+			if update {
+				j, err = s.Update(j.ID(), DurationJob(time.Hour), NewTask(func() {}), WithTags(tags...))
+				require.NoError(t, err)
+			}
+			other, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags("remove"))
+			require.NoError(t, err)
+
+			// Reuse the caller's input storage only after registration returns.
+			tags[0] = "remove"
+			require.Equal(t, []string{"keep"}, j.Tags())
+			for _, registered := range s.Jobs() {
+				if registered.ID() == j.ID() {
+					require.Equal(t, []string{"keep"}, registered.Tags())
+				}
+			}
+			s.RemoveByTags("remove")
+			remaining := s.Jobs()
+			require.Len(t, remaining, 1)
+			require.Equal(t, j.ID(), remaining[0].ID())
+			require.NotEqual(t, other.ID(), remaining[0].ID())
+		})
+	}
+}
+
+func TestWithTagsSharedOptionInputDoesNotChangeJobs(t *testing.T) {
+	tags := []string{"shared"}
+	s := newTestScheduler(t, WithGlobalJobOptions(WithTags(tags...)))
+	t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+	ids := make(map[uuid.UUID]bool)
+	for range 2 {
+		j, addErr := s.NewJob(DurationJob(time.Hour), NewTask(func() {}))
+		require.NoError(t, addErr)
+		ids[j.ID()] = true
+	}
+	tags[0] = "unrelated"
+	s.RemoveByTags("unrelated")
+	jobs := s.Jobs()
+	require.Len(t, jobs, 2)
+	for _, j := range jobs {
+		require.True(t, ids[j.ID()])
+		require.Equal(t, []string{"shared"}, j.Tags())
+	}
+}
+
+func TestWithTagsPreservesValues(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		tags []string
+	}{
+		{name: "nil"},
+		{name: "empty", tags: []string{}},
+		{name: "ordered duplicates", tags: []string{"second", "first", "second"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+			j, err := s.NewJob(DurationJob(time.Hour), NewTask(func() {}), WithTags(tc.tags...))
+			require.NoError(t, err)
+			require.Equal(t, tc.tags, j.Tags())
 		})
 	}
 }

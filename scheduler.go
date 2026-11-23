@@ -134,10 +134,10 @@ type scheduler struct {
 	startCh chan struct{}
 	// used to report that the scheduler has started
 	startedCh chan struct{}
-	// used to tell the scheduler to stop
-	stopCh chan struct{}
-	// used to report that the scheduler has stopped
-	stopErrCh chan error
+	// each stop request carries its own buffered result channel
+	stopCh chan chan error
+	// used to report that the scheduler has shut down
+	shutdownErrCh chan error
 	// used to send all the jobs out when a request is made by the client
 	allJobsOutRequest chan allJobsOutRequest
 	// used to send a jobs out when a request is made by the client
@@ -211,8 +211,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		removeJobsByTagsCh: make(chan []string),
 		startCh:            make(chan struct{}),
 		startedCh:          make(chan struct{}),
-		stopCh:             make(chan struct{}),
-		stopErrCh:          make(chan error, 1),
+		stopCh:             make(chan chan error),
+		shutdownErrCh:      make(chan error, 1),
 		jobOutRequestCh:    make(chan *jobOutRequest),
 		runJobRequestCh:    make(chan runJobRequest),
 		allJobsOutRequest:  make(chan allJobsOutRequest),
@@ -265,11 +265,11 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 			case <-s.startCh:
 				s.selectStart()
 
-			case <-s.stopCh:
-				s.stopScheduler()
+			case result := <-s.stopCh:
+				s.stopScheduler(result)
 
 			case <-s.shutdownCtx.Done():
-				s.stopScheduler()
+				s.stopScheduler(s.shutdownErrCh)
 				return
 			}
 		}
@@ -290,7 +290,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 // are not blocked by requests from the caller for information
 // about jobs.
 
-func (s *scheduler) stopScheduler() {
+func (s *scheduler) stopScheduler(result chan<- error) {
 	s.logger.Debug("gocron: stopping scheduler")
 
 	if s.started.Load() {
@@ -331,7 +331,7 @@ func (s *scheduler) stopScheduler() {
 		s.jobs[id] = j
 	}
 
-	s.stopErrCh <- err
+	result <- err
 	s.started.Store(false)
 	s.logger.Debug("gocron: scheduler stopped")
 
@@ -1167,16 +1167,17 @@ func (s *scheduler) StopJobs() error {
 }
 
 func (s *scheduler) StopJobsWithContext(ctx context.Context) error {
+	result := make(chan error, 1)
 	select {
 	case <-s.shutdownCtx.Done():
 		return nil
-	case s.stopCh <- struct{}{}:
+	case s.stopCh <- result:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 
 	select {
-	case err := <-s.stopErrCh:
+	case err := <-result:
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -1203,7 +1204,7 @@ func (s *scheduler) ShutdownWithContext(ctx context.Context) error {
 	}
 
 	select {
-	case err := <-s.stopErrCh:
+	case err := <-s.shutdownErrCh:
 		// notify monitor that scheduler stopped
 		s.notifySchedulerShutdown()
 		return err
