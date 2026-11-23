@@ -314,6 +314,52 @@ func TestDaylightSavingsTimePolicy_CronJob_Execution(t *testing.T) {
 	}
 }
 
+func TestDaylightSavingsTimePolicy_MultipleAtTimes(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	day := func(hour, minute int) time.Time {
+		return time.Date(2027, time.March, 14, hour, minute, 0, 0, loc)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		policy DaylightSavingsTimePolicy
+		times  AtTimes
+		want   []time.Time
+	}{
+		{
+			"adjusted forward", DaylightSavingsTimeRunAfterTransition,
+			NewAtTimes(NewAtTime(2, 30, 0), NewAtTime(3, 15, 0)),
+			[]time.Time{day(3, 15), day(3, 30)},
+		},
+		{
+			"normalized backward", DaylightSavingsTimeDefault,
+			NewAtTimes(NewAtTime(1, 45, 0), NewAtTime(2, 30, 0)),
+			[]time.Time{day(1, 30), day(1, 45)},
+		},
+	} {
+		for _, schedule := range []struct {
+			name string
+			def  JobDefinition
+		}{
+			{"daily", DailyJob(1, tc.times)},
+			{"weekly", WeeklyJob(1, NewWeekdays(time.Sunday), tc.times)},
+			{"monthly", MonthlyJob(1, NewDaysOfTheMonth(14), tc.times)},
+		} {
+			t.Run(tc.name+"/"+schedule.name, func(t *testing.T) {
+				s := newTestScheduler(t, WithLocation(loc), WithClock(clockwork.NewFakeClockAt(day(0, 0))))
+				t.Cleanup(func() { assert.NoError(t, s.Shutdown()) })
+				j, err := s.NewJob(schedule.def, NewTask(func() {}), WithDaylightSavingsTimePolicy(tc.policy))
+				require.NoError(t, err)
+				s.Start()
+				runs, err := j.NextRuns(2)
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, runs)
+			})
+		}
+	}
+}
+
 func TestDaylightSavingsTimePolicy_DailyJob(t *testing.T) {
 	americaNewYork, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
