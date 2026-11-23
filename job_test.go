@@ -2,6 +2,7 @@ package gocron
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -310,6 +311,52 @@ func TestDaylightSavingsTimePolicy_CronJob_Execution(t *testing.T) {
 				t.Fatal("job did not run at its scheduled time")
 			}
 		})
+	}
+}
+
+func TestDaylightSavingsTimePolicy_MultipleAtTimes(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	day := func(hour, minute int) time.Time {
+		return time.Date(2027, time.March, 14, hour, minute, 0, 0, loc)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		policy DaylightSavingsTimePolicy
+		times  AtTimes
+		want   []time.Time
+	}{
+		{
+			"adjusted forward", DaylightSavingsTimeRunAfterTransition,
+			NewAtTimes(NewAtTime(2, 30, 0), NewAtTime(3, 15, 0)),
+			[]time.Time{day(3, 15), day(3, 30)},
+		},
+		{
+			"normalized backward", DaylightSavingsTimeDefault,
+			NewAtTimes(NewAtTime(1, 45, 0), NewAtTime(2, 30, 0)),
+			[]time.Time{day(1, 30), day(1, 45)},
+		},
+	} {
+		for _, schedule := range []struct {
+			name string
+			def  JobDefinition
+		}{
+			{"daily", DailyJob(1, tc.times)},
+			{"weekly", WeeklyJob(1, NewWeekdays(time.Sunday), tc.times)},
+			{"monthly", MonthlyJob(1, NewDaysOfTheMonth(14), tc.times)},
+		} {
+			t.Run(tc.name+"/"+schedule.name, func(t *testing.T) {
+				s := newTestScheduler(t, WithLocation(loc), WithClock(clockwork.NewFakeClockAt(day(0, 0))))
+				t.Cleanup(func() { assert.NoError(t, s.Shutdown()) })
+				j, err := s.NewJob(schedule.def, NewTask(func() {}), WithDaylightSavingsTimePolicy(tc.policy))
+				require.NoError(t, err)
+				s.Start()
+				runs, err := j.NextRuns(2)
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, runs)
+			})
+		}
 	}
 }
 
@@ -968,6 +1015,71 @@ func TestDurationRandomJob_next(t *testing.T) {
 func TestOneTimeJob_next(t *testing.T) {
 	otj := oneTimeJob{}
 	assert.Zero(t, otj.next(time.Time{}))
+}
+
+func TestOneTimeJobEqualInstants(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	now := time.Now()
+	first := now.Add(24 * time.Hour)
+	second := first.Add(time.Hour)
+	offset := time.FixedZone("offset", 3600)
+	zoneA := time.FixedZone("zone A", 0)
+	zoneB := time.FixedZone("zone B", 0)
+	for _, tt := range []struct {
+		name  string
+		times []time.Time
+		want  []time.Time
+	}{
+		{
+			name:  "different locations",
+			times: []time.Time{second.UTC(), first.UTC(), first.In(offset)},
+			want:  []time.Time{first.UTC(), second.UTC()},
+		},
+		{
+			name:  "different location names with the same offset",
+			times: []time.Time{first.In(zoneA), second, first.In(zoneB)},
+			want:  []time.Time{first.In(zoneA), second},
+		},
+		{
+			name:  "with and without monotonic readings",
+			times: []time.Time{first, first.Round(0), second},
+			want:  []time.Time{first, second},
+		},
+		{
+			name:  "identical values",
+			times: []time.Time{first, first, second, second},
+			want:  []time.Time{first, second},
+		},
+		{
+			name:  "same wall clock values at different instants",
+			times: []time.Time{first.UTC(), first.Add(-time.Hour).In(offset)},
+			want:  []time.Time{first.Add(-time.Hour).In(offset), first.UTC()},
+		},
+		{
+			name:  "equivalent times at now are all excluded",
+			times: []time.Time{first, now.UTC(), now.In(offset), now.Add(-time.Hour), second},
+			want:  []time.Time{first, second},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t, WithClock(clockwork.NewFakeClockAt(now)))
+			t.Cleanup(func() { require.NoError(t, s.Shutdown()) })
+			input := slices.Clone(tt.times)
+			j, err := s.NewJob(OneTimeJob(OneTimeJobStartDateTimes(tt.times...)), NewTask(func() {}))
+			require.NoError(t, err)
+			require.Equal(t, input, tt.times, "registration changed the input times")
+			require.Equal(t, tt.want, j.Schedule().(OneTimeJobSchedule).StartAt)
+
+			s.Start()
+			runs, err := j.NextRuns(len(tt.want))
+			require.NoError(t, err)
+			require.Len(t, runs, len(tt.want))
+			for i, expected := range tt.want {
+				require.True(t, runs[i].Equal(expected), "run %d: got %s, want %s", i, runs[i], expected)
+			}
+		})
+	}
 }
 
 func TestJob_RunNow_Error(t *testing.T) {
