@@ -1026,6 +1026,15 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrDailyJobAtTimesNil,
 		},
 		{
+			"daily job at times empty",
+			DailyJob(
+				1,
+				func() []AtTime { return nil },
+			),
+			nil,
+			ErrDailyJobAtTimesNil,
+		},
+		{
 			"daily job at time nil",
 			DailyJob(
 				1,
@@ -1084,6 +1093,16 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				1,
 				NewWeekdays(time.Monday),
 				nil,
+			),
+			nil,
+			ErrWeeklyJobAtTimesNil,
+		},
+		{
+			"weekly job at times empty",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Monday),
+				func() []AtTime { return nil },
 			),
 			nil,
 			ErrWeeklyJobAtTimesNil,
@@ -1164,6 +1183,16 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 				1,
 				NewDaysOfTheMonth(1),
 				nil,
+			),
+			nil,
+			ErrMonthlyJobAtTimesNil,
+		},
+		{
+			"monthly job at times empty",
+			MonthlyJob(
+				1,
+				NewDaysOfTheMonth(1),
+				func() []AtTime { return nil },
 			),
 			nil,
 			ErrMonthlyJobAtTimesNil,

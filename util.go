@@ -100,6 +100,10 @@ func convertAtTimesToDateTime(atTimes AtTimes, location *time.Location) ([]time.
 		}
 		atTimesDate = append(atTimesDate, at.time(location))
 	}
+	// a job without at times never has a next run
+	if len(atTimesDate) == 0 {
+		return nil, errAtTimesNil
+	}
 	slices.SortStableFunc(atTimesDate, ascendingTime)
 	return atTimesDate, nil
 }
