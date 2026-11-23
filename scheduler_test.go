@@ -727,6 +727,59 @@ func TestScheduler_StopJobsWithContext(t *testing.T) {
 		require.NoError(t, s.StopJobsWithContext(ctx))
 		require.NoError(t, s.Shutdown()) // clean up
 	})
+	cancelPendingStop := func(t *testing.T) (Scheduler, *clockwork.FakeClock) {
+		t.Helper()
+		clock := clockwork.NewFakeClock()
+		s := newTestScheduler(t, WithClock(clock), WithStopTimeout(time.Second))
+		t.Cleanup(func() { assert.NoError(t, s.Shutdown()) })
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		started := make(chan struct{})
+		release := make(chan struct{})
+		_, err := s.NewJob(DurationJob(time.Hour), NewTask(func(jobCtx context.Context) {
+			close(started)
+			<-jobCtx.Done()
+			cancel()
+			<-release
+		}), WithStartAt(WithStartImmediately()))
+		require.NoError(t, err)
+		t.Cleanup(func() { close(release) })
+
+		s.Start()
+		<-started
+		require.ErrorIs(t, s.StopJobsWithContext(ctx), context.Canceled)
+
+		// Wait for the executor timeout and scheduler watchdog to be armed.
+		waitCtx, stopWaiting := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopWaiting()
+		require.NoError(t, clock.BlockUntilContext(waitCtx, 2))
+		return s, clock
+	}
+
+	t.Run("canceled stop does not pass its timeout to the next stop", func(t *testing.T) {
+		s, clock := cancelPendingStop(t)
+		clock.Advance(time.Second)
+		require.NoError(t, s.StopJobs())
+	})
+
+	t.Run("canceled stop does not pass its timeout to shutdown", func(t *testing.T) {
+		s, clock := cancelPendingStop(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		shutdownCtx := &observedDoneContext{Context: ctx, observed: make(chan struct{})}
+		result := make(chan error, 1)
+		go func() { result <- s.ShutdownWithContext(shutdownCtx) }()
+
+		// Advance time only after shutdown is waiting for its result.
+		select {
+		case <-shutdownCtx.observed:
+		case <-ctx.Done():
+			t.Fatal("shutdown did not wait for its result")
+		}
+		clock.Advance(time.Second)
+		require.NoError(t, <-result)
+	})
 }
 
 func TestScheduler_Start(t *testing.T) {
