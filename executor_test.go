@@ -56,6 +56,7 @@ func TestExecutor_LimitModeRunnerCancellation(t *testing.T) {
 				logger:                 noOpLogger{},
 				jobOutRequest:          make(chan *jobOutRequest),
 				jobsOutForRescheduling: make(chan uuid.UUID),
+				jobUpdateNextRuns:      make(chan uuid.UUID, 1),
 				jobsOutCompleted:       make(chan jobOutCompleted, 1),
 				jobTimingUpdateCh:      make(chan jobTimingUpdate, 2),
 				limitMode: &limitModeConfig{
