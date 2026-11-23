@@ -1148,10 +1148,14 @@ func (s *scheduler) Start() {
 		// Scheduler already shut down, don't notify
 		return
 	case s.startCh <- struct{}{}:
-		<-s.startedCh // Wait for scheduler to actually start
-
-		// Scheduler has started
-		s.notifySchedulerStarted()
+		select {
+		case <-s.startedCh:
+			// Scheduler has started
+			s.notifySchedulerStarted()
+		case <-s.shutdownCtx.Done():
+			// Scheduler was shut down while starting, return instead
+			// of waiting for a start confirmation that will never come
+		}
 	}
 }
 
