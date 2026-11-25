@@ -6,6 +6,7 @@ import (
 
 // Public error definitions
 var (
+	ErrChangeLocationNil             = errors.New("gocron: ChangeLocation: location must not be nil")
 	ErrCronJobInvalid                = errors.New("gocron: CronJob: invalid crontab")
 	ErrCronJobParse                  = errors.New("gocron: CronJob: crontab parse failure")
 	ErrDailyJobAtTimeNil             = errors.New("gocron: DailyJob: atTime within atTimes must not be nil")

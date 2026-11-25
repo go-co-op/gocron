@@ -55,7 +55,7 @@ func TestExecutor_LimitModeRunnerCancellation(t *testing.T) {
 				clock:                  clockwork.NewRealClock(),
 				logger:                 noOpLogger{},
 				jobOutRequest:          make(chan *jobOutRequest),
-				jobsOutForRescheduling: make(chan uuid.UUID),
+				jobsOutForRescheduling: make(chan jobRescheduleRequest),
 				jobUpdateNextRuns:      make(chan uuid.UUID, 1),
 				jobsOutCompleted:       make(chan jobOutCompleted, 1),
 				jobTimingUpdateCh:      make(chan jobTimingUpdate, 2),
@@ -86,7 +86,7 @@ func TestExecutor_LimitModeRunnerCancellation(t *testing.T) {
 				if tt.cancelJob {
 					cancelJob()
 				} else {
-					require.Equal(t, j.id, <-e.jobsOutForRescheduling)
+					require.Equal(t, jobRescheduleRequest{id: j.id}, <-e.jobsOutForRescheduling)
 				}
 				next := internalJob{id: uuid.New(), ctx: context.Background()}
 				ran := make(chan struct{})

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -51,6 +52,15 @@ var _ Scheduler = (*scheduler)(nil)
 
 // Scheduler defines the interface for the Scheduler.
 type Scheduler interface {
+	// ChangeLocation updates the scheduler's location (i.e. timezone) and
+	// refreshes existing jobs to use the new location. If the scheduler is
+	// already running, location-dependent jobs (CronJob without an explicit
+	// TZ=/CRON_TZ= prefix, DailyJob, WeeklyJob, and MonthlyJob) have their
+	// upcoming runs recalculated for the new location.
+	// If location is nil, ErrChangeLocationNil is returned. If any job's
+	// schedule cannot be validated in the new location, no changes are
+	// applied and the error is returned.
+	ChangeLocation(*time.Location) error
 	// Jobs returns all the jobs currently in the scheduler.
 	//
 	// The returned slice is sorted by job UUID as raw bytes, giving a
@@ -120,6 +130,8 @@ type scheduler struct {
 	exec executor
 	// the map of jobs registered in the scheduler
 	jobs map[uuid.UUID]internalJob
+	// guards concurrent reads/writes of location
+	locationMu sync.RWMutex
 	// the location used by the scheduler for scheduling when relevant
 	location *time.Location
 	// whether the scheduler has been started or not
@@ -150,15 +162,27 @@ type scheduler struct {
 	removeJobCh chan uuid.UUID
 	// requests from the client to remove jobs by tags are received here
 	removeJobsByTagsCh chan []string
+	// requests from the client to change the scheduler location are received here
+	changeLocationCh chan changeLocationRequest
 
 	// scheduler monitor from which metrics can be collected
 	schedulerMonitor SchedulerMonitor
 }
 
 type newJobIn struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	job    internalJob
+	job      internalJob
+	location *time.Location
+	outChan  chan newJobOut
+}
+
+type newJobOut struct {
+	job internalJob
+	err error
+}
+
+type changeLocationRequest struct {
+	location *time.Location
+	outChan  chan error
 }
 
 type jobOutRequest struct {
@@ -191,7 +215,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		clock:            clockwork.NewRealClock(),
 
 		jobsIn:                 make(chan jobIn),
-		jobsOutForRescheduling: make(chan uuid.UUID),
+		jobsOutForRescheduling: make(chan jobRescheduleRequest),
 		jobUpdateNextRuns:      make(chan uuid.UUID),
 		jobsOutCompleted:       make(chan jobOutCompleted),
 		jobOutRequest:          make(chan *jobOutRequest, defaultJobOutRequestBuffer),
@@ -209,6 +233,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		newJobCh:           make(chan newJobIn),
 		removeJobCh:        make(chan uuid.UUID),
 		removeJobsByTagsCh: make(chan []string),
+		changeLocationCh:   make(chan changeLocationRequest),
 		startCh:            make(chan struct{}),
 		startedCh:          make(chan struct{}),
 		stopCh:             make(chan chan error),
@@ -231,8 +256,8 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		s.logger.Info("gocron: new scheduler created")
 		for {
 			select {
-			case id := <-s.exec.jobsOutForRescheduling:
-				s.selectExecJobsOutForRescheduling(id)
+			case req := <-s.exec.jobsOutForRescheduling:
+				s.selectExecJobsOutForRescheduling(req)
 			case id := <-s.exec.jobUpdateNextRuns:
 				s.updateNextScheduled(id)
 			case completed := <-s.exec.jobsOutCompleted:
@@ -249,6 +274,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 
 			case tags := <-s.removeJobsByTagsCh:
 				s.selectRemoveJobsByTags(tags)
+
+			case req := <-s.changeLocationCh:
+				s.selectChangeLocation(req)
 
 			case out := <-s.exec.jobOutRequest:
 				s.selectJobOutRequest(out)
@@ -498,16 +526,22 @@ func (s *scheduler) firstRunOrGrace(j internalJob, next time.Time) (time.Time, f
 // notification for a job that just started. Advances j.nextRun past
 // now, updates the timer, and appends to nextScheduled. No-op if the
 // job was removed while running.
-func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
+func (s *scheduler) selectExecJobsOutForRescheduling(req jobRescheduleRequest) {
 	select {
 	case <-s.shutdownCtx.Done():
 		return
 	default:
 	}
+	id := req.id
 	j, ok := s.jobs[id]
 	if !ok {
 		// the job was removed while it was running, and
 		// so we don't need to reschedule it.
+		return
+	}
+	if req.scheduleGen != j.scheduleGen {
+		// the job was rescheduled (for example, by ChangeLocation) after
+		// this run was dispatched; ignore the stale reschedule request.
 		return
 	}
 
@@ -594,18 +628,12 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	}
 
 	j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
+	gen := j.scheduleGen
 	j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
 		// set the actual timer on the job here and listen for
 		// shut down events so that the job doesn't attempt to
 		// run if the scheduler has been shutdown.
-		select {
-		case <-s.shutdownCtx.Done():
-			return
-		case s.exec.jobsIn <- jobIn{
-			id:            j.id,
-			shouldSendOut: true,
-		}:
-		}
+		s.dispatchJobRun(id, gen)
 	})
 	// update the job with its new next and last run times and timer.
 	s.jobs[id] = j
@@ -744,12 +772,13 @@ func (s *scheduler) selectJobOutRequest(out *jobOutRequest) {
 // dispatchJobRun sends an immediate run request for id to the executor,
 // respecting scheduler shutdown. Used for both start-immediately jobs and
 // grace-triggered fires.
-func (s *scheduler) dispatchJobRun(id uuid.UUID) {
+func (s *scheduler) dispatchJobRun(id uuid.UUID, scheduleGen uint64) {
 	select {
 	case <-s.shutdownCtx.Done():
 	case s.exec.jobsIn <- jobIn{
 		id:            id,
 		shouldSendOut: true,
+		scheduleGen:   scheduleGen,
 	}:
 	}
 }
@@ -770,7 +799,7 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 	next := j.startTime
 	if j.startImmediately {
 		next = s.now()
-		s.dispatchJobRun(j.id)
+		s.dispatchJobRun(j.id, j.scheduleGen)
 	} else {
 		if next.IsZero() {
 			next = j.next(s.now())
@@ -789,7 +818,7 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 				if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
 					return j, true
 				}
-				s.dispatchJobRun(j.id)
+				s.dispatchJobRun(j.id, j.scheduleGen)
 				j.startTime = next
 				j.nextScheduled = insertNextScheduled(j.nextScheduled, next)
 				return j, false
@@ -801,8 +830,9 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 		}
 
 		id := j.id
+		gen := j.scheduleGen
 		j.timer = s.exec.clock.AfterFunc(next.Sub(s.now()), func() {
-			s.dispatchJobRun(id)
+			s.dispatchJobRun(id, gen)
 		})
 	}
 	j.startTime = next
@@ -813,9 +843,18 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 // selectNewJob installs a job produced by addOrUpdateJob into s.jobs.
 // Runs the job's initial nextRun computation and, if the scheduler is
 // already started, wires it into the executor immediately. Signals
-// completion via in.cancel() so NewJob can return.
+// completion via in.outChan so NewJob can return.
 func (s *scheduler) selectNewJob(in newJobIn) {
 	j := in.job
+	if curLoc := s.currentLocation(); in.location != curLoc {
+		updatedSchedule, _, err := updateJobScheduleLocation(j.jobSchedule, curLoc, s.now())
+		if err != nil {
+			j.cancel()
+			in.outChan <- newJobOut{err: err}
+			return
+		}
+		j.jobSchedule = updatedSchedule
+	}
 	if s.started.Load() {
 		updated, drop := s.prepareFirstRun(j)
 		j = updated
@@ -823,14 +862,180 @@ func (s *scheduler) selectNewJob(in newJobIn) {
 			// Store before removing so selectRemoveJob can find the
 			// brand-new job to cancel its context and notify monitors.
 			s.jobs[j.id] = j
-			in.cancel()
+			in.outChan <- newJobOut{job: j}
 			s.selectRemoveJob(j.id)
 			return
 		}
 	}
 
 	s.jobs[j.id] = j
-	in.cancel()
+	in.outChan <- newJobOut{job: j}
+}
+
+type preparedJobLocation struct {
+	schedule   jobSchedule
+	reschedule bool
+}
+
+func (s *scheduler) selectChangeLocation(req changeLocationRequest) {
+	select {
+	case <-s.shutdownCtx.Done():
+		return
+	default:
+	}
+
+	newLoc := req.location
+	oldLoc := s.currentLocation()
+	if newLoc == oldLoc {
+		req.outChan <- nil
+		return
+	}
+
+	now := s.exec.clock.Now().In(newLoc)
+	prepared := make(map[uuid.UUID]preparedJobLocation, len(s.jobs))
+	var customCronIDs []uuid.UUID
+
+	// Phase 1a: validate and prepare built-in schedules without mutating any state.
+	for id, j := range s.jobs {
+		if _, isCustom := isCustomCronJob(j.jobSchedule); isCustom {
+			customCronIDs = append(customCronIDs, id)
+			continue
+		}
+		updatedSchedule, reschedule, err := updateJobScheduleLocation(j.jobSchedule, newLoc, now)
+		if err != nil {
+			req.outChan <- err
+			return
+		}
+		prepared[id] = preparedJobLocation{
+			schedule:   updatedSchedule,
+			reschedule: reschedule,
+		}
+	}
+
+	// Phase 1b: validate custom Cron implementations, rolling back any
+	// previously updated custom crons if a subsequent one rejects newLoc.
+	var updatedCustom []*cronJob
+	for _, id := range customCronIDs {
+		j := s.jobs[id]
+		cj, _ := isCustomCronJob(j.jobSchedule)
+		updatedSchedule, reschedule, err := updateJobScheduleLocation(j.jobSchedule, newLoc, now)
+		if err != nil {
+			oldNow := s.exec.clock.Now().In(oldLoc)
+			for _, prev := range updatedCustom {
+				_ = prev.cronSchedule.IsValid(prev.crontab, oldLoc, oldNow)
+			}
+			req.outChan <- err
+			return
+		}
+		updatedCustom = append(updatedCustom, cj)
+		prepared[id] = preparedJobLocation{
+			schedule:   updatedSchedule,
+			reschedule: reschedule,
+		}
+	}
+
+	// Phase 2: commit the new location and update all jobs.
+	s.locationMu.Lock()
+	s.location = newLoc
+	s.locationMu.Unlock()
+
+	started := s.started.Load()
+	for id, j := range s.jobs {
+		prep := prepared[id]
+		j.jobSchedule = prep.schedule
+
+		if !started {
+			if prep.reschedule {
+				j.startTime = j.configuredStartTime
+			}
+			s.jobs[id] = j
+			continue
+		}
+
+		if !prep.reschedule {
+			if _, isOneTime := j.jobSchedule.(oneTimeJob); !isOneTime && len(j.nextScheduled) > 0 {
+				updatedNext := make([]time.Time, len(j.nextScheduled))
+				for i, t := range j.nextScheduled {
+					updatedNext[i] = t.In(newLoc)
+				}
+				j.nextScheduled = updatedNext
+			}
+			s.jobs[id] = j
+			continue
+		}
+
+		s.rescheduleJobForLocation(j)
+	}
+
+	req.outChan <- nil
+}
+
+func (s *scheduler) rescheduleJobForLocation(j internalJob) {
+	id := j.id
+	now := s.now()
+
+	// Preserve an explicit future WithStartDateTime first run; subsequent runs
+	// will compute against the updated jobSchedule in the new location.
+	if !j.configuredStartTime.IsZero() && j.configuredStartTime.After(now) {
+		s.jobs[id] = j
+		return
+	}
+
+	// A job that has already reached its WithLimitedRuns limit is awaiting
+	// removal after its final in-flight execution finishes; do not re-arm it.
+	if j.limitRunsTo != nil && j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+		s.jobs[id] = j
+		return
+	}
+
+	if j.stopTimeReached(now) {
+		s.selectRemoveJob(id)
+		return
+	}
+
+	if j.timer != nil {
+		j.timer.Stop()
+		j.timer = nil
+	}
+	j.scheduleGen++
+	j.nextScheduled = nil
+
+	var next time.Time
+	if !j.configuredStartTime.IsZero() && j.configuredStartTime.Before(now) && j.lastRun.IsZero() && j.lastRunStartedAt.IsZero() {
+		var ok bool
+		next, ok = s.advancePastNow(j, j.configuredStartTime)
+		if !ok {
+			s.selectRemoveJob(id)
+			return
+		}
+	} else {
+		next = j.next(now)
+		if next.IsZero() {
+			s.selectRemoveJob(id)
+			return
+		}
+		if next.Before(now) {
+			var ok bool
+			next, ok = s.advancePastNow(j, next)
+			if !ok {
+				s.selectRemoveJob(id)
+				return
+			}
+		}
+	}
+
+	if !j.stopTime.IsZero() && !next.Before(j.stopTime) {
+		s.removeJobAtStopTime(j)
+		return
+	}
+
+	j.startTime = next
+	j.nextScheduled = []time.Time{next}
+	gen := j.scheduleGen
+	j.timer = s.exec.clock.AfterFunc(next.Sub(now), func() {
+		s.dispatchJobRun(id, gen)
+	})
+	s.jobs[id] = j
 }
 
 // selectRemoveJobsByTags deletes every job whose tag set intersects
@@ -879,8 +1084,38 @@ func (s *scheduler) selectStart() {
 // -----------------------------------------------
 // -----------------------------------------------
 
+func (s *scheduler) currentLocation() *time.Location {
+	s.locationMu.RLock()
+	loc := s.location
+	s.locationMu.RUnlock()
+	return loc
+}
+
 func (s *scheduler) now() time.Time {
-	return s.exec.clock.Now().In(s.location)
+	return s.exec.clock.Now().In(s.currentLocation())
+}
+
+func (s *scheduler) ChangeLocation(location *time.Location) error {
+	if location == nil {
+		return ErrChangeLocationNil
+	}
+
+	outChan := make(chan error, 1)
+	select {
+	case <-s.shutdownCtx.Done():
+		return nil
+	case s.changeLocationCh <- changeLocationRequest{
+		location: location,
+		outChan:  outChan,
+	}:
+	}
+
+	select {
+	case <-s.shutdownCtx.Done():
+		return nil
+	case err := <-outChan:
+		return err
+	}
 }
 
 func (s *scheduler) jobFromInternalJob(in internalJob) job {
@@ -1038,16 +1273,19 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		j.parameters = tsk.parameters
 	}
 
+	loc := s.currentLocation()
+	now := s.exec.clock.Now().In(loc)
+
 	// apply global job options
 	for _, option := range s.globalJobOptions {
-		if err := option(&j, s.now()); err != nil {
+		if err := option(&j, now); err != nil {
 			return nil, err
 		}
 	}
 
 	// apply job specific options, which take precedence
 	for _, option := range options {
-		if err := option(&j, s.now()); err != nil {
+		if err := option(&j, now); err != nil {
 			return nil, err
 		}
 	}
@@ -1075,7 +1313,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		return nil, err
 	}
 
-	if err := definition.setup(&j, s.location, s.exec.clock.Now()); err != nil {
+	if err := definition.setup(&j, loc, now); err != nil {
 		j.cancel()
 		return nil, err
 	}
@@ -1093,21 +1331,22 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		}
 	}
 
-	newJobCtx, newJobCancel := context.WithCancel(context.Background())
+	outChan := make(chan newJobOut, 1)
 	select {
 	case <-s.shutdownCtx.Done():
-		newJobCancel()
 	case s.newJobCh <- newJobIn{
-		ctx:    newJobCtx,
-		cancel: newJobCancel,
-		job:    j,
+		job:      j,
+		location: loc,
+		outChan:  outChan,
 	}:
-	}
-
-	select {
-	case <-newJobCtx.Done():
-	case <-s.shutdownCtx.Done():
-		newJobCancel()
+		select {
+		case res := <-outChan:
+			if res.err != nil {
+				return nil, res.err
+			}
+			j = res.job
+		case <-s.shutdownCtx.Done():
+		}
 	}
 
 	out := s.jobFromInternalJob(j)
