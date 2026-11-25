@@ -38,6 +38,7 @@ var (
 	ErrStopSchedulerTimedOut         = errors.New("gocron: timed out waiting for scheduler to stop")
 	ErrWeeklyJobAtTimeNil            = errors.New("gocron: WeeklyJob: atTime within atTimes must not be nil")
 	ErrWeeklyJobAtTimesNil           = errors.New("gocron: WeeklyJob: atTimes must not be nil")
+	ErrWeeklyJobDaysOfTheWeek        = errors.New("gocron: WeeklyJob: daysOfTheWeek must be between Sunday and Saturday inclusive")
 	ErrWeeklyJobDaysOfTheWeekNil     = errors.New("gocron: WeeklyJob: daysOfTheWeek must not be nil")
 	ErrWeeklyJobHours                = errors.New("gocron: WeeklyJob: atTimes hours must be between 0 and 23 inclusive")
 	ErrWeeklyJobZeroInterval         = errors.New("gocron: WeeklyJob: interval must be greater than 0")
