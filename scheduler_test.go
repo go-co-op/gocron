@@ -1130,6 +1130,36 @@ func TestScheduler_NewJobErrors(t *testing.T) {
 			ErrWeeklyJobDaysOfTheWeekNil,
 		},
 		{
+			"weekly job weekday below Sunday",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Sunday-1),
+				NewAtTimes(NewAtTime(12, 0, 0)),
+			),
+			[]JobOption{WithDaylightSavingsTimePolicy(DaylightSavingsTimeSkip)},
+			ErrWeeklyJobDaysOfTheWeek,
+		},
+		{
+			"weekly job weekday above Saturday",
+			WeeklyJob(
+				1,
+				NewWeekdays(time.Saturday+1),
+				NewAtTimes(NewAtTime(12, 0, 0)),
+			),
+			[]JobOption{WithDaylightSavingsTimePolicy(DaylightSavingsTimeSkip)},
+			ErrWeeklyJobDaysOfTheWeek,
+		},
+		{
+			"weekly job valid and invalid weekdays",
+			WeeklyJob(
+				1,
+				func() []time.Weekday { return []time.Weekday{time.Monday, 100} },
+				NewAtTimes(NewAtTime(12, 0, 0)),
+			),
+			[]JobOption{WithDaylightSavingsTimePolicy(DaylightSavingsTimeSkip)},
+			ErrWeeklyJobDaysOfTheWeek,
+		},
+		{
 			"weekly job hours out of range",
 			WeeklyJob(
 				1,
