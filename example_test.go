@@ -655,6 +655,19 @@ func ExampleOneTimeJob() {
 	s.Start()
 }
 
+func ExampleScheduler_changeLocation() {
+	s, _ := gocron.NewScheduler(
+		gocron.WithLocation(time.UTC),
+	)
+	defer func() { _ = s.Shutdown() }()
+
+	location, _ := time.LoadLocation("America/New_York")
+	err := s.ChangeLocation(location)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func ExampleScheduler_jobs() {
 	s, _ := gocron.NewScheduler()
 	defer func() { _ = s.Shutdown() }()

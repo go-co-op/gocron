@@ -25,7 +25,7 @@ type executor struct {
 	// receives jobs scheduled to execute
 	jobsIn chan jobIn
 	// sends out jobs for rescheduling
-	jobsOutForRescheduling chan uuid.UUID
+	jobsOutForRescheduling chan jobRescheduleRequest
 	// sends out jobs once completed
 	jobsOutCompleted chan jobOutCompleted
 	// used to request jobs from the scheduler
@@ -79,9 +79,15 @@ type jobOutCompleted struct {
 	skipped bool
 }
 
+type jobRescheduleRequest struct {
+	id          uuid.UUID
+	scheduleGen uint64
+}
+
 type jobIn struct {
 	id            uuid.UUID
 	shouldSendOut bool
+	scheduleGen   uint64
 }
 
 type singletonRunner struct {
@@ -286,7 +292,7 @@ func (e *executor) start() {
 func (e *executor) sendOutForRescheduling(jIn *jobIn) {
 	if jIn.shouldSendOut {
 		select {
-		case e.jobsOutForRescheduling <- jIn.id:
+		case e.jobsOutForRescheduling <- jobRescheduleRequest{id: jIn.id, scheduleGen: jIn.scheduleGen}:
 		case <-e.ctx.Done():
 			return
 		}
@@ -345,7 +351,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 							select {
 							case <-e.ctx.Done():
 							case <-j.ctx.Done():
-							case e.jobsOutForRescheduling <- j.id:
+							case e.jobsOutForRescheduling <- jobRescheduleRequest{id: j.id, scheduleGen: jIn.scheduleGen}:
 							}
 						}
 						e.sendOutForNextRunUpdate(&jIn)

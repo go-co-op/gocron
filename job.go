@@ -64,17 +64,19 @@ type internalJob struct {
 	// nextScheduled times.
 	nextScheduled []time.Time
 
-	lastRun            time.Time
-	lastRunStartedAt   time.Time
-	lastRunCompletedAt time.Time
-	function           any
-	parameters         []any
-	timer              clockwork.Timer
-	singletonMode      bool
-	singletonLimitMode LimitMode
-	limitRunsTo        *limitRunsTo
-	startTime          time.Time
-	startImmediately   bool
+	lastRun             time.Time
+	lastRunStartedAt    time.Time
+	lastRunCompletedAt  time.Time
+	function            any
+	parameters          []any
+	timer               clockwork.Timer
+	singletonMode       bool
+	singletonLimitMode  LimitMode
+	limitRunsTo         *limitRunsTo
+	startTime           time.Time
+	configuredStartTime time.Time
+	startImmediately    bool
+	scheduleGen         uint64
 	// startAtGrace is the maximum tolerated lateness for the first
 	// scheduled run. If the scheduler dispatches a job and finds that
 	// the computed first-run time has already passed, the run fires
@@ -943,6 +945,7 @@ func WithStartDateTime(start time.Time) StartAtOption {
 			return ErrStartTimeLaterThanEndTime
 		}
 		j.startTime = start
+		j.configuredStartTime = start
 		return nil
 	}
 }
@@ -963,6 +966,7 @@ func WithStartDateTimePast(start time.Time) StartAtOption {
 			return ErrStartTimeLaterThanEndTime
 		}
 		j.startTime = start
+		j.configuredStartTime = start
 		return nil
 	}
 }
@@ -1268,6 +1272,74 @@ func (o OneTimeJobSchedule) JobType() JobType {
 
 type jobSchedule interface {
 	next(lastRun time.Time) time.Time
+}
+
+func rebindAtTimesLocation(atTimes []time.Time, location *time.Location) []time.Time {
+	if len(atTimes) == 0 {
+		return nil
+	}
+	rebound := make([]time.Time, len(atTimes))
+	for i, at := range atTimes {
+		hour, minute, second := at.Clock()
+		rebound[i] = time.Date(0, 0, 0, hour, minute, second, 0, location)
+	}
+	slices.SortStableFunc(rebound, ascendingTime)
+	return rebound
+}
+
+func isCustomCronJob(js jobSchedule) (*cronJob, bool) {
+	cj, ok := js.(*cronJob)
+	if !ok {
+		return nil, false
+	}
+	if _, isDefault := cj.cronSchedule.(*defaultCron); isDefault {
+		return nil, false
+	}
+	return cj, true
+}
+
+// updateJobScheduleLocation returns a fresh copy of js updated for location,
+// whether the schedule's fire instants depend on the scheduler's location
+// (requiring running timers to be recalculated), and any validation error.
+// Live schedules and slices are never mutated in place so concurrent
+// Job.NextRuns and Job.Schedule snapshots cannot race and failed location
+// changes leave all state untouched. Custom Cron implementations cannot be
+// cloned or validated in isolation, so they return
+// ErrChangeLocationUnsupportedCron.
+func updateJobScheduleLocation(js jobSchedule, location *time.Location, now time.Time) (jobSchedule, bool, error) {
+	switch v := js.(type) {
+	case *cronJob:
+		dc, ok := v.cronSchedule.(*defaultCron)
+		if !ok {
+			return nil, false, ErrChangeLocationUnsupportedCron
+		}
+		if strings.HasPrefix(v.crontab, "TZ=") || strings.HasPrefix(v.crontab, "CRON_TZ=") {
+			return v, false, nil
+		}
+		nextCron := &defaultCron{withSeconds: dc.withSeconds}
+		if err := nextCron.IsValid(v.crontab, location, now); err != nil {
+			return nil, false, err
+		}
+		return &cronJob{
+			crontab:                   v.crontab,
+			cronSchedule:              nextCron,
+			daylightSavingsTimePolicy: v.daylightSavingsTimePolicy,
+		}, true, nil
+	case dailyJob:
+		v.atTimes = rebindAtTimesLocation(v.atTimes, location)
+		v.location = location
+		return v, true, nil
+	case weeklyJob:
+		v.atTimes = rebindAtTimesLocation(v.atTimes, location)
+		v.location = location
+		return v, true, nil
+	case monthlyJob:
+		v.atTimes = rebindAtTimesLocation(v.atTimes, location)
+		v.location = location
+		return v, true, nil
+	default:
+		return js, false, nil
+	}
 }
 
 // daylightSavingsTimeRunAfterTransitionTime computes the post-transition equivalent

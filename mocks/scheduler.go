@@ -12,6 +12,7 @@ package gocronmocks
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	v2 "github.com/go-co-op/gocron/v2"
 	uuid "github.com/google/uuid"
@@ -40,6 +41,20 @@ func NewMockScheduler(ctrl *gomock.Controller) *MockScheduler {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockScheduler) EXPECT() *MockSchedulerMockRecorder {
 	return m.recorder
+}
+
+// ChangeLocation mocks base method.
+func (m *MockScheduler) ChangeLocation(arg0 *time.Location) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChangeLocation", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ChangeLocation indicates an expected call of ChangeLocation.
+func (mr *MockSchedulerMockRecorder) ChangeLocation(arg0 any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeLocation", reflect.TypeOf((*MockScheduler)(nil).ChangeLocation), arg0)
 }
 
 // Jobs mocks base method.
