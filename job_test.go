@@ -177,6 +177,9 @@ func TestDaylightSavingsTimePolicy_CronJob_CalendarConstraints(t *testing.T) {
 		expectedNextRun time.Time
 	}{
 		{"daily adjusts on transition day", "30 2 * * *", false, march7, adjusted},
+		{"daily from earlier on transition day", "30 2 * * *", false, time.Date(2026, 3, 8, 1, 0, 0, 0, americaNewYork), adjusted},
+		{"seconds from earlier on transition day", "15 30 2 * * *", true, time.Date(2026, 3, 8, 0, 0, 0, 0, americaNewYork), adjusted.Add(15 * time.Second)},
+		{"adjusted run is not repeated", "30 2 * * *", false, adjusted, time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork)},
 		{"daily before transition", "30 2 * * *", false, march2, time.Date(2026, 3, 3, 2, 30, 0, 0, americaNewYork)},
 		{"weekday excludes Sunday", "30 2 * * MON", false, march2, monday},
 		{"weekday includes Sunday", "30 2 * * SUN", false, march2, adjusted},
@@ -275,18 +278,21 @@ func TestDaylightSavingsTimePolicy_CronJob_Execution(t *testing.T) {
 	americaNewYork, err := time.LoadLocation("America/New_York")
 	require.NoError(t, err)
 
-	start := time.Date(2026, 3, 7, 3, 0, 0, 0, americaNewYork)
+	march7 := time.Date(2026, 3, 7, 3, 0, 0, 0, americaNewYork)
 	tests := []struct {
 		name            string
 		crontab         string
+		start           time.Time
 		expectedNextRun time.Time
 	}{
-		{"Monday job runs on Monday", "30 2 * * MON", time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork)},
-		{"daily job runs after transition", "30 2 * * *", time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork)},
+		{"Monday job runs on Monday", "30 2 * * MON", march7, time.Date(2026, 3, 9, 2, 30, 0, 0, americaNewYork)},
+		{"daily job runs after transition", "30 2 * * *", march7, time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork)},
+		{"started on transition day before the gap", "30 2 * * *", time.Date(2026, 3, 8, 1, 0, 0, 0, americaNewYork), time.Date(2026, 3, 8, 3, 30, 0, 0, americaNewYork)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer verifyNoGoroutineLeaks(t)
+			start := tt.start
 			clock := clockwork.NewFakeClockAt(start)
 			s := newTestScheduler(t, WithClock(clock), WithLocation(americaNewYork))
 			defer func() { require.NoError(t, s.Shutdown()) }()
