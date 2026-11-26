@@ -1353,10 +1353,11 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 
 	// Handle Daylight Saving Time spring-forward with RunAfterTransition policy:
 	// The cron library skips non-existent times during a Daylight Saving Time gap.
-	// When the policy is DaylightSavingsTimeRunAfterTransition, check for intermediate
-	// days between lastRun and next where the target wall-clock time falls in a
-	// Daylight Saving Time gap. If found, return the clock-adjusted (normalized)
-	// time for that day instead of skipping, but only if the expression permits it.
+	// When the policy is DaylightSavingsTimeRunAfterTransition, check the days from
+	// lastRun's day (the gap may still be ahead on it) up to next for one where the
+	// target wall-clock time falls in a Daylight Saving Time gap. If found, return the
+	// clock-adjusted (normalized) time for that day instead of skipping, but only if
+	// the expression permits it.
 	if j.daylightSavingsTimePolicy == DaylightSavingsTimeRunAfterTransition {
 		// Next alone cannot tell us whether a custom cron intended to run on an
 		// intermediate date. Only adjust parsed, calendar-based default schedules.
@@ -1378,7 +1379,7 @@ func (j *cronJob) next(lastRun time.Time) time.Time {
 		// and OR semantics, to the parser's schedule without mutating shared state.
 		wallSchedule := *spec
 		wallSchedule.Location = time.UTC
-		for day := lastRun.In(loc).AddDate(0, 0, 1); day.Before(next); day = day.AddDate(0, 0, 1) {
+		for day := lastRun.In(loc); day.Before(next); day = day.AddDate(0, 0, 1) {
 			candidate := time.Date(day.Year(), day.Month(), day.Day(),
 				nextLocal.Hour(), nextLocal.Minute(), nextLocal.Second(), 0, loc)
 			if candidate.Hour() != nextLocal.Hour() || candidate.Minute() != nextLocal.Minute() || candidate.Second() != nextLocal.Second() {
