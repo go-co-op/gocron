@@ -4679,26 +4679,29 @@ func TestWithTagsPreservesValues(t *testing.T) {
 	}
 }
 
-type threadSafeLocationCron struct {
-	mu       sync.RWMutex
-	location *time.Location
-	failFor  string
+// perJobLocationCron models a permitted per-job custom Cron implementation
+// without internal locking (see Cron docs: callers may supply a fresh instance
+// per job instead of synchronizing IsValid/Next). If ChangeLocation calls
+// IsValid on a live instance while Job.NextRuns reads Next, -race detects the
+// data race; if IsValid mutates state before returning an error, rollback fails
+// to restore it.
+type perJobLocationCron struct {
+	location     *time.Location
+	failFor      string
+	isValidCalls atomic.Int32
 }
 
-func (c *threadSafeLocationCron) IsValid(_ string, location *time.Location, _ time.Time) error {
+func (c *perJobLocationCron) IsValid(_ string, location *time.Location, _ time.Time) error {
+	c.isValidCalls.Add(1)
+	c.location = location
 	if c.failFor != "" && location.String() == c.failFor {
 		return ErrCronJobInvalid
 	}
-	c.mu.Lock()
-	c.location = location
-	c.mu.Unlock()
 	return nil
 }
 
-func (c *threadSafeLocationCron) Next(lastRun time.Time) time.Time {
-	c.mu.RLock()
+func (c *perJobLocationCron) Next(lastRun time.Time) time.Time {
 	loc := c.location
-	c.mu.RUnlock()
 	inLoc := lastRun.In(loc)
 	next := time.Date(inLoc.Year(), inLoc.Month(), inLoc.Day(), 9, 0, 0, 0, loc)
 	if !next.After(inLoc) {
@@ -5184,7 +5187,7 @@ func TestScheduler_ChangeLocation_AtomicOnValidationError(t *testing.T) {
 	assert.Equal(t, time.UTC.String(), addedNext.Location().String())
 }
 
-func TestScheduler_ChangeLocation_CustomCronAndRollback(t *testing.T) {
+func TestScheduler_ChangeLocation_CustomCronUnsupported(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 
 	newYork, err := time.LoadLocation("America/New_York")
@@ -5196,30 +5199,65 @@ func TestScheduler_ChangeLocation_CustomCronAndRollback(t *testing.T) {
 	s := newTestScheduler(t, WithClock(fakeClock), WithLocation(time.UTC))
 	defer func() { require.NoError(t, s.Shutdown()) }()
 
-	okCron := &threadSafeLocationCron{}
-	failingCron := &threadSafeLocationCron{failFor: tokyo.String()}
-
-	j1, err := s.NewJob(CronJob("0 9 * * *", false), NewTask(func() {}), WithCronImplementation(okCron))
+	// A permitted per-job non-mutex Cron that mutates location before failing on Tokyo.
+	custom := &perJobLocationCron{failFor: tokyo.String()}
+	customJob, err := s.NewJob(CronJob("0 9 * * *", false), NewTask(func() {}), WithCronImplementation(custom))
 	require.NoError(t, err)
-	j2, err := s.NewJob(CronJob("0 9 * * *", false), NewTask(func() {}), WithCronImplementation(failingCron))
+	defaultCustomJob, err := s.NewJob(CronJob("0 9 * * *", false), NewTask(func() {}), WithCronImplementation(NewDefaultCron(false)))
+	require.NoError(t, err)
+	dailyJob, err := s.NewJob(DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))), NewTask(func() {}))
 	require.NoError(t, err)
 
 	s.Start()
 
-	// Failing on Tokyo must roll back okCron and leave both jobs in UTC.
-	require.ErrorIs(t, s.ChangeLocation(tokyo), ErrCronJobInvalid)
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_, _ = customJob.NextRuns(3)
+				_, _ = defaultCustomJob.NextRuns(3)
+			}
+		}
+	}()
+	defer func() {
+		close(stop)
+		wg.Wait()
+	}()
+
+	// Attempting to change location while any custom Cron job is registered must
+	// return ErrChangeLocationUnsupportedCron without touching live state.
+	for range 20 {
+		require.ErrorIs(t, s.ChangeLocation(newYork), ErrChangeLocationUnsupportedCron)
+		require.ErrorIs(t, s.ChangeLocation(tokyo), ErrChangeLocationUnsupportedCron)
+	}
+	assert.Equal(t, int32(1), custom.isValidCalls.Load(), "ChangeLocation must not invoke IsValid on a live custom Cron")
+	assert.Equal(t, time.UTC, custom.location, "custom Cron location must remain unchanged")
+
+	// No-op ChangeLocation to the current location still succeeds.
+	require.NoError(t, s.ChangeLocation(time.UTC))
+
 	expectedUTC := time.Date(2026, time.January, 5, 9, 0, 0, 0, time.UTC)
-	for _, j := range []Job{j1, j2} {
+	for _, j := range []Job{customJob, defaultCustomJob, dailyJob} {
 		next, err := j.NextRun()
 		require.NoError(t, err)
 		assert.True(t, next.Equal(expectedUTC))
 		assert.Equal(t, time.UTC.String(), next.Location().String())
 	}
 
-	// Changing to New York succeeds for both custom crons.
+	// Removing the custom Cron job allows ChangeLocation to succeed, including
+	// for a job configured via WithCronImplementation(NewDefaultCron(false)).
+	require.NoError(t, s.RemoveJob(customJob.ID()))
+	require.Eventually(t, func() bool { return len(s.Jobs()) == 2 }, time.Second, 5*time.Millisecond)
 	require.NoError(t, s.ChangeLocation(newYork))
+
 	expectedNY := time.Date(2026, time.January, 5, 9, 0, 0, 0, newYork)
-	for _, j := range []Job{j1, j2} {
+	for _, j := range []Job{defaultCustomJob, dailyJob} {
 		next, err := j.NextRun()
 		require.NoError(t, err)
 		assert.True(t, next.Equal(expectedNY))
@@ -5346,4 +5384,228 @@ func TestScheduler_ChangeLocation_ConcurrentRaceSafety(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 	// Calling ChangeLocation after Shutdown returns without blocking or erroring.
 	require.NoError(t, s.ChangeLocation(tokyo))
+}
+
+func TestScheduler_Update_ConcurrentChangeLocation(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	newYork, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	tokyo, err := time.LoadLocation("Asia/Tokyo")
+	require.NoError(t, err)
+
+	t.Run("revalidation failure preserves original job", func(t *testing.T) {
+		baseTime := time.Date(2026, time.January, 5, 6, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(baseTime)
+		s := newTestScheduler(t, WithClock(fakeClock), WithLocation(time.UTC))
+		defer func() { require.NoError(t, s.Shutdown()) }()
+
+		release := make(chan struct{})
+		defer close(release)
+		runs := make(chan context.Context, 2)
+		original, err := s.NewJob(
+			DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))),
+			NewTask(func(ctx context.Context) {
+				runs <- ctx
+				<-release
+			}),
+			WithName("original-daily"),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+		s.Start()
+
+		var jobCtx context.Context
+		select {
+		case jobCtx = <-runs:
+		case <-time.After(time.Second):
+			t.Fatal("original job did not start")
+		}
+
+		// Switch the scheduler to a non-IANA FixedZone after Update captures loc=UTC
+		// and before selectNewJob installs the replacement CronJob. The existing
+		// DailyJob accepts FixedZone, so ChangeLocation succeeds, and then
+		// selectNewJob's revalidation of the CronJob fails with ErrCronJobParse.
+		invalidForCron := time.FixedZone("CUSTOM_NON_IANA_TZ", 3600)
+		changeDuringUpdate := func(_ *internalJob, _ time.Time) error {
+			return s.ChangeLocation(invalidForCron)
+		}
+
+		updated, err := s.Update(
+			original.ID(),
+			CronJob("0 9 * * *", false),
+			NewTask(func() {}),
+			changeDuringUpdate,
+		)
+		require.ErrorIs(t, err, ErrCronJobParse)
+		require.Nil(t, updated)
+
+		assert.NoError(t, jobCtx.Err(), "failed Update must not cancel the original job")
+		jobs := s.Jobs()
+		require.Len(t, jobs, 1, "failed Update must not remove the original job")
+		assert.Equal(t, original.ID(), jobs[0].ID())
+		assert.Equal(t, "original-daily", jobs[0].Name())
+
+		// Original DailyJob was cleanly moved to FixedZone (+01:00 -> 09:00+01:00 == 08:00 UTC).
+		next, err := original.NextRun()
+		require.NoError(t, err)
+		expectedNext := time.Date(2026, time.January, 5, 9, 0, 0, 0, invalidForCron)
+		assert.Truef(t, expectedNext.Equal(next), "expected %s, got %s", expectedNext, next)
+		assert.Equal(t, invalidForCron.String(), next.Location().String())
+
+		// Advancing to 08:00 UTC (= 09:00+01:00) must fire the preserved original job.
+		fakeClock.Advance(2 * time.Hour)
+		select {
+		case ctx := <-runs:
+			assert.NoError(t, ctx.Err())
+		case <-time.After(time.Second):
+			t.Fatal("preserved original job did not run after failed Update")
+		}
+	})
+
+	t.Run("revalidation success replaces original job in new location", func(t *testing.T) {
+		baseTime := time.Date(2026, time.January, 5, 6, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(baseTime)
+		s := newTestScheduler(t, WithClock(fakeClock), WithLocation(time.UTC))
+		defer func() { require.NoError(t, s.Shutdown()) }()
+
+		release := make(chan struct{})
+		defer close(release)
+		origRuns := make(chan context.Context, 2)
+		original, err := s.NewJob(
+			DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))),
+			NewTask(func(ctx context.Context) {
+				origRuns <- ctx
+				<-release
+			}),
+			WithName("original-daily"),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+		s.Start()
+
+		var jobCtx context.Context
+		select {
+		case jobCtx = <-origRuns:
+		case <-time.After(time.Second):
+			t.Fatal("original job did not start")
+		}
+
+		updatedRan := make(chan struct{}, 2)
+		changeDuringUpdate := func(_ *internalJob, _ time.Time) error {
+			return s.ChangeLocation(newYork)
+		}
+
+		updated, err := s.Update(
+			original.ID(),
+			CronJob("0 9 * * *", false),
+			NewTask(func() { updatedRan <- struct{}{} }),
+			WithName("updated-cron"),
+			changeDuringUpdate,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+		assert.Equal(t, original.ID(), updated.ID())
+		assert.ErrorIs(t, jobCtx.Err(), context.Canceled, "successful Update must cancel the replaced job")
+
+		next, err := updated.NextRun()
+		require.NoError(t, err)
+		expectedNY := time.Date(2026, time.January, 5, 9, 0, 0, 0, newYork)
+		assert.Truef(t, expectedNY.Equal(next), "expected %s, got %s", expectedNY, next)
+		assert.Equal(t, newYork.String(), next.Location().String())
+
+		// Advance from 06:00 UTC to 14:00 UTC (= 09:00 EST) to verify the updated job fires.
+		fakeClock.Advance(8 * time.Hour)
+		select {
+		case <-updatedRan:
+		case <-time.After(time.Second):
+			t.Fatal("updated job did not fire in new location")
+		}
+	})
+
+	t.Run("custom cron revalidation failure preserves original job", func(t *testing.T) {
+		baseTime := time.Date(2026, time.January, 5, 6, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(baseTime)
+		s := newTestScheduler(t, WithClock(fakeClock), WithLocation(time.UTC))
+		defer func() { require.NoError(t, s.Shutdown()) }()
+
+		release := make(chan struct{})
+		defer close(release)
+		runs := make(chan context.Context, 2)
+		original, err := s.NewJob(
+			DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))),
+			NewTask(func(ctx context.Context) {
+				runs <- ctx
+				<-release
+			}),
+			WithName("original-daily"),
+			WithStartAt(WithStartImmediately()),
+		)
+		require.NoError(t, err)
+		s.Start()
+
+		var jobCtx context.Context
+		select {
+		case jobCtx = <-runs:
+		case <-time.After(time.Second):
+			t.Fatal("original job did not start")
+		}
+
+		rejectingCustom := &perJobLocationCron{failFor: tokyo.String()}
+		changeDuringUpdate := func(_ *internalJob, _ time.Time) error {
+			return s.ChangeLocation(tokyo)
+		}
+
+		updated, err := s.Update(
+			original.ID(),
+			CronJob("0 9 * * *", false),
+			NewTask(func() {}),
+			WithCronImplementation(rejectingCustom),
+			changeDuringUpdate,
+		)
+		require.ErrorIs(t, err, ErrCronJobInvalid)
+		require.Nil(t, updated)
+		assert.NoError(t, jobCtx.Err(), "failed custom Cron Update must not cancel the original job")
+
+		jobs := s.Jobs()
+		require.Len(t, jobs, 1)
+		assert.Equal(t, original.ID(), jobs[0].ID())
+		assert.Equal(t, "original-daily", jobs[0].Name())
+	})
+
+	t.Run("custom cron revalidation success installs in new location", func(t *testing.T) {
+		baseTime := time.Date(2026, time.January, 5, 6, 0, 0, 0, time.UTC)
+		fakeClock := clockwork.NewFakeClockAt(baseTime)
+		s := newTestScheduler(t, WithClock(fakeClock), WithLocation(time.UTC))
+		defer func() { require.NoError(t, s.Shutdown()) }()
+
+		original, err := s.NewJob(
+			DailyJob(1, NewAtTimes(NewAtTime(9, 0, 0))),
+			NewTask(func() {}),
+			WithName("original-daily"),
+		)
+		require.NoError(t, err)
+		s.Start()
+
+		custom := &perJobLocationCron{}
+		changeDuringUpdate := func(_ *internalJob, _ time.Time) error {
+			return s.ChangeLocation(newYork)
+		}
+
+		updated, err := s.Update(
+			original.ID(),
+			CronJob("0 9 * * *", false),
+			NewTask(func() {}),
+			WithCronImplementation(custom),
+			changeDuringUpdate,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, updated)
+
+		next, err := updated.NextRun()
+		require.NoError(t, err)
+		expectedNY := time.Date(2026, time.January, 5, 9, 0, 0, 0, newYork)
+		assert.Truef(t, expectedNY.Equal(next), "expected %s, got %s", expectedNY, next)
+		assert.Equal(t, newYork.String(), next.Location().String())
+	})
 }

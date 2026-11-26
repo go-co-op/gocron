@@ -57,9 +57,10 @@ type Scheduler interface {
 	// already running, location-dependent jobs (CronJob without an explicit
 	// TZ=/CRON_TZ= prefix, DailyJob, WeeklyJob, and MonthlyJob) have their
 	// upcoming runs recalculated for the new location.
-	// If location is nil, ErrChangeLocationNil is returned. If any job's
-	// schedule cannot be validated in the new location, no changes are
-	// applied and the error is returned.
+	// If location is nil, ErrChangeLocationNil is returned. If any registered
+	// job uses a custom Cron implementation, ErrChangeLocationUnsupportedCron
+	// is returned. If any job's schedule cannot be validated in the new location,
+	// no changes are applied and the error is returned.
 	ChangeLocation(*time.Location) error
 	// Jobs returns all the jobs currently in the scheduler.
 	//
@@ -170,9 +171,10 @@ type scheduler struct {
 }
 
 type newJobIn struct {
-	job      internalJob
-	location *time.Location
-	outChan  chan newJobOut
+	job       internalJob
+	location  *time.Location
+	replaceID uuid.UUID
+	outChan   chan newJobOut
 }
 
 type newJobOut struct {
@@ -842,18 +844,40 @@ func (s *scheduler) prepareFirstRun(j internalJob) (internalJob, bool) {
 
 // selectNewJob installs a job produced by addOrUpdateJob into s.jobs.
 // Runs the job's initial nextRun computation and, if the scheduler is
-// already started, wires it into the executor immediately. Signals
-// completion via in.outChan so NewJob can return.
+// already started, wires it into the executor immediately. For Update calls
+// (in.replaceID != uuid.Nil), any concurrent location change is revalidated
+// before removing the existing job so a failed Update leaves the original job
+// untouched. Signals completion via in.outChan so NewJob/Update can return.
 func (s *scheduler) selectNewJob(in newJobIn) {
 	j := in.job
 	if curLoc := s.currentLocation(); in.location != curLoc {
-		updatedSchedule, _, err := updateJobScheduleLocation(j.jobSchedule, curLoc, s.now())
+		var (
+			updatedSchedule jobSchedule
+			err             error
+		)
+		if cj, isCustom := isCustomCronJob(j.jobSchedule); isCustom {
+			// j has not been installed or exposed to callers yet, so re-validating
+			// the candidate custom Cron against curLoc cannot race with Job.NextRuns
+			// or mutate any live job.
+			err = cj.cronSchedule.IsValid(cj.crontab, curLoc, s.now())
+			updatedSchedule = cj
+		} else {
+			updatedSchedule, _, err = updateJobScheduleLocation(j.jobSchedule, curLoc, s.now())
+		}
 		if err != nil {
 			j.cancel()
 			in.outChan <- newJobOut{err: err}
 			return
 		}
 		j.jobSchedule = updatedSchedule
+	}
+	if in.replaceID != uuid.Nil {
+		if prev, ok := s.jobs[in.replaceID]; ok {
+			if in.replaceID == j.id {
+				j.scheduleGen = prev.scheduleGen + 1
+			}
+			s.selectRemoveJob(in.replaceID)
+		}
 	}
 	if s.started.Load() {
 		updated, drop := s.prepareFirstRun(j)
@@ -893,41 +917,15 @@ func (s *scheduler) selectChangeLocation(req changeLocationRequest) {
 
 	now := s.exec.clock.Now().In(newLoc)
 	prepared := make(map[uuid.UUID]preparedJobLocation, len(s.jobs))
-	var customCronIDs []uuid.UUID
 
-	// Phase 1a: validate and prepare built-in schedules without mutating any state.
+	// Phase 1: validate and prepare all schedules into fresh copies without
+	// mutating any live state.
 	for id, j := range s.jobs {
-		if _, isCustom := isCustomCronJob(j.jobSchedule); isCustom {
-			customCronIDs = append(customCronIDs, id)
-			continue
-		}
 		updatedSchedule, reschedule, err := updateJobScheduleLocation(j.jobSchedule, newLoc, now)
 		if err != nil {
 			req.outChan <- err
 			return
 		}
-		prepared[id] = preparedJobLocation{
-			schedule:   updatedSchedule,
-			reschedule: reschedule,
-		}
-	}
-
-	// Phase 1b: validate custom Cron implementations, rolling back any
-	// previously updated custom crons if a subsequent one rejects newLoc.
-	var updatedCustom []*cronJob
-	for _, id := range customCronIDs {
-		j := s.jobs[id]
-		cj, _ := isCustomCronJob(j.jobSchedule)
-		updatedSchedule, reschedule, err := updateJobScheduleLocation(j.jobSchedule, newLoc, now)
-		if err != nil {
-			oldNow := s.exec.clock.Now().In(oldLoc)
-			for _, prev := range updatedCustom {
-				_ = prev.cronSchedule.IsValid(prev.crontab, oldLoc, oldNow)
-			}
-			req.outChan <- err
-			return
-		}
-		updatedCustom = append(updatedCustom, cj)
 		prepared[id] = preparedJobLocation{
 			schedule:   updatedSchedule,
 			reschedule: reschedule,
@@ -1318,26 +1316,15 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 		return nil, err
 	}
 
-	if id != uuid.Nil {
-		currentJob := requestJobCtx(s.shutdownCtx, id, s.jobOutRequestCh)
-		if currentJob != nil && currentJob.id != uuid.Nil {
-			select {
-			case <-s.shutdownCtx.Done():
-				j.cancel()
-				return nil, nil
-			case s.removeJobCh <- id:
-				<-currentJob.ctx.Done()
-			}
-		}
-	}
-
 	outChan := make(chan newJobOut, 1)
 	select {
 	case <-s.shutdownCtx.Done():
+		j.cancel()
 	case s.newJobCh <- newJobIn{
-		job:      j,
-		location: loc,
-		outChan:  outChan,
+		job:       j,
+		location:  loc,
+		replaceID: id,
+		outChan:   outChan,
 	}:
 		select {
 		case res := <-outChan:
@@ -1346,6 +1333,7 @@ func (s *scheduler) addOrUpdateJob(id uuid.UUID, definition JobDefinition, taskW
 			}
 			j = res.job
 		case <-s.shutdownCtx.Done():
+			j.cancel()
 		}
 	}
 

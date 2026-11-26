@@ -1293,34 +1293,31 @@ func isCustomCronJob(js jobSchedule) (*cronJob, bool) {
 	return cj, true
 }
 
-// updateJobScheduleLocation returns a copy of js updated for location, whether
-// the schedule's fire instants depend on the scheduler's location (requiring
-// running timers to be recalculated), and any validation error. Built-in
-// schedules and slices are never mutated in place so concurrent Job.NextRuns
-// and Job.Schedule snapshots cannot race.
+// updateJobScheduleLocation returns a fresh copy of js updated for location,
+// whether the schedule's fire instants depend on the scheduler's location
+// (requiring running timers to be recalculated), and any validation error.
+// Live schedules and slices are never mutated in place so concurrent
+// Job.NextRuns and Job.Schedule snapshots cannot race and failed location
+// changes leave all state untouched. Custom Cron implementations cannot be
+// cloned or validated in isolation, so they return
+// ErrChangeLocationUnsupportedCron.
 func updateJobScheduleLocation(js jobSchedule, location *time.Location, now time.Time) (jobSchedule, bool, error) {
 	switch v := js.(type) {
 	case *cronJob:
-		if dc, ok := v.cronSchedule.(*defaultCron); ok {
-			if strings.HasPrefix(v.crontab, "TZ=") || strings.HasPrefix(v.crontab, "CRON_TZ=") {
-				return v, false, nil
-			}
-			nextCron := &defaultCron{withSeconds: dc.withSeconds}
-			if err := nextCron.IsValid(v.crontab, location, now); err != nil {
-				return nil, false, err
-			}
-			return &cronJob{
-				crontab:                   v.crontab,
-				cronSchedule:              nextCron,
-				daylightSavingsTimePolicy: v.daylightSavingsTimePolicy,
-			}, true, nil
+		dc, ok := v.cronSchedule.(*defaultCron)
+		if !ok {
+			return nil, false, ErrChangeLocationUnsupportedCron
 		}
-		if err := v.cronSchedule.IsValid(v.crontab, location, now); err != nil {
+		if strings.HasPrefix(v.crontab, "TZ=") || strings.HasPrefix(v.crontab, "CRON_TZ=") {
+			return v, false, nil
+		}
+		nextCron := &defaultCron{withSeconds: dc.withSeconds}
+		if err := nextCron.IsValid(v.crontab, location, now); err != nil {
 			return nil, false, err
 		}
 		return &cronJob{
 			crontab:                   v.crontab,
-			cronSchedule:              v.cronSchedule,
+			cronSchedule:              nextCron,
 			daylightSavingsTimePolicy: v.daylightSavingsTimePolicy,
 		}, true, nil
 	case dailyJob:
