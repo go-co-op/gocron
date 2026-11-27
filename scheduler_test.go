@@ -3809,6 +3809,51 @@ func TestScheduler_WithLimitedRuns_ContextNotCanceledDuringTask(t *testing.T) {
 	require.NoError(t, s.Shutdown())
 }
 
+// TestScheduler_WithLimitedRuns_TaskOutlastsInterval asserts that a job
+// whose task runs longer than its interval still runs exactly the number
+// of times allowed by WithLimitedRuns, and is removed once the last run
+// has finished.
+func TestScheduler_WithLimitedRuns_TaskOutlastsInterval(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name          string
+		schedulerOpts []SchedulerOption
+		jobOpts       []JobOption
+	}{
+		{"default", nil, nil},
+		{"singleton wait", nil, []JobOption{WithSingletonMode(LimitModeWait)}},
+		{"singleton reschedule", nil, []JobOption{WithSingletonMode(LimitModeReschedule)}},
+		{"limit concurrent jobs wait", []SchedulerOption{WithLimitConcurrentJobs(1, LimitModeWait)}, nil},
+		{"limit concurrent jobs reschedule", []SchedulerOption{WithLimitConcurrentJobs(1, LimitModeReschedule)}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t, tt.schedulerOpts...)
+
+			var runs atomic.Int32
+			jobOpts := append([]JobOption{WithLimitedRuns(2)}, tt.jobOpts...)
+			_, err := s.NewJob(
+				DurationJob(10*time.Millisecond),
+				NewTask(func() {
+					runs.Add(1)
+					time.Sleep(50 * time.Millisecond)
+				}),
+				jobOpts...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+			time.Sleep(400 * time.Millisecond)
+			assert.Empty(t, s.Jobs(), "job should be removed after its last run")
+			require.NoError(t, s.Shutdown())
+
+			assert.Equal(t, int32(2), runs.Load())
+		})
+	}
+}
+
 // zeroNextCron is a pathological Cron implementation whose Next always
 // returns the zero time. Used to verify the scheduler does not hang when
 // a custom Cron implementation fails to produce a forward-progressing time.
@@ -3890,6 +3935,73 @@ func TestScheduler_WithGlobalJobOptions_MultipleCallsAppend(t *testing.T) {
 	require.Equal(t, "shared-name", j.Name())
 
 	require.NoError(t, s.Shutdown())
+}
+
+// TestScheduler_WithLimitedRuns_ConcurrentRunNow asserts that runs
+// started at the same time by RunNow can't go over WithLimitedRuns: both
+// calls are accepted while the job has a run left, but only one of the
+// runs may call the task function.
+func TestScheduler_WithLimitedRuns_ConcurrentRunNow(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+
+	tests := []struct {
+		name    string
+		jobOpts []JobOption
+	}{
+		{"default", nil},
+		{"interval from completion", []JobOption{WithIntervalFromCompletion()}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t)
+
+			var runs atomic.Int64
+			entered := make(chan struct{}, 2)
+			release := make(chan struct{})
+
+			opts := append([]JobOption{
+				WithLimitedRuns(1),
+				WithEventListeners(BeforeJobRuns(func(_ uuid.UUID, _ string) {
+					// hold both runs here until each has been
+					// dispatched, then let them go together
+					entered <- struct{}{}
+					<-release
+				})),
+			}, tt.jobOpts...)
+			j, err := s.NewJob(
+				DurationJob(time.Hour),
+				NewTask(func() {
+					runs.Add(1)
+				}),
+				opts...,
+			)
+			require.NoError(t, err)
+
+			s.Start()
+
+			require.NoError(t, j.RunNow())
+			require.NoError(t, j.RunNow())
+			for range 2 {
+				select {
+				case <-entered:
+				case <-time.After(2 * time.Second):
+					t.Fatal("timed out waiting for the runs to reach BeforeJobRuns")
+				}
+			}
+			close(release)
+
+			require.Eventually(t, func() bool {
+				return len(s.Jobs()) == 0
+			}, 2*time.Second, 10*time.Millisecond, "job should be removed after its last run")
+			// give a run that got past the limit time to finish
+			time.Sleep(50 * time.Millisecond)
+			assert.Equal(t, int64(1), runs.Load())
+			assert.ErrorIs(t, j.RunNow(), ErrJobNotFound)
+
+			require.NoError(t, s.Shutdown())
+		})
+	}
 }
 
 // TestScheduler_WithLimitedRuns_SkippedRunsDoNotConsumeBudget asserts

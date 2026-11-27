@@ -194,6 +194,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 		jobsOutForRescheduling: make(chan uuid.UUID),
 		jobUpdateNextRuns:      make(chan uuid.UUID),
 		jobsOutCompleted:       make(chan jobOutCompleted),
+		jobRunAdmission:        make(chan jobRunAdmission),
 		jobOutRequest:          make(chan *jobOutRequest, defaultJobOutRequestBuffer),
 		done:                   make(chan error, 1),
 		jobTimingUpdateCh:      make(chan jobTimingUpdate, defaultJobTimingBuffer),
@@ -238,6 +239,9 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 			case completed := <-s.exec.jobsOutCompleted:
 				s.selectExecJobsOutCompleted(completed)
 
+			case admission := <-s.exec.jobRunAdmission:
+				s.selectJobRunAdmission(admission)
+
 			case update := <-s.exec.jobTimingUpdateCh:
 				s.selectJobTimingUpdate(update)
 
@@ -251,7 +255,7 @@ func NewScheduler(options ...SchedulerOption) (Scheduler, error) {
 				s.selectRemoveJobsByTags(tags)
 
 			case out := <-s.exec.jobOutRequest:
-				s.selectJobOutRequest(out)
+				s.selectExecJobOutRequest(out)
 
 			case out := <-s.jobOutRequestCh:
 				s.selectJobOutRequest(out)
@@ -367,7 +371,7 @@ func (s *scheduler) selectAllJobsOutRequest(out allJobsOutRequest) {
 // bounded by defaultRunNowSendTimeout.
 func (s *scheduler) selectRunJobRequest(run runJobRequest) {
 	j, ok := s.jobs[run.id]
-	if !ok {
+	if !ok || j.runsExhausted() {
 		select {
 		case run.outChan <- ErrJobNotFound:
 		case <-s.shutdownCtx.Done():
@@ -508,6 +512,10 @@ func (s *scheduler) selectExecJobsOutForRescheduling(id uuid.UUID) {
 	if !ok {
 		// the job was removed while it was running, and
 		// so we don't need to reschedule it.
+		return
+	}
+	if j.runsExhausted() {
+		// the job is only waiting for its last runs to finish
 		return
 	}
 
@@ -673,12 +681,19 @@ func (s *scheduler) selectExecJobsOutCompleted(completed jobOutCompleted) {
 	// not canceled while the task is still executing. See #925.
 	if j.limitRunsTo != nil {
 		j.limitRunsTo.runCount = j.limitRunsTo.runCount + 1
-		if j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+		if j.limitReached() {
 			if j.intervalFromCompletion {
 				s.selectRemoveJob(completed.id)
-			} else {
-				s.jobs[completed.id] = j
+				return
 			}
+			// No more runs: drop the run that was already scheduled
+			// when this one started. selectExecJobOutRequest keeps
+			// runs that were already dispatched from executing.
+			if j.timer != nil {
+				j.timer.Stop()
+			}
+			j.nextScheduled = nil
+			s.jobs[completed.id] = j
 			return
 		}
 	}
@@ -707,7 +722,7 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 	// has finished (completedAt is set), remove the job now. This is done
 	// here rather than in selectExecJobsOutCompleted to avoid canceling
 	// the job's context while the task is still running. See #925.
-	if !update.completedAt.IsZero() && j.limitRunsTo != nil && j.limitRunsTo.runCount >= j.limitRunsTo.limit {
+	if !update.completedAt.IsZero() && j.limitReached() {
 		go func(id uuid.UUID) {
 			select {
 			case <-s.shutdownCtx.Done():
@@ -716,6 +731,50 @@ func (s *scheduler) selectJobTimingUpdate(update jobTimingUpdate) {
 			}
 		}(update.id)
 	}
+}
+
+// selectJobRunAdmission decides whether a run of a WithLimitedRuns job
+// may call its task function. The executor asks right before calling it,
+// after the job's listeners have run, so this is where a run takes one of
+// the job's slots. Because the scheduler goroutine handles admissions one
+// at a time, runs that were dispatched concurrently (for example several
+// RunNow calls) can't both take the last slot.
+func (s *scheduler) selectJobRunAdmission(admission jobRunAdmission) {
+	j, ok := s.jobs[admission.id]
+	if !ok || j.limitRunsTo == nil {
+		// Refuse if the job was removed while this run was on its
+		// way; allow it if an update dropped WithLimitedRuns.
+		admission.outChan <- ok
+		return
+	}
+	if j.runsExhausted() {
+		admission.outChan <- false
+		return
+	}
+	j.limitRunsTo.admitted++
+	if j.runsExhausted() {
+		// This is the last run: drop the run that is already
+		// scheduled, nothing else may start.
+		if j.timer != nil {
+			j.timer.Stop()
+		}
+		j.nextScheduled = nil
+	}
+	s.jobs[admission.id] = j
+	admission.outChan <- true
+}
+
+// selectExecJobOutRequest answers the executor's request for a job it is
+// about to run. A job that has used up its WithLimitedRuns runs is kept
+// until its last run returns, but it is reported as not found here so that
+// runs that were already dispatched (a timer that had fired, queued
+// singleton runs, RunNow) are dropped instead of going over the limit.
+func (s *scheduler) selectExecJobOutRequest(out *jobOutRequest) {
+	if j, ok := s.jobs[out.id]; ok && j.runsExhausted() {
+		close(out.outChan)
+		return
+	}
+	s.selectJobOutRequest(out)
 }
 
 // selectJobOutRequest handles Job.X() accessor queries (LastRun,

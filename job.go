@@ -108,6 +108,20 @@ func (j *internalJob) stop() {
 	j.cancel()
 }
 
+// limitReached reports whether the job has completed all the runs
+// allowed by WithLimitedRuns.
+func (j *internalJob) limitReached() bool {
+	return j.limitRunsTo != nil && j.limitRunsTo.runCount >= j.limitRunsTo.limit
+}
+
+// runsExhausted reports whether no more runs of the job may start:
+// every run allowed by WithLimitedRuns has been admitted, though some
+// of them may still be executing.
+func (j *internalJob) runsExhausted() bool {
+	return j.limitRunsTo != nil &&
+		(j.limitRunsTo.admitted >= j.limitRunsTo.limit || j.limitRunsTo.runCount >= j.limitRunsTo.limit)
+}
+
 func (j *internalJob) stopTimeReached(now time.Time) bool {
 	if j.stopTime.IsZero() {
 		return false
@@ -166,7 +180,13 @@ func NewTask(function any, parameters ...any) Task {
 // when the user only wants the job to run a certain
 // number of times and then be removed from the scheduler.
 type limitRunsTo struct {
-	limit    uint
+	limit uint
+	// admitted is the number of runs the scheduler has let start.
+	// It is taken right before the task function is called, so it
+	// is never behind runCount.
+	admitted uint
+	// runCount is the number of runs that have been counted as
+	// completed by the scheduler.
 	runCount uint
 }
 

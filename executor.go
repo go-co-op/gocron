@@ -30,6 +30,9 @@ type executor struct {
 	jobsOutCompleted chan jobOutCompleted
 	// used to request jobs from the scheduler
 	jobOutRequest chan *jobOutRequest
+	// used to ask the scheduler whether a run of a job with
+	// limited runs may start
+	jobRunAdmission chan jobRunAdmission
 
 	// sends out job needs to update the next runs
 	jobUpdateNextRuns chan uuid.UUID
@@ -77,6 +80,13 @@ type jobTimingUpdate struct {
 type jobOutCompleted struct {
 	id      uuid.UUID
 	skipped bool
+}
+
+// jobRunAdmission asks the scheduler for one of a WithLimitedRuns job's
+// runs. The scheduler answers on outChan, which must be buffered.
+type jobRunAdmission struct {
+	id      uuid.UUID
+	outChan chan bool
 }
 
 type jobIn struct {
@@ -506,6 +516,11 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		return
 	}
 
+	if j.limitRunsTo != nil && !e.admitRun(j.id) {
+		// every run allowed by WithLimitedRuns has already started
+		return
+	}
+
 	// Notify job running
 	if e.scheduler != nil && e.scheduler.schedulerMonitor != nil {
 		e.scheduler.notifyJobRunning(e.scheduler.jobFromInternalJob(j))
@@ -571,6 +586,23 @@ func (e *executor) runJob(j internalJob, jIn jobIn) {
 		case <-e.ctx.Done():
 		}
 		e.sendOutForRescheduling(&jIn)
+	}
+}
+
+// admitRun asks the scheduler whether this run of a WithLimitedRuns job
+// may call its task function, taking one of the job's runs if so.
+func (e *executor) admitRun(id uuid.UUID) bool {
+	admission := jobRunAdmission{id: id, outChan: make(chan bool, 1)}
+	select {
+	case e.jobRunAdmission <- admission:
+	case <-e.ctx.Done():
+		return false
+	}
+	select {
+	case ok := <-admission.outChan:
+		return ok
+	case <-e.ctx.Done():
+		return false
 	}
 }
 
