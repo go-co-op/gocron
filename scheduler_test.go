@@ -1698,6 +1698,55 @@ func TestScheduler_LimitMode(t *testing.T) {
 	}
 }
 
+func TestScheduler_LimitMode_StopAndStart(t *testing.T) {
+	defer verifyNoGoroutineLeaks(t)
+	tests := []struct {
+		name      string
+		limitMode LimitMode
+	}{
+		{
+			"limit mode reschedule",
+			LimitModeReschedule,
+		},
+		{
+			"limit mode wait",
+			LimitModeWait,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestScheduler(t,
+				WithLimitConcurrentJobs(1, tt.limitMode),
+			)
+
+			jobRanCh := make(chan struct{}, 1000)
+
+			_, err := s.NewJob(
+				DurationJob(time.Millisecond),
+				NewTask(func() {
+					jobRanCh <- struct{}{}
+				}),
+				WithStartAt(WithStartImmediately()),
+			)
+			require.NoError(t, err)
+
+			// the job must run after every start, which under the race
+			// detector also checks the executor's state across restarts.
+			for i := 0; i < 3; i++ {
+				s.Start()
+				select {
+				case <-jobRanCh:
+				case <-time.After(time.Second):
+					t.Fatalf("timed out waiting for the job to run after start %d", i+1)
+				}
+				require.NoError(t, s.StopJobs())
+			}
+			require.NoError(t, s.Shutdown())
+		})
+	}
+}
+
 func TestScheduler_LimitModeAndSingleton(t *testing.T) {
 	defer verifyNoGoroutineLeaks(t)
 	tests := []struct {
