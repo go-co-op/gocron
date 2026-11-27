@@ -218,12 +218,12 @@ func (e *executor) start() {
 						runnerSrc, ok := e.singletonRunners.Load(jIn.id)
 						if !ok {
 							runner.in = make(chan jobIn, defaultSingletonQueueBuffer)
-							if j.singletonLimitMode == LimitModeReschedule {
-								runner.rescheduleLimiter = make(chan struct{}, 1)
-							}
+							// the runner outlives Scheduler.Update, which can change
+							// the job's limit mode, so it is set up for both modes.
+							runner.rescheduleLimiter = make(chan struct{}, 1)
 							e.singletonRunners.Store(jIn.id, runner)
 							singletonJobsWg.Add(1)
-							go e.singletonModeRunner("singleton-"+jIn.id.String(), runner.in, singletonJobsWg, j.singletonLimitMode, runner.rescheduleLimiter)
+							go e.singletonModeRunner("singleton-"+jIn.id.String(), runner.in, singletonJobsWg, runner.rescheduleLimiter)
 						} else {
 							runner = runnerSrc.(*singletonRunner)
 						}
@@ -389,7 +389,7 @@ func (e *executor) limitModeRunner(name string, in chan jobIn, wg *waitGroupWith
 // LimitModeReschedule drops overlapping ticks (job still executing);
 // LimitModeWait queues them up to the channel's buffer
 // (defaultSingletonQueueBuffer, see scheduler.go).
-func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, limitMode LimitMode, rescheduleLimiter chan struct{}) {
+func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroupWithMutex, rescheduleLimiter chan struct{}) {
 	e.logger.Debug("gocron: singletonModeRunner starting", "name", name)
 	for {
 		select {
@@ -416,9 +416,11 @@ func (e *executor) singletonModeRunner(name string, in chan jobIn, wg *waitGroup
 				e.runJob(*j, jIn)
 			}
 
-			// remove the limiter block to allow another job to be scheduled
-			if limitMode == LimitModeReschedule {
-				<-rescheduleLimiter
+			// remove the limiter block to allow another job to be scheduled.
+			// Runs queued in LimitModeWait hold no block, so don't wait for one.
+			select {
+			case <-rescheduleLimiter:
+			default:
 			}
 		case <-e.ctx.Done():
 			e.logger.Debug("singletonModeRunner shutting down", "name", name)
